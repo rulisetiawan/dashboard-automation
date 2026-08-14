@@ -31,6 +31,10 @@ const state = {
       chemical: "chemical",
     },
   },
+  utility: {
+    electricalLevel: "cubical",
+    selectedElectrical: "CUB-A",
+  },
 };
 
 const pageMeta = {
@@ -787,6 +791,89 @@ function kalenderDetailPage() {
   `;
 }
 
+function createElectricalAsset(spec, index) {
+  return {
+    ...spec,
+    status: spec.status || "running",
+    powerFactor: (0.92 + (index % 4) * 0.01).toFixed(2),
+    load: 61 + (index * 7) % 28,
+    voltage: 396 + (index * 3) % 8,
+    peak: Math.round(spec.demand * (1.07 + (index % 3) * 0.025)),
+    energy: spec.demand * (6.85 + (index % 4) * 0.22) / 1000,
+  };
+}
+
+const electricalDistribution = {
+  cubical: [
+    { id: "CUB-A", name: "Electrical Cubical A", demand: 720, location: "Main LV Room A", supply: "Main Incomer · Transformer 01", downstream: "MDP Jetflow 1, Jetflow 2, Washing" },
+    { id: "CUB-B", name: "Electrical Cubical B", demand: 612, location: "Main LV Room B", supply: "Main Incomer · Transformer 02", downstream: "MDP Dryer, MDP Kalender" },
+    { id: "CUB-C", name: "Electrical Cubical C", demand: 508, location: "Utility Power Room", supply: "Main Incomer · Transformer 03", downstream: "MDP Utility & Auxiliary", status: "warning" },
+  ].map(createElectricalAsset),
+  mdp: [
+    { id: "MDP-JF-1", name: "MDP Jetflow Lane A–C", demand: 408, location: "Dyeing West", supply: "Electrical Cubical A", downstream: "SDP Jetflow Lane A, B, C" },
+    { id: "MDP-JF-2", name: "MDP Jetflow Lane D–F", demand: 382, location: "Dyeing East", supply: "Electrical Cubical A", downstream: "SDP Jetflow Lane D, E, F" },
+    { id: "MDP-WASH", name: "MDP Calator & Dispensing", demand: 198, location: "Washing Area", supply: "Electrical Cubical A", downstream: "SDP Calator Depan, Belakang, Timur" },
+    { id: "MDP-DRY", name: "MDP Dryer", demand: 314, location: "Drying Area", supply: "Electrical Cubical B", downstream: "SDP Dryer Depan, Belakang, Timur" },
+    { id: "MDP-KAL", name: "MDP Kalender", demand: 286, location: "Finishing Area", supply: "Electrical Cubical B", downstream: "SDP Kalender Depan, Belakang, Timur" },
+    { id: "MDP-UTL", name: "MDP Utility & Auxiliary", demand: 252, location: "Utility Building", supply: "Electrical Cubical C", downstream: "SDP Boiler dan SDP Auxiliary", status: "warning" },
+  ].map(createElectricalAsset),
+  sdp: [
+    { id: "SDP-JF-A", name: "SDP Jetflow Lane A", demand: 120, location: "Lane A", supply: "MDP Jetflow Lane A–C", downstream: "6 Jetflow machines" },
+    { id: "SDP-JF-B", name: "SDP Jetflow Lane B", demand: 142, location: "Lane B", supply: "MDP Jetflow Lane A–C", downstream: "18 Jetflow machines" },
+    { id: "SDP-JF-C", name: "SDP Jetflow Lane C", demand: 146, location: "Lane C", supply: "MDP Jetflow Lane A–C", downstream: "18 Jetflow machines" },
+    { id: "SDP-JF-D", name: "SDP Jetflow Lane D", demand: 136, location: "Lane D", supply: "MDP Jetflow Lane D–F", downstream: "18 Jetflow machines" },
+    { id: "SDP-JF-E", name: "SDP Jetflow Lane E", demand: 110, location: "Lane E", supply: "MDP Jetflow Lane D–F", downstream: "13 Jetflow machines" },
+    { id: "SDP-JF-F", name: "SDP Jetflow Lane F", demand: 136, location: "Lane F", supply: "MDP Jetflow Lane D–F", downstream: "15 Jetflow machines" },
+    { id: "SDP-CL-D", name: "SDP Calator Depan", demand: 58, location: "Area Depan", supply: "MDP Calator & Dispensing", downstream: "2 Calator + 1 Dispensing" },
+    { id: "SDP-CL-B", name: "SDP Calator Belakang", demand: 82, location: "Area Belakang", supply: "MDP Calator & Dispensing", downstream: "9 Calator + 2 Dispensing" },
+    { id: "SDP-CL-T", name: "SDP Calator Timur", demand: 58, location: "Area Timur", supply: "MDP Calator & Dispensing", downstream: "7 Calator + 2 Dispensing" },
+    { id: "SDP-DR-D", name: "SDP Dryer Depan", demand: 74, location: "Area Depan", supply: "MDP Dryer", downstream: "1 Dryer machine" },
+    { id: "SDP-DR-B", name: "SDP Dryer Belakang", demand: 106, location: "Area Belakang", supply: "MDP Dryer", downstream: "2 Dryer machines" },
+    { id: "SDP-DR-T", name: "SDP Dryer Timur", demand: 134, location: "Area Timur", supply: "MDP Dryer", downstream: "3 Dryer machines", status: "warning" },
+    { id: "SDP-KL-D", name: "SDP Kalender Depan", demand: 92, location: "Area Depan", supply: "MDP Kalender", downstream: "7 Kalender machines" },
+    { id: "SDP-KL-B", name: "SDP Kalender Belakang", demand: 98, location: "Area Belakang", supply: "MDP Kalender", downstream: "7 Kalender machines" },
+    { id: "SDP-KL-T", name: "SDP Kalender Timur", demand: 96, location: "Area Timur", supply: "MDP Kalender", downstream: "7 Kalender machines" },
+    { id: "SDP-BLR", name: "SDP Boiler", demand: 152, location: "Boiler House", supply: "MDP Utility & Auxiliary", downstream: "Steam and thermal oil boiler" },
+    { id: "SDP-AUX", name: "SDP Auxiliary", demand: 100, location: "Utility Building", supply: "MDP Utility & Auxiliary", downstream: "WWTP, pumps, lighting, auxiliary" },
+  ].map(createElectricalAsset),
+};
+
+const electricalColors = ["#078eaa", "#4d8fd0", "#119b70", "#8267c7", "#d68b05", "#db6d48", "#4aa8b8", "#6d9bd1", "#55a685", "#9a82ca", "#dfaa43", "#df8467", "#217d94", "#3d78b7", "#287e61", "#7054aa", "#b9780a"];
+
+function electricalDistributionPanel() {
+  const level = state.utility.electricalLevel;
+  const assets = electricalDistribution[level];
+  if (!assets.some((asset) => asset.id === state.utility.selectedElectrical)) state.utility.selectedElectrical = assets[0].id;
+  const selected = assets.find((asset) => asset.id === state.utility.selectedElectrical) || assets[0];
+  const total = assets.reduce((sum, asset) => sum + asset.demand, 0);
+  const share = selected.demand / total * 100;
+  const levelLabels = { cubical: "Electrical Cubical", mdp: "Electrical MDP", sdp: "Electrical SDP" };
+  const legend = assets.map((asset, index) => `<button class="electrical-legend-row ${asset.id === selected.id ? "active" : ""}" data-electrical-asset="${asset.id}"><i style="background:${electricalColors[index]}"></i><span><strong>${asset.id}</strong><small>${asset.name}</small></span><b>${asset.demand} kW</b><em>${(asset.demand / total * 100).toFixed(1)}%</em></button>`).join("");
+  return `<section class="card electrical-distribution-card">
+    <div class="electrical-distribution-head">
+      <div><span class="eyebrow">Electrical mapping</span><h2>Electrical Distribution</h2><p>Pilih level distribusi, kemudian klik segmen pie atau daftar untuk melihat detail sumber dan beban.</p></div>
+      <div class="electrical-dropdowns">
+        <label><span>Distribution level</span><select class="select-control" id="electrical-level-select"><option value="cubical" ${level === "cubical" ? "selected" : ""}>Electrical Cubical · 3 units</option><option value="mdp" ${level === "mdp" ? "selected" : ""}>Electrical MDP · 6 units</option><option value="sdp" ${level === "sdp" ? "selected" : ""}>Electrical SDP · 17 units</option></select></label>
+        <label><span>Selected equipment</span><select class="select-control" id="electrical-asset-select">${assets.map((asset) => `<option value="${asset.id}" ${asset.id === selected.id ? "selected" : ""}>${asset.id} · ${asset.name}</option>`).join("")}</select></label>
+      </div>
+    </div>
+    <div class="electrical-distribution-layout">
+      <div class="electrical-chart-panel">
+        <div class="electrical-pie-wrap"><canvas id="electrical-pie-chart" aria-label="Perbandingan demand ${levelLabels[level]}"></canvas><div class="electrical-pie-total"><strong>${(total / 1000).toFixed(2)}</strong><span>MW total</span><small>${levelLabels[level]}</small></div></div>
+        <div class="electrical-legend">${legend}</div>
+      </div>
+      <aside class="electrical-detail-panel">
+        <div class="electrical-detail-head"><div><span>${selected.id}</span><h3>${selected.name}</h3><p>${selected.location}</p></div>${statusPill(selected.status)}</div>
+        <div class="electrical-primary-reading"><strong>${selected.demand}</strong><span>kW actual demand</span><small>${share.toFixed(1)}% dari total ${levelLabels[level]}</small></div>
+        <div class="electrical-detail-grid"><div><span>Peak demand</span><strong>${selected.peak} kW</strong></div><div><span>Load</span><strong>${selected.load}%</strong></div><div><span>Power factor</span><strong>${selected.powerFactor}</strong></div><div><span>Voltage</span><strong>${selected.voltage} V</strong></div><div><span>Energy shift</span><strong>${selected.energy.toFixed(2)} MWh</strong></div><div><span>Data status</span><strong>Good · 24 ms</strong></div></div>
+        <div class="electrical-load-bar"><span><b style="width:${selected.load}%"></b></span><small>Loading terhadap configured capacity · demo</small></div>
+        <div class="electrical-path"><div><span>Supply from</span><strong>${selected.supply}</strong></div><i>→</i><div><span>Feeds</span><strong>${selected.downstream}</strong></div></div>
+        <button class="button ghost electrical-history-button" data-page-target="trends">⌗ Open electrical historical</button>
+      </aside>
+    </div>
+  </section>`;
+}
+
 function utilitiesPage() {
   return `
     ${pageHead("utilities", `<select class="select-control"><option>All utilities</option><option>Electrical</option><option>Water</option><option>Steam</option><option>Thermal Oil</option></select><button class="button" data-page-target="trends">⌗ Historical</button>`)}
@@ -810,9 +897,8 @@ function utilitiesPage() {
         </div>
       `)}
     </section>
-    <section class="grid-equal">
-      ${panel("Electrical Distribution", "Cubicle → MDP → SDP → machine meter", `<div class="utility-tree">${utilityTree()}</div>`)}
-      ${panel("Boiler & Water", "Supply status and affected consumers", `
+    ${electricalDistributionPanel()}
+    ${panel("Boiler & Water", "Supply status and affected consumers", `
         <div class="metric-grid">
           ${metricTile("Steam boiler", "RUN", "Load 78.4%")}
           ${metricTile("Steam header", liveValue(7.8, "bar", .06, 1), "Baseline 8.1")}
@@ -822,23 +908,8 @@ function utilitiesPage() {
           ${metricTile("Water flow", liveValue(184, "m³/h", 1, 0), "32 machine meters")}
         </div>
       `)}
-    </section>
     ${panel("Machine Energy Intensity", "Consumption terhadap good output · current shift", energyTable())}
   `;
-}
-
-function utilityTree() {
-  const rows = [
-    [0, "CB", "Main Cubicle A", "1.12 MW", "running"],
-    [1, "MD", "MDP-A · Dyeing", "684 kW", "running"],
-    [2, "SD", "SDP-A1 · Jetflow", "428 kW", "running"],
-    [3, "MC", "JF-01 / JF-02 / JF-03", "392 kW", "running"],
-    [2, "SD", "SDP-A2 · Washing", "218 kW", "running"],
-    [0, "CB", "Main Cubicle B", "724 kW", "running"],
-    [1, "MD", "MDP-B · Finishing", "598 kW", "running"],
-    [2, "SD", "SDP-B1 · Dryer", "364 kW", "warning"],
-  ];
-  return rows.map((r) => `<div class="utility-node depth-${r[0]}"><div class="utility-name"><span>${r[1]}</span><strong>${r[2]}</strong></div><span class="utility-reading">${r[3]}</span>${statusPill(r[4])}</div>`).join("");
 }
 
 function energyTable() {
@@ -1094,6 +1165,21 @@ function bindPageEvents() {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openResourceArea(); }
     });
   });
+  document.getElementById("electrical-level-select")?.addEventListener("change", (event) => {
+    state.utility.electricalLevel = event.target.value;
+    state.utility.selectedElectrical = electricalDistribution[event.target.value][0].id;
+    renderPage();
+  });
+  document.getElementById("electrical-asset-select")?.addEventListener("change", (event) => {
+    state.utility.selectedElectrical = event.target.value;
+    renderPage();
+  });
+  document.querySelectorAll("[data-electrical-asset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.utility.selectedElectrical = button.dataset.electricalAsset;
+      renderPage();
+    });
+  });
   document.querySelectorAll("[data-process-level]").forEach((button) => {
     button.addEventListener("click", () => {
       const type = button.dataset.processType;
@@ -1282,10 +1368,13 @@ function initPageCharts() {
       { data: wave(32, 123, 1.0, .03, 1.5), color: "#4d8fd0" },
       { data: wave(32, 118, .7, .01, 2.2), color: "#119b70" },
     ], labels),
-    utilities: () => drawLineChart("utility-chart", [
-      { data: wave(32, 1.58, .12, .014, .2), color: "#078eaa", fill: true },
-      { data: wave(32, 1.75, .02, .009, 0), color: "#d68b05", dash: true },
-    ], labels),
+    utilities: () => {
+      drawLineChart("utility-chart", [
+        { data: wave(32, 1.58, .12, .014, .2), color: "#078eaa", fill: true },
+        { data: wave(32, 1.75, .02, .009, 0), color: "#d68b05", dash: true },
+      ], labels);
+      drawElectricalDistributionChart();
+    },
     chemical: () => drawBarChart("chemical-chart", chemicals.map((c) => c[2]), chemicals.map((c) => c[0]), chemicals.map((c) => c[4])),
     alarms: () => drawBarChart("alarm-chart", [18, 12, 9, 7, 5, 4], ["Tangle", "Temp", "Speed", "Steam", "Data", "Drive"], ["#d9485c", "#d68b05", "#d68b05", "#d68b05", "#8b999f", "#8b999f"]),
     trends: drawHistoricalTrend,
@@ -1415,6 +1504,62 @@ function drawBarChart(id, data, labels, colors) {
     ctx.fillText(labels[i], x + barW / 2, height - 7);
   });
   ctx.textAlign = "left";
+}
+
+function drawElectricalDistributionChart() {
+  const canvas = document.getElementById("electrical-pie-chart");
+  if (!canvas) return;
+  const assets = electricalDistribution[state.utility.electricalLevel];
+  const total = assets.reduce((sum, asset) => sum + asset.demand, 0);
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, rect.width * ratio);
+  canvas.height = Math.max(1, rect.height * ratio);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(ratio, ratio);
+  const centerX = rect.width / 2;
+  const centerY = rect.height / 2;
+  const radius = Math.max(10, Math.min(rect.width, rect.height) / 2 - 12);
+  let start = -Math.PI / 2;
+  const slices = [];
+  ctx.clearRect(0, 0, rect.width, rect.height);
+  assets.forEach((asset, index) => {
+    const end = start + asset.demand / total * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, radius, start, end);
+    ctx.closePath();
+    ctx.fillStyle = electricalColors[index];
+    ctx.fill();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = asset.id === state.utility.selectedElectrical ? 4 : 2;
+    ctx.stroke();
+    slices.push({ start, end, asset });
+    start = end;
+  });
+  const assetAtPointer = (event) => {
+    const bounds = canvas.getBoundingClientRect();
+    const x = event.clientX - bounds.left - bounds.width / 2;
+    const y = event.clientY - bounds.top - bounds.height / 2;
+    if (Math.hypot(x, y) > Math.min(bounds.width, bounds.height) / 2 - 8) return null;
+    let angle = Math.atan2(y, x);
+    if (angle < -Math.PI / 2) angle += Math.PI * 2;
+    return slices.find((slice) => angle >= slice.start && angle < slice.end)?.asset || null;
+  };
+  canvas._electricalAssetAtPointer = assetAtPointer;
+  if (canvas.dataset.electricalBound) return;
+  canvas.dataset.electricalBound = "true";
+  canvas.addEventListener("pointermove", (event) => {
+    const asset = canvas._electricalAssetAtPointer(event);
+    canvas.style.cursor = asset ? "pointer" : "default";
+    canvas.title = asset ? `${asset.name}: ${asset.demand} kW` : "";
+  });
+  canvas.addEventListener("click", (event) => {
+    const asset = canvas._electricalAssetAtPointer(event);
+    if (!asset) return;
+    state.utility.selectedElectrical = asset.id;
+    renderPage();
+  });
 }
 
 function roundedRect(ctx, x, y, width, height, radius) {

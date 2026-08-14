@@ -4,6 +4,30 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.6 — 14 Agustus 2026
+
+**Status:** Electrical Distribution mapping selesai
+
+### Ditambahkan
+
+- Dropdown level Electrical Cubical, MDP, dan SDP.
+- Pie chart perbandingan demand untuk 3 Cubical, 6 MDP, dan 17 SDP.
+- Pemilihan equipment melalui dropdown, segmen pie, atau legend.
+- Panel detail demand, peak, load, power factor, voltage, energy, status data, upstream, dan downstream.
+- Legend scroll untuk kelompok SDP dan layout responsive.
+
+### Diubah
+
+- Hierarchy tree Electrical Distribution diganti menjadi visual pie chart dengan detail di samping.
+- Electrical Distribution menjadi panel full-width pada halaman Utilities.
+
+### Batasan
+
+- Mapping dan seluruh nilai electrical masih simulated.
+- Belum terhubung ke meter, single-line diagram, atau tag aktual.
+
+---
+
 ## Frontend Dashboard V1.5 — 14 Agustus 2026
 
 **Status:** Pembaruan identitas dashboard selesai

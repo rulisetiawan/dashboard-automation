@@ -1933,6 +1933,381 @@ select:focus-visible {
   font-size: 0.55rem;
 }
 
+.electrical-distribution-card {
+  margin-bottom: 13px;
+  padding: 18px;
+}
+
+.electrical-distribution-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.electrical-distribution-head h2 {
+  margin: 5px 0 4px;
+  font-size: 0.88rem;
+}
+
+.electrical-distribution-head p {
+  max-width: 600px;
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.56rem;
+  line-height: 1.6;
+}
+
+.electrical-dropdowns {
+  display: flex;
+  min-width: min(520px, 50%);
+  gap: 9px;
+}
+
+.electrical-dropdowns label {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 5px;
+}
+
+.electrical-dropdowns label > span {
+  color: var(--ink-3);
+  font-size: 0.48rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.electrical-dropdowns .select-control {
+  width: 100%;
+  min-width: 0;
+}
+
+.electrical-distribution-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(310px, 0.38fr);
+  gap: 17px;
+  padding-top: 17px;
+}
+
+.electrical-chart-panel {
+  display: grid;
+  grid-template-columns: 280px minmax(250px, 1fr);
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.electrical-pie-wrap {
+  position: relative;
+  width: 270px;
+  height: 270px;
+  justify-self: center;
+}
+
+#electrical-pie-chart {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 8px 14px rgba(25, 61, 73, 0.09));
+}
+
+.electrical-pie-total {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 112px;
+  height: 112px;
+  place-items: center;
+  align-content: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 5px 20px rgba(25, 61, 73, 0.1);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.electrical-pie-total strong,
+.electrical-pie-total span,
+.electrical-pie-total small {
+  display: block;
+  text-align: center;
+}
+
+.electrical-pie-total strong {
+  font-family: var(--font-data);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.electrical-pie-total span {
+  margin-top: 2px;
+  color: var(--ink-2);
+  font-size: 0.5rem;
+}
+
+.electrical-pie-total small {
+  max-width: 90px;
+  margin-top: 4px;
+  color: var(--ink-3);
+  font-size: 0.42rem;
+}
+
+.electrical-legend {
+  display: grid;
+  max-height: 320px;
+  gap: 5px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.electrical-legend-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) 64px 42px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.electrical-legend-row:hover,
+.electrical-legend-row:focus-visible,
+.electrical-legend-row.active {
+  border-color: rgba(7, 142, 170, 0.24);
+  background: var(--surface);
+  outline: none;
+}
+
+.electrical-legend-row.active {
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.electrical-legend-row > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.electrical-legend-row > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.electrical-legend-row strong,
+.electrical-legend-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.electrical-legend-row strong {
+  font-family: var(--font-data);
+  font-size: 0.53rem;
+}
+
+.electrical-legend-row small {
+  color: var(--ink-3);
+  font-size: 0.46rem;
+}
+
+.electrical-legend-row b,
+.electrical-legend-row em {
+  font-family: var(--font-data);
+  font-size: 0.5rem;
+  font-style: normal;
+  font-weight: 500;
+  text-align: right;
+}
+
+.electrical-legend-row em {
+  color: var(--ink-3);
+}
+
+.electrical-detail-panel {
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid rgba(7, 142, 170, 0.18);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(145deg, #f5fbfc, #ffffff 58%);
+}
+
+.electrical-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.electrical-detail-head > div {
+  min-width: 0;
+}
+
+.electrical-detail-head span:first-child {
+  color: var(--primary);
+  font-family: var(--font-data);
+  font-size: 0.5rem;
+  font-weight: 500;
+}
+
+.electrical-detail-head h3 {
+  overflow: hidden;
+  margin: 5px 0 3px;
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.electrical-detail-head p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.49rem;
+}
+
+.electrical-primary-reading {
+  margin: 18px 0 14px;
+  padding: 15px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.electrical-primary-reading strong,
+.electrical-primary-reading span,
+.electrical-primary-reading small {
+  display: block;
+}
+
+.electrical-primary-reading strong {
+  color: var(--primary);
+  font-family: var(--font-data);
+  font-size: 1.55rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.electrical-primary-reading span {
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: 0.53rem;
+  font-weight: 600;
+}
+
+.electrical-primary-reading small {
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-size: 0.46rem;
+}
+
+.electrical-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.electrical-detail-grid > div {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.electrical-detail-grid span {
+  color: var(--ink-3);
+  font-size: 0.44rem;
+  text-transform: uppercase;
+}
+
+.electrical-detail-grid strong {
+  overflow: hidden;
+  font-family: var(--font-data);
+  font-size: 0.51rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.electrical-load-bar {
+  margin-top: 13px;
+}
+
+.electrical-load-bar > span {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--surface-3);
+}
+
+.electrical-load-bar b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--success), var(--warning));
+}
+
+.electrical-load-bar small {
+  display: block;
+  margin-top: 5px;
+  color: var(--ink-3);
+  font-size: 0.43rem;
+}
+
+.electrical-path {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 13px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.electrical-path > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.electrical-path span {
+  color: var(--ink-3);
+  font-size: 0.44rem;
+  text-transform: uppercase;
+}
+
+.electrical-path strong {
+  font-size: 0.5rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.electrical-path i {
+  color: var(--primary);
+  font-style: normal;
+}
+
+.electrical-history-button {
+  width: 100%;
+  margin-top: 14px;
+}
+
 .ring-wrap {
   display: grid;
   grid-template-columns: 130px minmax(0, 1fr);
@@ -2816,6 +3191,20 @@ select:focus-visible {
     height: 148px;
   }
 
+  .electrical-distribution-layout {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+
+  .electrical-chart-panel {
+    grid-template-columns: 220px minmax(210px, 1fr);
+    gap: 12px;
+  }
+
+  .electrical-pie-wrap {
+    width: 210px;
+    height: 210px;
+  }
+
   .area-grid,
   .fleet-machine-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2852,6 +3241,28 @@ select:focus-visible {
   .resource-donut {
     width: 170px;
     height: 170px;
+  }
+
+  .electrical-distribution-head {
+    flex-direction: column;
+  }
+
+  .electrical-dropdowns {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .electrical-distribution-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .electrical-chart-panel {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+
+  .electrical-pie-wrap {
+    width: 240px;
+    height: 240px;
   }
 
   .process-flow {
@@ -3042,6 +3453,41 @@ select:focus-visible {
 
   .downtime-bars > div {
     grid-template-columns: 94px minmax(0, 1fr) 34px;
+  }
+
+  .electrical-distribution-card {
+    padding: 14px;
+  }
+
+  .electrical-dropdowns {
+    flex-direction: column;
+  }
+
+  .electrical-chart-panel {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .electrical-pie-wrap {
+    width: 220px;
+    height: 220px;
+  }
+
+  .electrical-legend {
+    width: 100%;
+    max-height: 280px;
+  }
+
+  .electrical-legend-row {
+    grid-template-columns: 8px minmax(0, 1fr) 58px 38px;
+  }
+
+  .electrical-path {
+    grid-template-columns: 1fr;
+  }
+
+  .electrical-path i {
+    transform: rotate(90deg);
   }
 
   .fleet-summary,
