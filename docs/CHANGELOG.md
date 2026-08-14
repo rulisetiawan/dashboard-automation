@@ -4,6 +4,21 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.11 — 14 Agustus 2026
+
+**Status:** Plant water consumption card diperbarui
+
+### Diubah
+
+- Kartu Water Flow pada Plant Overview menjadi Water Consumption.
+- Unit `m³/h` diganti menjadi total penggunaan `m³` seluruh mesin pada shift berjalan.
+
+### Batasan
+
+- Total konsumsi masih simulated.
+
+---
+
 ## Frontend Dashboard V1.10 — 14 Agustus 2026
 
 **Status:** Production abnormality log selesai

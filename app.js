@@ -340,7 +340,7 @@ function overviewPage() {
           ${metricTile("Electrical", liveValue(1.84, "MW", .02, 2), "Main incomer · PF 0.94")}
           ${metricTile("Steam Header", liveValue(7.8, "bar", .08, 1), "Jetflow + Kalender")}
           ${metricTile("Thermal Oil", liveValue(218.4, "°C", .25, 1), "Dryer supply")}
-          ${metricTile("Water Flow", liveValue(184, "m³/h", 1.2, 0), "All production")}
+          ${metricTile("Water Consumption", "1,284<small>m³</small>", "All machines · current shift")}
           ${metricTile("Chemical Today", "6,115<small>kg</small>", "7 variants")}
           ${metricTile("Data Good", "99.4<small>%</small>", "248.6K active tags")}
         </div>
