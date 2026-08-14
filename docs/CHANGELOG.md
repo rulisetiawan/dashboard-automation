@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.16 — 14 Agustus 2026
+
+**Status:** Standard chemical usage bar chart selesai
+
+### Diubah
+
+- Daily Usage by Variant menjadi standard full-width bar chart.
+- Ditambahkan baseline nol, sumbu kilogram, gridline, dan nilai pada setiap batang.
+- Transfer Route dipisahkan dari layout dua kolom agar grafik chemical menggunakan lebar penuh.
+
+### Batasan
+
+- Data chemical masih simulated dan belum mendukung drill-down transaksi per batang.
+
+---
+
 ## Frontend Dashboard V1.15 — 14 Agustus 2026
 
 **Status:** Standard production bar chart selesai

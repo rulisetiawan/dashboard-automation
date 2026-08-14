@@ -1238,17 +1238,15 @@ function chemicalDetailPage() {
       const pct = Math.round(c[2] / c[3] * 100);
       return `<div class="chemical-card"><div class="chemical-card-head"><strong>${c[0]} · ${c[1]}</strong><i class="equipment-state"></i></div><div class="card-reading">${c[2].toLocaleString()}<small>kg</small></div><div class="card-caption">${pct}% of ${c[3].toLocaleString()} kg forecast</div><div class="mini-bar"><span style="width:${pct}%;background:${c[4]}"></span></div></div>`;
     }).join("")}</div>`)}
-    <section class="grid-2">
-      ${panel("Daily Usage by Variant", "Accumulated chemical usage · kg", `<div class="chart-container"><canvas id="chemical-chart" class="chart-canvas"></canvas></div>`)}
-      ${panel("Transfer Route", "Current source-to-Calator path", `
-        <div class="utility-tree">
-          <div class="utility-node"><div class="utility-name"><span>TK</span><strong>CH-01 Source Tank</strong></div><span class="utility-reading">68.4%</span>${statusPill("running")}</div>
-          <div class="utility-node depth-1"><div class="utility-name"><span>DS</span><strong>Dispensing Unit 01</strong></div><span class="utility-reading">82.6 / 128 kg</span>${statusPill("running")}</div>
-          <div class="utility-node depth-2"><div class="utility-name"><span>PP</span><strong>Pipe Route P-02</strong></div><span class="utility-reading">42.8 kg/min</span>${statusPill("running")}</div>
-          <div class="utility-node depth-3"><div class="utility-name"><span>CL</span><strong>Calator 02</strong></div><span class="utility-reading">Destination</span>${statusPill("running")}</div>
-        </div>
-      `)}
-    </section>
+    ${panel("Transfer Route", "Current source-to-Calator path", `
+      <div class="utility-tree">
+        <div class="utility-node"><div class="utility-name"><span>TK</span><strong>CH-01 Source Tank</strong></div><span class="utility-reading">68.4%</span>${statusPill("running")}</div>
+        <div class="utility-node depth-1"><div class="utility-name"><span>DS</span><strong>Dispensing Unit 01</strong></div><span class="utility-reading">82.6 / 128 kg</span>${statusPill("running")}</div>
+        <div class="utility-node depth-2"><div class="utility-name"><span>PP</span><strong>Pipe Route P-02</strong></div><span class="utility-reading">42.8 kg/min</span>${statusPill("running")}</div>
+        <div class="utility-node depth-3"><div class="utility-name"><span>CL</span><strong>Calator 02</strong></div><span class="utility-reading">Destination</span>${statusPill("running")}</div>
+      </div>
+    `)}
+    ${panel("Daily Usage by Variant", "Accumulated chemical usage · kg", `<div class="chart-container production-bar-chart"><canvas id="chemical-chart" class="chart-canvas"></canvas></div>`)}
     ${panel("Dispensing Transactions", "Request, target, actual, route, dan transfer status", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Request</th><th>Chemical</th><th>Destination</th><th>Target</th><th>Actual</th><th>Route</th><th>Status</th></tr></thead><tbody>${transactions.map((r) => `<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="mono">${r[3]}</td><td class="mono">${r[4]}</td><td class="mono">${r[5]}</td><td><span class="data-pill ${r[6] === "Completed" ? "good" : r[6] === "Partial" ? "warning" : "neutral"}">${r[6]}</span></td></tr>`).join("")}</tbody></table></div>`)}
     ${batchInvestigationPanel("chemical", machine)}
     ${batchTrendWorkspace("chemical", machine)}
@@ -1744,7 +1742,13 @@ function initPageCharts() {
       ], labels);
       drawElectricalDistributionChart();
     },
-    chemical: () => drawBarChart("chemical-chart", chemicals.map((c) => c[2]), chemicals.map((c) => c[0]), chemicals.map((c) => c[4])),
+    chemical: () => drawBarChart(
+      "chemical-chart",
+      chemicals.map((chemical) => chemical[2]),
+      chemicals.map((chemical) => chemical[0]),
+      chemicals.map((chemical) => chemical[4]),
+      { showValues: true, standard: true, unit: "kg" }
+    ),
     alarms: () => drawBarChart("alarm-chart", [18, 12, 9, 7, 5, 4], ["Tangle", "Temp", "Speed", "Steam", "Data", "Drive"], ["#d9485c", "#d68b05", "#d68b05", "#d68b05", "#8b999f", "#8b999f"]),
     trends: drawHistoricalTrend,
     health: () => drawLineChart("health-chart", [
