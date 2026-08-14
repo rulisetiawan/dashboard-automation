@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 0.4 seconds
-Output:
 # Plant Machine and Area Mapping v1.1
 
 **Tanggal:** 14 Agustus 2026  
