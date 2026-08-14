@@ -15,7 +15,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `chemicals/Chemical_Dispensing_Transfer_Concept_v1.1.md` | 1.1 | Aktif | Konsep tujuh varian chemical dan lima dispensing pada area Depan, Belakang, serta Timur |
 | `dashboard/Dashboard_V1_Concept_v1.1.md` | 1.1 | Aktif | Konsep dashboard real-time/historical dengan multi-speed Calator, machine monitoring, alarm, data health, utility, dan chemical |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
-| `releases/Frontend_V1.12.md` | 1.12 | Selesai | Plant Overview menampilkan production output dalam grafik batang sesuai time range |
+| `releases/Frontend_V1.13.md` | 1.13 | Selesai | Plant Overview memisahkan Live Now di bagian atas dan Selected Range di bawahnya |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
 ## Aturan pembaruan

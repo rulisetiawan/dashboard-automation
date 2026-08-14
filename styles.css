@@ -3091,6 +3091,22 @@ select:focus-visible {
   margin-top: 22px;
 }
 
+.overview-section-label {
+  margin-top: 0;
+}
+
+.overview-section-label.historical-section-label {
+  margin-top: 26px;
+}
+
+.overview-section-label .segmented {
+  margin-left: auto;
+}
+
+.overview-history-grid {
+  margin-bottom: 13px;
+}
+
 .kpi-scope {
   display: inline-flex;
   align-items: center;
@@ -3888,6 +3904,10 @@ select:focus-visible {
   .management-section-label {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .overview-section-label .segmented {
+    margin-left: 0;
   }
 
   .resource-donut-wrap {

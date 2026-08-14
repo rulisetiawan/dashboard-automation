@@ -4,6 +4,28 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.13 — 14 Agustus 2026
+
+**Status:** Live dan historical Plant Overview dipisahkan
+
+### Ditambahkan
+
+- Label bagian Live Now dan Selected Range pada Plant Overview.
+- KPI historical Water Consumption, Energy Consumption, Total Machine Runtime, dan Machine Downtime.
+
+### Diubah
+
+- Seluruh kartu dan panel live ditempatkan sebelum data historical.
+- Good Production Output dipindahkan dari KPI live ke KPI Selected Range.
+- Pemilih 1H, 8H, 24H, dan 7D ditempatkan pada header historical.
+- Utility Snapshot hanya menampilkan nilai aktual dan status koneksi.
+
+### Batasan
+
+- KPI historical masih simulated dan belum terhubung ke meter serta counter aktual.
+
+---
+
 ## Frontend Dashboard V1.12 — 14 Agustus 2026
 
 **Status:** Production output bar trend selesai

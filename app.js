@@ -315,24 +315,40 @@ function productionOutputDataset() {
       values: [142, 158, 166, 171, 182, 175, 188, 194, 201, 196, 209, 216],
       interval: "5 min",
       scope: "Last 1 hour",
+      water: 166,
+      runtime: 108,
+      downtime: 5.4,
+      energy: 3.4,
     },
     "8H": {
       labels: ["06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00"],
       values: [1960, 2140, 2260, 2380, 2250, 2470, 2580, 2380],
       interval: "hour",
       scope: "Current 8-hour shift",
+      water: 1284,
+      runtime: 852,
+      downtime: 42.6,
+      energy: 26.8,
     },
     "24H": {
       labels: ["00:00", "02:00", "04:00", "06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"],
       values: [2940, 2780, 3020, 3240, 3580, 3860, 4010, 4160, 3950, 4210, 4090, 3840],
       interval: "2 hours",
       scope: "Last 24 hours",
+      water: 3160,
+      runtime: 2498,
+      downtime: 126,
+      energy: 78.9,
     },
     "7D": {
       labels: ["08 Agu", "09 Agu", "10 Agu", "11 Agu", "12 Agu", "13 Agu", "14 Agu"],
       values: [41820, 43680, 42940, 45210, 44780, 46120, 45560],
       interval: "day",
       scope: "Last 7 days",
+      water: 22480,
+      runtime: 17540,
+      downtime: 864,
+      energy: 552,
     },
   };
   const selected = datasets[state.range] || datasets["8H"];
@@ -353,47 +369,56 @@ function overviewPage() {
   const alarmItems = alarms.filter((a) => !a.ack).slice(0, 3).map(alarmRow).join("");
   const productionFleet = [...jetflows, ...calators, ...dryers, ...kalenders];
   const runningMachines = statusCount(productionFleet, "running");
+  const stoppedMachines = statusCount(productionFleet, "idle") + statusCount(productionFleet, "fault");
+  const activeExceptions = statusCount(productionFleet, "warning") + statusCount(productionFleet, "fault");
   const productionOutput = productionOutputDataset();
   return `
     ${pageHead("overview", `<button class="button" data-page-target="health">⊕ Data health</button><button class="button primary" data-page-target="trends">⌗ Open trends</button>`)}
+    <div class="management-section-label overview-section-label"><span class="kpi-scope live">LIVE NOW</span><p>Snapshot aktual plant; nilai tidak berubah saat time range historis diganti.</p></div>
     <section class="kpi-grid">
       ${kpi("Machines Running", runningMachines, "/ 133", "MC", `<strong>${(runningMachines / 133 * 100).toFixed(1)}%</strong>simulated fleet state`, "success")}
-      ${kpi("Good Production Output", formatProductionOutput(productionOutput.total), "m", "OP", `<strong>${state.range}</strong>· ${productionOutput.scope}`)}
+      ${kpi("Machines Stopped", stoppedMachines, "machines", "ST", `<strong class='danger'>${statusCount(productionFleet, "fault")} fault</strong>· ${statusCount(productionFleet, "idle")} idle`, stoppedMachines ? "warning" : "success")}
       ${kpi("Electrical Demand", "1.84", "MW", "EL", "<strong class='danger'>92%</strong>of demand baseline", "warning")}
-      ${kpi("Unack. Alarms", "4", "events", "AL", "<strong class='danger'>2 critical</strong>require action", "danger")}
+      ${kpi("Active Exceptions", activeExceptions, "machines", "AL", `<strong class='danger'>${alarms.filter((alarm) => !alarm.ack).length} alarms</strong>not acknowledged`, activeExceptions ? "danger" : "success")}
     </section>
     <section class="grid-2">
-      ${panel("Production Output by Interval", `Good fabric output · ${productionOutput.scope} · meter kain`, `
-        <div class="throughput-summary">
-          <div><span>Total Output</span><strong>${formatProductionOutput(productionOutput.total)} <small>m</small></strong></div>
-          <div><span>Average / ${productionOutput.interval}</span><strong>${formatProductionOutput(productionOutput.average)} <small>m</small></strong></div>
-          <div><span>Peak / ${productionOutput.interval}</span><strong>${formatProductionOutput(productionOutput.peak)} <small>m</small></strong></div>
-        </div>
-        <div class="chart-container"><canvas id="overview-chart" class="chart-canvas"></canvas></div>
-      `, rangeButtons())}
       ${panel("Requires Attention", "Exception paling penting saat ini", `<div class="alarm-list">${alarmItems}</div>`, `<button class="button ghost small" data-page-target="alarms">View all →</button>`)}
-    </section>
-    <section class="grid-equal">
-      ${panel("Textile Process Flow", "Status real-time dari pencelupan sampai finishing", `
-        <div class="process-flow">
-          ${processNode("Jetflow", "Pencelupan · 88 assets", "jetflow", statusCount(jetflows, "running"), statusCount(jetflows, "warning"), statusCount(jetflows, "fault"))}
-          ${processNode("Calator", "Pencucian · 18 assets", "calator", statusCount(calators, "running"), statusCount(calators, "warning"), statusCount(calators, "fault"))}
-          ${processNode("Dryer", "Pengeringan · 6 assets", "dryer", statusCount(dryers, "running"), statusCount(dryers, "warning"), statusCount(dryers, "fault"))}
-          ${processNode("Kalender", "Finishing · 21 assets", "kalender", statusCount(kalenders, "running"), statusCount(kalenders, "warning"), statusCount(kalenders, "fault"))}
-        </div>
-      `)}
       ${panel("Utility Snapshot", "Supply utama dan current demand", `
         <div class="metric-grid">
           ${metricTile("Electrical", liveValue(1.84, "MW", .02, 2), "Main incomer · PF 0.94")}
           ${metricTile("Steam Header", liveValue(7.8, "bar", .08, 1), "Jetflow + Kalender")}
           ${metricTile("Thermal Oil", liveValue(218.4, "°C", .25, 1), "Dryer supply")}
-          ${metricTile("Water Consumption", "1,284<small>m³</small>", "All machines · current shift")}
-          ${metricTile("Chemical Today", "6,115<small>kg</small>", "7 variants")}
           ${metricTile("Data Good", "99.4<small>%</small>", "248.6K active tags")}
+          ${metricTile("PLC Gateways", "18<small>/ 18</small>", "All gateways online")}
+          ${metricTile("Historian Latency", "24<small>ms</small>", "Collector to historian")}
         </div>
       `, `<button class="button ghost small" data-page-target="utilities">Open utilities →</button>`)}
     </section>
+    ${panel("Textile Process Flow", "Status real-time dari pencelupan sampai finishing", `
+      <div class="process-flow">
+        ${processNode("Jetflow", "Pencelupan · 88 assets", "jetflow", statusCount(jetflows, "running"), statusCount(jetflows, "warning"), statusCount(jetflows, "fault"))}
+        ${processNode("Calator", "Pencucian · 18 assets", "calator", statusCount(calators, "running"), statusCount(calators, "warning"), statusCount(calators, "fault"))}
+        ${processNode("Dryer", "Pengeringan · 6 assets", "dryer", statusCount(dryers, "running"), statusCount(dryers, "warning"), statusCount(dryers, "fault"))}
+        ${processNode("Kalender", "Finishing · 21 assets", "kalender", statusCount(kalenders, "running"), statusCount(kalenders, "warning"), statusCount(kalenders, "fault"))}
+      </div>
+    `)}
     ${panel("Active Process Runs", "Material, recipe, progress, dan machine state", activeRunsTable(), `<button class="button ghost small">Export view</button>`)}
+    <div class="management-section-label overview-section-label historical-section-label"><span class="kpi-scope historical">SELECTED RANGE</span><p>${state.range} · ${productionOutput.scope} · seluruh nilai di bawah mengikuti periode ini.</p>${rangeButtons()}</div>
+    <section class="management-kpi-grid historical-grid overview-history-grid">
+      ${managementKpi("historical", "Good Production Output", formatProductionOutput(productionOutput.total), "m", "Good fabric aggregate · demo")}
+      ${managementKpi("historical", "Water Consumption", formatProductionOutput(productionOutput.water), "m³", "All production machines · demo")}
+      ${managementKpi("historical", "Energy Consumption", formatManagementValue(productionOutput.energy, "MWh"), "MWh", "Accumulated electrical energy · demo")}
+      ${managementKpi("historical", "Total Machine Runtime", formatProductionOutput(productionOutput.runtime), "h", "Accumulated across 133 machines")}
+      ${managementKpi("historical", "Machine Downtime", formatManagementValue(productionOutput.downtime, "h"), "h", "Idle and fault duration · demo", "warning")}
+    </section>
+    ${panel("Production Output by Interval", `Good fabric output · ${productionOutput.scope} · meter kain`, `
+      <div class="throughput-summary">
+        <div><span>Total Output</span><strong>${formatProductionOutput(productionOutput.total)} <small>m</small></strong></div>
+        <div><span>Average / ${productionOutput.interval}</span><strong>${formatProductionOutput(productionOutput.average)} <small>m</small></strong></div>
+        <div><span>Peak / ${productionOutput.interval}</span><strong>${formatProductionOutput(productionOutput.peak)} <small>m</small></strong></div>
+      </div>
+      <div class="chart-container"><canvas id="overview-chart" class="chart-canvas"></canvas></div>
+    `)}
   `;
 }
 
