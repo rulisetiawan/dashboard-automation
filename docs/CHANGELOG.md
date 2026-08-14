@@ -4,6 +4,17 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.8 — 14 Agustus 2026
+
+**Status:** In-place dashboard interaction selesai
+
+### Diubah
+
+- Filter consumption donut, legend, resource tab, time range, dan Electrical Distribution mempertahankan posisi scroll.
+- Navigasi menuju halaman proses, area, dan mesin tetap membuka halaman dari bagian atas.
+
+---
+
 ## Frontend Dashboard V1.7 — 14 Agustus 2026
 
 **Status:** Area-linked machine ranking selesai

@@ -1100,7 +1100,8 @@ function healthPage() {
   `;
 }
 
-function renderPage() {
+function renderPage({ preserveScroll = false } = {}) {
+  const previousScroll = Number.isFinite(window.scrollY) ? window.scrollY : 0;
   const content = document.getElementById("page-content");
   const renderers = {
     overview: overviewPage,
@@ -1118,8 +1119,10 @@ function renderPage() {
   document.getElementById("breadcrumb-page").textContent = pageMeta[state.page][0];
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === state.page));
   bindPageEvents();
-  requestAnimationFrame(initPageCharts);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  requestAnimationFrame(() => {
+    initPageCharts();
+    window.scrollTo({ top: preserveScroll ? previousScroll : 0, behavior: preserveScroll ? "auto" : "smooth" });
+  });
 }
 
 function bindPageEvents() {
@@ -1164,7 +1167,7 @@ function bindPageEvents() {
     button.addEventListener("click", () => {
       const [type, metric] = button.dataset.managementMetric.split("|");
       state.management.metric[type] = metric;
-      renderPage();
+      renderPage({ preserveScroll: true });
     });
   });
   document.querySelectorAll("[data-resource-area]").forEach((button) => {
@@ -1172,7 +1175,7 @@ function bindPageEvents() {
       const [type, area, metric] = button.dataset.resourceArea.split("|");
       state.management.metric[type] = metric;
       state.management.area[type] = area;
-      renderPage();
+      renderPage({ preserveScroll: true });
     };
     button.addEventListener("click", openResourceArea);
     button.addEventListener("keydown", (event) => {
@@ -1182,22 +1185,22 @@ function bindPageEvents() {
   document.querySelectorAll("[data-ranking-reset]").forEach((button) => {
     button.addEventListener("click", () => {
       state.management.area[button.dataset.rankingReset] = null;
-      renderPage();
+      renderPage({ preserveScroll: true });
     });
   });
   document.getElementById("electrical-level-select")?.addEventListener("change", (event) => {
     state.utility.electricalLevel = event.target.value;
     state.utility.selectedElectrical = electricalDistribution[event.target.value][0].id;
-    renderPage();
+    renderPage({ preserveScroll: true });
   });
   document.getElementById("electrical-asset-select")?.addEventListener("change", (event) => {
     state.utility.selectedElectrical = event.target.value;
-    renderPage();
+    renderPage({ preserveScroll: true });
   });
   document.querySelectorAll("[data-electrical-asset]").forEach((button) => {
     button.addEventListener("click", () => {
       state.utility.selectedElectrical = button.dataset.electricalAsset;
-      renderPage();
+      renderPage({ preserveScroll: true });
     });
   });
   document.querySelectorAll("[data-process-level]").forEach((button) => {
@@ -1211,7 +1214,7 @@ function bindPageEvents() {
   document.querySelectorAll("[data-range]").forEach((button) => {
     button.addEventListener("click", () => {
       state.range = button.dataset.range;
-      renderPage();
+      renderPage({ preserveScroll: true });
     });
   });
   document.querySelectorAll("[data-history-range]").forEach((button) => {
@@ -1273,7 +1276,7 @@ function selectHistoryRange(range) {
   state.history.end = end;
   state.history.start = end - durationMap[range] * 60 * 60 * 1000;
   resetHistoricalViewport();
-  renderPage();
+  renderPage({ preserveScroll: true });
 }
 
 function applyCustomHistoryRange() {
@@ -1293,7 +1296,7 @@ function applyCustomHistoryRange() {
   state.history.start = start;
   state.history.end = end;
   resetHistoricalViewport();
-  renderPage();
+  renderPage({ preserveScroll: true });
 }
 
 function resetHistoricalViewport() {
@@ -1578,7 +1581,7 @@ function drawElectricalDistributionChart() {
     const asset = canvas._electricalAssetAtPointer(event);
     if (!asset) return;
     state.utility.selectedElectrical = asset.id;
-    renderPage();
+    renderPage({ preserveScroll: true });
   });
 }
 
