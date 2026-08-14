@@ -14,6 +14,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `utilities/Plant_Utility_Concept_v1.0.md` | 1.0 | Baseline | Konsep listrik, water, steam boiler, thermal oil boiler, energy balance, dan machine utility monitoring |
 | `chemicals/Chemical_Dispensing_Transfer_Concept_v1.0.md` | 1.0 | Baseline | Konsep tujuh varian chemical, request Calator, dispensing, pipe transfer, consumption, dan traceability |
 | `dashboard/Dashboard_V1_Concept_v1.1.md` | 1.1 | Aktif | Konsep dashboard real-time/historical dengan multi-speed Calator, machine monitoring, alarm, data health, utility, dan chemical |
+| `assets/Plant_Machine_Area_Mapping_v1.0.md` | 1.0 | Aktif | Master mapping 133 mesin: 88 Jetflow pada Lane A–F serta 45 mesin pada area Depan, Belakang, dan Timur |
 | `releases/Frontend_V1.0.md` | 1.0 | Selesai | Implementasi frontend read-only dengan simulated real-time dan historical data |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
@@ -27,4 +28,4 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 
 ## Status saat ini
 
-Dokumentasi berada pada tahap baseline konseptual. Konsep mesin, utilitas, chemical dispensing, dan Dashboard V1 telah ditambahkan. Tahap berikutnya adalah menetapkan pilot, data source, tag, topology, infrastructure, serta kebutuhan operasional aktual.
+Dokumentasi berada pada tahap baseline konseptual. Konsep mesin, utilitas, chemical dispensing, Dashboard V1, serta mapping awal 133 mesin telah ditambahkan. Tahap berikutnya adalah menetapkan nomor mesin aktual, pilot, data source, tag, topology, infrastructure, serta kebutuhan operasional aktual.

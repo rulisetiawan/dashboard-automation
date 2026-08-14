@@ -4,6 +4,27 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Plant Machine and Area Mapping v1.0 — 14 Agustus 2026
+
+**Status:** Baseline master mapping dibuat
+
+### Ditambahkan
+
+- Enam area Jetflow: Lane A–F.
+- 88 Jetflow: Lane A 6, B 18, C 18, D 18, E 13, dan F 15.
+- Area Depan: 2 Calator, 7 Kalender, dan 1 Dryer.
+- Area Belakang: 9 Calator, 7 Kalender, dan 2 Dryer.
+- Area Timur: 7 Calator, 7 Kalender, dan 3 Dryer.
+- Rekapitulasi 18 Calator, 21 Kalender, 6 Dryer, dan total 133 mesin produksi terdata.
+- Usulan machine ID, asset hierarchy, filter dashboard, dan status onboarding integrasi.
+
+### Catatan
+
+- Penyebutan Lane A–E dinormalisasi menjadi Lane A–F karena daftar aktual mencakup enam lane.
+- Nomor mesin aktual, subtype, PLC, protocol, dan integration status masih diperlukan.
+
+---
+
 ## Frontend Dashboard V1.0 — 14 Agustus 2026
 
 **Status:** Prototype frontend selesai
