@@ -1,10 +1,18 @@
 const state = {
   page: "overview",
   selected: {
-    jetflow: "JF-02",
-    calator: "CL-B01",
-    dryer: "DR-01",
-    kalender: "KL-02",
+    jetflow: "JF-LA-01",
+    calator: "CL-DPN-01",
+    dryer: "DR-DPN-01",
+    kalender: "KL-DPN-01",
+    chemical: "DSP-DPN-01",
+  },
+  drill: {
+    jetflow: { area: null, machine: null },
+    calator: { area: null, machine: null },
+    dryer: { area: null, machine: null },
+    kalender: { area: null, machine: null },
+    chemical: { area: null, machine: null },
   },
   range: "8H",
   history: {
@@ -29,30 +37,63 @@ const pageMeta = {
   health: ["Data Health", "Collector & Tag Quality", "Koneksi PLC, gateway, meter, stale tag, dan historian health."],
 };
 
-const jetflows = [
-  { id: "JF-01", name: "Jetflow 01", winches: 2, state: "running", batch: "DB-260814-031", recipe: "NAVY-R12", step: "Heating", progress: 68 },
-  { id: "JF-02", name: "Jetflow 02", winches: 5, state: "running", batch: "DB-260814-032", recipe: "BLACK-R08", step: "Holding", progress: 81 },
-  { id: "JF-03", name: "Jetflow 03", winches: 8, state: "warning", batch: "DB-260814-034", recipe: "OLIVE-R03", step: "Dosing", progress: 44 },
-  { id: "JF-04", name: "Jetflow 04", winches: 5, state: "idle", batch: "—", recipe: "—", step: "Ready", progress: 0 },
-];
+const processAreas = {
+  jetflow: [
+    { code: "LA", label: "Lane A", count: 6 }, { code: "LB", label: "Lane B", count: 18 },
+    { code: "LC", label: "Lane C", count: 18 }, { code: "LD", label: "Lane D", count: 18 },
+    { code: "LE", label: "Lane E", count: 13 }, { code: "LF", label: "Lane F", count: 15 },
+  ],
+  calator: [{ code: "DPN", label: "Depan", count: 2 }, { code: "BLK", label: "Belakang", count: 9 }, { code: "TMR", label: "Timur", count: 7 }],
+  dryer: [{ code: "DPN", label: "Depan", count: 1 }, { code: "BLK", label: "Belakang", count: 2 }, { code: "TMR", label: "Timur", count: 3 }],
+  kalender: [{ code: "DPN", label: "Depan", count: 7 }, { code: "BLK", label: "Belakang", count: 7 }, { code: "TMR", label: "Timur", count: 7 }],
+  chemical: [{ code: "DPN", label: "Depan", count: 1 }, { code: "BLK", label: "Belakang", count: 2 }, { code: "TMR", label: "Timur", count: 2 }],
+};
 
-const calators = [
-  { id: "CL-01", name: "Calator 01", subtype: "Standard", state: "running", batch: "DB-260814-028", recipe: "WASH-S04", progress: 74 },
-  { id: "CL-B01", name: "Calator Bianco 01", subtype: "Bianco", state: "running", batch: "DB-260814-029", recipe: "SOFT-B12", progress: 62 },
-  { id: "CL-B02", name: "Calator Bianco 02", subtype: "Bianco", state: "warning", batch: "DB-260814-030", recipe: "SOFT-B08", progress: 51 },
-];
+const processConfig = {
+  jetflow: { code: "JF", singular: "Jetflow", plural: "Jetflow", process: "Pencelupan", areas: "6 lanes" },
+  calator: { code: "CL", singular: "Calator", plural: "Calator", process: "Pencucian", areas: "3 areas" },
+  dryer: { code: "DR", singular: "Dryer", plural: "Dryer", process: "Pengeringan", areas: "3 areas" },
+  kalender: { code: "KL", singular: "Kalender", plural: "Kalender", process: "Finishing", areas: "3 areas" },
+  chemical: { code: "DSP", singular: "Dispensing", plural: "Dispensing Calator", process: "Chemical transfer", areas: "3 areas" },
+};
 
-const dryers = [
-  { id: "DR-01", name: "Dryer 01", chambers: 8, state: "running", batch: "DB-260814-024", setup: "DRY-COT-18", progress: 72 },
-  { id: "DR-02", name: "Dryer 02", chambers: 6, state: "running", batch: "DB-260814-025", setup: "DRY-POL-22", progress: 49 },
-  { id: "DR-03", name: "Dryer 03", chambers: 8, state: "fault", batch: "DB-260814-026", setup: "DRY-COT-16", progress: 31 },
-];
+function simulatedMachineState(index, areaIndex) {
+  const marker = index + areaIndex * 5;
+  if (marker % 19 === 0 && marker > 0) return "fault";
+  if (marker % 11 === 0 && marker > 0) return "warning";
+  if (marker % 7 === 0) return "idle";
+  return "running";
+}
 
-const kalenders = [
-  { id: "KL-01", name: "Kalender 01", state: "running", batch: "DB-260814-021", setup: "FIN-COT-07", progress: 78 },
-  { id: "KL-02", name: "Kalender 02", state: "running", batch: "DB-260814-022", setup: "FIN-POL-05", progress: 65 },
-  { id: "KL-03", name: "Kalender 03", state: "warning", batch: "DB-260814-023", setup: "FIN-COT-09", progress: 39 },
-];
+function createFleet(type) {
+  const config = processConfig[type];
+  return processAreas[type].flatMap((area, areaIndex) => Array.from({ length: area.count }, (_, index) => {
+    const number = String(index + 1).padStart(2, "0");
+    const machineState = simulatedMachineState(index, areaIndex);
+    const active = machineState === "running" || machineState === "warning";
+    const base = {
+      id: `${config.code}-${area.code}-${number}`,
+      name: `${config.singular} ${area.label} ${number}`,
+      area: area.code,
+      areaLabel: area.label,
+      state: machineState,
+      batch: active ? `DB-260814-${String(areaIndex * 20 + index + 1).padStart(3, "0")}` : "—",
+      progress: active ? 31 + ((index * 13 + areaIndex * 17) % 63) : 0,
+      connected: machineState !== "offline",
+    };
+    if (type === "jetflow") return { ...base, winches: 2 + ((index + areaIndex) % 7), recipe: active ? ["NAVY-R12", "BLACK-R08", "OLIVE-R03"][index % 3] : "—", step: active ? ["Filling", "Dosing", "Heating", "Holding"][index % 4] : "Ready" };
+    if (type === "calator") return { ...base, subtype: index % 6 === 5 ? "Bianco" : "Standard", recipe: active ? ["WASH-S04", "SOFT-B12", "SOFT-B08"][index % 3] : "—" };
+    if (type === "dryer") return { ...base, chambers: 6 + ((index + areaIndex) % 2) * 2, setup: active ? ["DRY-COT-18", "DRY-POL-22", "DRY-COT-16"][index % 3] : "—" };
+    if (type === "kalender") return { ...base, setup: active ? ["FIN-COT-07", "FIN-POL-05", "FIN-COT-09"][index % 3] : "—" };
+    return { ...base, recipe: active ? "CHEM-TRANSFER-07" : "—", step: active ? "Ready / Transfer" : "Standby" };
+  }));
+}
+
+const jetflows = createFleet("jetflow");
+const calators = createFleet("calator");
+const dryers = createFleet("dryer");
+const kalenders = createFleet("kalender");
+const dispensers = createFleet("chemical");
 
 const alarms = [
   { id: 1, severity: "critical", title: "Tangle limit aktif", detail: "Limit tangle Winch 3 terdeteksi selama 18 detik.", source: "JF-03 · Winch 3", time: "10:38:42", ack: false },
@@ -155,10 +196,12 @@ function selector(items, page) {
 
 function overviewPage() {
   const alarmItems = alarms.filter((a) => !a.ack).slice(0, 3).map(alarmRow).join("");
+  const productionFleet = [...jetflows, ...calators, ...dryers, ...kalenders];
+  const runningMachines = statusCount(productionFleet, "running");
   return `
     ${pageHead("overview", `<button class="button" data-page-target="health">⊕ Data health</button><button class="button primary" data-page-target="trends">⌗ Open trends</button>`)}
     <section class="kpi-grid">
-      ${kpi("Machines Running", "27", "/ 31", "MC", "<strong>87.1%</strong>plant availability", "success")}
+      ${kpi("Machines Running", runningMachines, "/ 133", "MC", `<strong>${(runningMachines / 133 * 100).toFixed(1)}%</strong>simulated fleet state`, "success")}
       ${kpi("Active Output", "18,420", "m", "OP", "<strong>↑ 4.8%</strong>vs previous shift")}
       ${kpi("Electrical Demand", "1.84", "MW", "EL", "<strong class='danger'>92%</strong>of demand baseline", "warning")}
       ${kpi("Unack. Alarms", "4", "events", "AL", "<strong class='danger'>2 critical</strong>require action", "danger")}
@@ -172,10 +215,10 @@ function overviewPage() {
     <section class="grid-equal">
       ${panel("Textile Process Flow", "Status real-time dari pencelupan sampai finishing", `
         <div class="process-flow">
-          ${processNode("Jetflow", "Pencelupan", "jetflow", 10, 1, 1)}
-          ${processNode("Calator", "Pencucian", "calator", 7, 1, 0)}
-          ${processNode("Dryer", "Pengeringan", "dryer", 5, 0, 1)}
-          ${processNode("Kalender", "Finishing", "kalender", 4, 1, 0)}
+          ${processNode("Jetflow", "Pencelupan · 88 assets", "jetflow", statusCount(jetflows, "running"), statusCount(jetflows, "warning"), statusCount(jetflows, "fault"))}
+          ${processNode("Calator", "Pencucian · 18 assets", "calator", statusCount(calators, "running"), statusCount(calators, "warning"), statusCount(calators, "fault"))}
+          ${processNode("Dryer", "Pengeringan · 6 assets", "dryer", statusCount(dryers, "running"), statusCount(dryers, "warning"), statusCount(dryers, "fault"))}
+          ${processNode("Kalender", "Finishing · 21 assets", "kalender", statusCount(kalenders, "running"), statusCount(kalenders, "warning"), statusCount(kalenders, "fault"))}
         </div>
       `)}
       ${panel("Utility Snapshot", "Supply utama dan current demand", `
@@ -231,14 +274,109 @@ function alarmRow(a) {
   `;
 }
 
-function jetflowPage() {
+function fleetFor(type) {
+  return { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers }[type] || [];
+}
+
+function processBreadcrumb(type, machine = null) {
+  const config = processConfig[type];
+  const areaCode = machine?.area || state.drill[type].area;
+  const area = processAreas[type].find((item) => item.code === areaCode);
+  return `<nav class="process-breadcrumb" aria-label="Lokasi halaman">
+    <button data-process-level="overview" data-process-type="${type}">${config.plural}</button>
+    ${area ? `<span>›</span><button data-process-level="area" data-process-type="${type}">${area.label}</button>` : ""}
+    ${machine ? `<span>›</span><strong>${machine.id}</strong>` : ""}
+  </nav>`;
+}
+
+function statusCount(items, machineState) {
+  return items.filter((item) => item.state === machineState).length;
+}
+
+function processFleetPage(type) {
+  const config = processConfig[type];
+  const fleet = fleetFor(type);
+  const exceptions = statusCount(fleet, "warning") + statusCount(fleet, "fault");
+  const areaCards = processAreas[type].map((area) => {
+    const items = fleet.filter((machine) => machine.area === area.code);
+    const running = statusCount(items, "running");
+    const idle = statusCount(items, "idle");
+    const warning = statusCount(items, "warning");
+    const fault = statusCount(items, "fault");
+    const tone = fault ? "fault" : warning ? "warning" : "running";
+    return `<article class="card area-card" data-area-target="${type}|${area.code}" role="button" tabindex="0">
+      <div class="area-card-head"><div><span class="area-code">${area.code}</span><h2>${type === "jetflow" ? area.label : `Area ${area.label}`}</h2></div>${statusPill(tone)}</div>
+      <div class="area-total"><strong>${items.length}</strong><span>${config.singular} registered</span></div>
+      <div class="area-state-grid"><span><strong>${running}</strong>Run</span><span><strong>${idle}</strong>Idle</span><span><strong>${warning}</strong>Warn</span><span><strong>${fault}</strong>Fault</span></div>
+      <div class="area-card-foot"><span>${items.filter((item) => item.batch !== "—").length} active batches</span><strong>Open ${type === "jetflow" ? "lane" : "area"} →</strong></div>
+    </article>`;
+  }).join("");
+  return `
+    ${pageHead(type, `<span class="data-pill neutral">Asset mapping · simulated state</span><button class="button" data-page-target="trends">⌗ Historical</button>`)}
+    <section class="fleet-summary card">
+      <div><span class="eyebrow">${config.process}</span><h2>${config.plural} Fleet Overview</h2><p>Pilih ${type === "jetflow" ? "lane" : "area"} untuk melihat daftar mesin, kemudian masuk ke detail mesin.</p></div>
+      <div class="fleet-total"><strong>${fleet.length}</strong><span>Total assets</span></div>
+    </section>
+    <section class="kpi-grid">
+      ${kpi("Registered Assets", fleet.length, "machines", config.code, `<strong>${processAreas[type].length}</strong>${type === "jetflow" ? "lanes" : "areas"}`, "success")}
+      ${kpi("Running Demo", statusCount(fleet, "running"), "machines", "RN", `<strong>${Math.round(statusCount(fleet, "running") / fleet.length * 100)}%</strong>of mapped fleet`)}
+      ${kpi("Idle Demo", statusCount(fleet, "idle"), "machines", "ID", "<strong>Ready / standby</strong>")}
+      ${kpi("Exceptions", exceptions, "machines", "EX", `<strong class='danger'>${statusCount(fleet, "fault")} fault</strong>· ${statusCount(fleet, "warning")} warning`, exceptions ? "warning" : "success")}
+    </section>
+    <section class="area-grid">${areaCards}</section>
+  `;
+}
+
+function machineSnapshot(type, machine, index) {
+  if (type === "jetflow") return `${machine.winches} winches · Tank ${(91.8 + index % 6 * .3).toFixed(1)}°C`;
+  if (type === "calator") return `${machine.subtype} · OF Out ${(28.7 + index % 5 * .12).toFixed(1)} m/min`;
+  if (type === "dryer") return `${machine.chambers} chambers · Avg ${(145.2 + index % 4 * .5).toFixed(1)}°C`;
+  if (type === "kalender") return `Load balance ${(1.2 + index % 5 * .3).toFixed(1)}% · Width ${(180.8 + index % 4 * .2).toFixed(1)} cm`;
+  return `${machine.step} · 7 variants`;
+}
+
+function processAreaPage(type) {
+  const config = processConfig[type];
+  const area = processAreas[type].find((item) => item.code === state.drill[type].area) || processAreas[type][0];
+  const machines = fleetFor(type).filter((machine) => machine.area === area.code);
+  const cards = machines.map((machine, index) => `<article class="card fleet-machine-card" data-machine-target="${type}|${machine.id}" data-machine-state="${machine.state}" data-machine-search="${machine.id.toLowerCase()} ${machine.name.toLowerCase()} ${machine.batch.toLowerCase()}" role="button" tabindex="0">
+    <div class="fleet-machine-top"><span class="machine-code ${machine.state === "fault" ? "fault" : machine.state === "warning" ? "warning" : ""}">${config.code}</span><div><strong>${machine.id}</strong><span>${machine.name}</span></div>${statusPill(machine.state)}</div>
+    <div class="fleet-machine-reading">${machineSnapshot(type, machine, index)}</div>
+    <div class="fleet-machine-meta"><span>Batch<strong>${machine.batch}</strong></span><span>Progress<strong>${machine.progress}%</strong></span><span>Data<strong>18 ms</strong></span></div>
+    <div class="fleet-machine-foot"><span>${machine.connected ? "● Connected" : "○ Offline"}</span><strong>Machine detail →</strong></div>
+  </article>`).join("");
+  return `
+    ${processBreadcrumb(type)}
+    ${pageHead(type, `<button class="button" data-process-level="overview" data-process-type="${type}">← All ${type === "jetflow" ? "lanes" : "areas"}</button><button class="button" data-page-target="trends">⌗ Area trends</button>`)}
+    <section class="fleet-area-head card"><div><span class="area-code">${area.code}</span><div><h2>${config.plural} ${area.label}</h2><p>${machines.length} mesin terdaftar · pilih mesin untuk membuka sensor, motor, alarm, dan historical.</p></div></div><div class="area-health"><strong>${statusCount(machines, "running")}</strong><span>Running demo</span></div></section>
+    <section class="card fleet-filter"><input class="search-control" id="fleet-search" placeholder="Cari machine ID atau batch..." /><select class="select-control" id="fleet-state-filter"><option value="all">All states</option><option value="running">Running</option><option value="idle">Idle</option><option value="warning">Warning</option><option value="fault">Fault</option></select></section>
+    <section class="fleet-machine-grid" id="fleet-machine-grid">${cards}</section>
+    <div class="empty-state card hidden" id="fleet-empty"><strong>Mesin tidak ditemukan</strong><span>Ubah pencarian atau filter state.</span></div>
+  `;
+}
+
+function processPage(type, detailRenderer) {
+  const drill = state.drill[type];
+  if (!drill.area) return processFleetPage(type);
+  if (!drill.machine) return processAreaPage(type);
+  return detailRenderer();
+}
+
+function jetflowPage() { return processPage("jetflow", jetflowDetailPage); }
+function calatorPage() { return processPage("calator", calatorDetailPage); }
+function dryerPage() { return processPage("dryer", dryerDetailPage); }
+function kalenderPage() { return processPage("kalender", kalenderDetailPage); }
+function chemicalPage() { return processPage("chemical", chemicalDetailPage); }
+
+function jetflowDetailPage() {
   const machine = jetflows.find((m) => m.id === state.selected.jetflow) || jetflows[0];
   const winches = Array.from({ length: machine.winches }, (_, i) => {
     const warn = machine.id === "JF-03" && i === 2;
     return `<div class="winch-card"><div class="winch-card-head"><strong>Winch ${i + 1}</strong><i class="equipment-state ${warn ? "warning" : ""}"></i></div><div class="card-reading">${liveValue(42 + i * .7, "Hz", .25, 1)}</div><div class="card-caption">Motor · ${warn ? "Tangle detected" : "Limit clear"}</div><div class="mini-bar"><span style="width:${65 + i * 3}%"></span></div></div>`;
   }).join("");
   return `
-    ${pageHead("jetflow", selector(jetflows, "jetflow"))}
+    ${processBreadcrumb("jetflow", machine)}
+    ${pageHead("jetflow", selector(jetflows.filter((item) => item.area === machine.area), "jetflow"))}
     ${machineHero(machine, "JF", `${machine.winches} winches · ${machine.recipe} · Active step: ${machine.step}`)}
     <section class="kpi-grid">
       ${kpi("Main Tank Temp", liveValue(92.6, "", .18, 1), "°C", "MT", "<strong>Target 93.0°C</strong>· holding")}
@@ -303,7 +441,7 @@ function formatDateTime(timestamp, compact = false) {
     : { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-function calatorPage() {
+function calatorDetailPage() {
   const machine = calators.find((m) => m.id === state.selected.calator) || calators[0];
   const isBianco = machine.subtype === "Bianco";
   const standard = [
@@ -317,7 +455,8 @@ function calatorPage() {
   ];
   const speeds = isBianco ? bianco : standard;
   return `
-    ${pageHead("calator", selector(calators, "calator"))}
+    ${processBreadcrumb("calator", machine)}
+    ${pageHead("calator", selector(calators.filter((item) => item.area === machine.area), "calator"))}
     ${machineHero(machine, "CL", `${machine.subtype} · ${machine.recipe} · Jetflow source JF-04`)}
     <section class="kpi-grid">
       ${kpi("Overfeed Out Avg", liveValue(29.18, "", .08, 2), "m/min", "OF", "<strong>Balance 1.4%</strong>· within range")}
@@ -365,11 +504,12 @@ function balanceRows(rows) {
   return `<div>${rows.map((r) => `<div class="balance-row"><span class="balance-label">${r[0]}</span><div class="balance-track"><i class="balance-indicator" style="left:${r[1]}%"></i></div><span class="balance-value">${r[2]}</span></div>`).join("")}</div>`;
 }
 
-function dryerPage() {
+function dryerDetailPage() {
   const machine = dryers.find((m) => m.id === state.selected.dryer) || dryers[0];
   const temps = Array.from({ length: machine.chambers }, (_, i) => ({ actual: 142 + i * 1.2 + (i === 4 ? -9 : 0), sp: 144 + i * 1.0 }));
   return `
-    ${pageHead("dryer", selector(dryers, "dryer"))}
+    ${processBreadcrumb("dryer", machine)}
+    ${pageHead("dryer", selector(dryers.filter((item) => item.area === machine.area), "dryer"))}
     ${machineHero(machine, "DR", `${machine.chambers} chambers · ${machine.setup} · Calator source CL-03`)}
     <section class="kpi-grid">
       ${kpi("Machine Speed", liveValue(32.4, "", .08, 1), "m/min", "SP", "<strong>Target 32.5</strong>· stable")}
@@ -402,11 +542,12 @@ function dryerPage() {
   `;
 }
 
-function kalenderPage() {
+function kalenderDetailPage() {
   const machine = kalenders.find((m) => m.id === state.selected.kalender) || kalenders[0];
   const motors = ["Inlet", "Expander L", "Expander R", "Upper Felt", "Lower Felt", "Cooling Belt", "Conveyor Belt", "Plaiter", "Conveyor Table", "Up Down Table"];
   return `
-    ${pageHead("kalender", selector(kalenders, "kalender"))}
+    ${processBreadcrumb("kalender", machine)}
+    ${pageHead("kalender", selector(kalenders.filter((item) => item.area === machine.area), "kalender"))}
     ${machineHero(machine, "KL", `${machine.setup} · Dryer source DR-02 · Cotton 220 GSM`)}
     <section class="kpi-grid">
       ${kpi("Loadcell Balance", liveValue(1.8, "", .05, 1), "%", "LC", "<strong>Within ±3%</strong>· stable", "success")}
@@ -512,7 +653,8 @@ function energyTable() {
   return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Machine</th><th>Process Run</th><th>Energy</th><th>Intensity</th><th>vs Baseline</th><th>Data</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r[0]}</td><td class="mono">${r[1]}</td><td class="mono">${r[2]}</td><td class="mono">${r[3]}</td><td class="mono">${r[4]}</td><td><span class="data-pill ${r[5] === "Good" ? "good" : "warning"}">${r[5]}</span></td></tr>`).join("")}</tbody></table></div>`;
 }
 
-function chemicalPage() {
+function chemicalDetailPage() {
+  const machine = dispensers.find((item) => item.id === state.selected.chemical) || dispensers[0];
   const transactions = [
     ["TR-28419", "CH-02", "CL-B01", "184.0 kg", "182.4 kg", "P-04", "Completed"],
     ["TR-28420", "CH-01", "CL-02", "128.0 kg", "82.6 kg", "P-02", "Transfer"],
@@ -520,7 +662,9 @@ function chemicalPage() {
     ["TR-28418", "CH-03", "CL-B02", "110.0 kg", "108.1 kg", "P-03", "Partial"],
   ];
   return `
-    ${pageHead("chemical", `<select class="select-control"><option>Today · Shift A</option><option>Last 24 hours</option><option>This week</option></select><button class="button" data-page-target="trends">⌗ Historical</button>`)}
+    ${processBreadcrumb("chemical", machine)}
+    ${pageHead("chemical", selector(dispensers.filter((item) => item.area === machine.area), "chemical"))}
+    ${machineHero(machine, "DSP", `${machine.areaLabel} · 7 chemical variants · Calator destination group`)}
     <section class="kpi-grid">
       ${kpi("Usage Today", "6,115", "kg", "CH", "<strong>81.5%</strong>of daily forecast")}
       ${kpi("Active Transfers", "1", "route", "TR", "<strong>CH-01 → CL-02</strong>· 64.5%")}
@@ -704,6 +848,38 @@ function bindPageEvents() {
   document.querySelectorAll("[data-machine-select]").forEach((select) => {
     select.addEventListener("change", () => {
       state.selected[select.dataset.machineSelect] = select.value;
+      if (state.drill[select.dataset.machineSelect]) state.drill[select.dataset.machineSelect].machine = select.value;
+      renderPage();
+    });
+  });
+  document.querySelectorAll("[data-area-target]").forEach((card) => {
+    const openArea = () => {
+      const [type, area] = card.dataset.areaTarget.split("|");
+      state.drill[type] = { area, machine: null };
+      renderPage();
+    };
+    card.addEventListener("click", openArea);
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openArea(); }
+    });
+  });
+  document.querySelectorAll("[data-machine-target]").forEach((card) => {
+    const openMachine = () => {
+      const [type, machine] = card.dataset.machineTarget.split("|");
+      state.selected[type] = machine;
+      state.drill[type].machine = machine;
+      renderPage();
+    };
+    card.addEventListener("click", openMachine);
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openMachine(); }
+    });
+  });
+  document.querySelectorAll("[data-process-level]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const type = button.dataset.processType;
+      if (button.dataset.processLevel === "overview") state.drill[type] = { area: null, machine: null };
+      else state.drill[type].machine = null;
       renderPage();
     });
   });
@@ -731,12 +907,31 @@ function bindPageEvents() {
   const alarmSeverity = document.getElementById("alarm-severity");
   if (alarmSearch) alarmSearch.addEventListener("input", filterAlarms);
   if (alarmSeverity) alarmSeverity.addEventListener("change", filterAlarms);
+  const fleetSearch = document.getElementById("fleet-search");
+  const fleetState = document.getElementById("fleet-state-filter");
+  if (fleetSearch) fleetSearch.addEventListener("input", filterFleetMachines);
+  if (fleetState) fleetState.addEventListener("change", filterFleetMachines);
 }
 
 function navigate(page) {
+  if (state.drill[page]) state.drill[page] = { area: null, machine: null };
   state.page = page;
   renderPage();
   closeSidebar();
+}
+
+function filterFleetMachines() {
+  const query = (document.getElementById("fleet-search")?.value || "").trim().toLowerCase();
+  const machineState = document.getElementById("fleet-state-filter")?.value || "all";
+  let visible = 0;
+  document.querySelectorAll("[data-machine-search]").forEach((card) => {
+    const matchesSearch = card.dataset.machineSearch.includes(query);
+    const matchesState = machineState === "all" || card.dataset.machineState === machineState;
+    const show = matchesSearch && matchesState;
+    card.classList.toggle("hidden", !show);
+    if (show) visible += 1;
+  });
+  document.getElementById("fleet-empty")?.classList.toggle("hidden", visible > 0);
 }
 
 function selectHistoryRange(range) {

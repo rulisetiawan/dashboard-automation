@@ -4,6 +4,32 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.2 — 14 Agustus 2026
+
+**Status:** Hierarchical process navigation selesai
+
+### Ditambahkan
+
+- Fleet overview sebagai halaman awal tab proses.
+- Jetflow Lane A–F serta area Depan, Belakang, dan Timur untuk proses lain.
+- Area machine list dengan search dan state filter.
+- Breadcrumb process–area–machine.
+- Drill-down hingga machine detail.
+- Jumlah asset mapping aktual pada sidebar dan Plant Overview.
+
+### Diubah
+
+- Tab proses tidak lagi langsung membuka satu machine detail.
+- Machine selector pada halaman detail hanya menampilkan mesin dalam area aktif.
+- Chemical/Dispensing menggunakan pola area yang sama.
+
+### Batasan
+
+- Machine state dan process value masih simulated.
+- ID konseptual belum menjadi nomor mesin produksi resmi.
+
+---
+
 ## Frontend Dashboard V1.1 — 14 Agustus 2026
 
 **Status:** Custom range dan interactive historical trend selesai
