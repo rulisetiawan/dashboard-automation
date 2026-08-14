@@ -172,8 +172,9 @@ select:focus-visible {
   margin-top: 3px;
   color: #617781;
   font-family: var(--font-data);
-  font-size: 0.52rem;
-  letter-spacing: 0.08em;
+  font-size: 0.42rem;
+  letter-spacing: 0.045em;
+  line-height: 1.25;
 }
 
 .sidebar-close {

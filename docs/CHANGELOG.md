@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.5 — 14 Agustus 2026
+
+**Status:** Pembaruan identitas dashboard selesai
+
+### Diubah
+
+- Nama produk menjadi `PT.SMM Smart Manufacturing Dashboard`.
+- Brand sidebar, browser title, dan metadata description diperbarui.
+- Identitas package dan pesan build diselaraskan dengan nama produk baru.
+
+### Dihapus
+
+- Identitas `PulseGrid Textile Operations` dari frontend aktif.
+
+---
+
 ## Frontend Dashboard V1.4 — 14 Agustus 2026
 
 **Status:** Management cockpit dan consumption drill-down selesai

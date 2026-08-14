@@ -44,4 +44,4 @@ try {
 }
 await writeFile(new URL("./dist/.openai/hosting.json", import.meta.url), JSON.stringify(hosting, null, 2));
 
-console.log("PulseGrid V1 build complete");
+console.log("PT.SMM Smart Manufacturing Dashboard build complete");
