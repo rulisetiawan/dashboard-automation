@@ -42,6 +42,16 @@ const state = {
     electricalLevel: "cubical",
     selectedElectrical: "CUB-A",
   },
+  sensorTrend: {
+    range: "1H",
+    enabled: {
+      jetflow: ["main_temp", "water_level", "flow_meter"],
+      calator: ["overfeed_out", "dancing_roller", "feeding_speed"],
+      dryer: ["line_speed", "chamber_1", "chamber_5"],
+      kalender: ["temp_upper", "temp_lower", "overfeed"],
+      chemical: ["transfer_flow", "target_weight", "line_pressure"],
+    },
+  },
 };
 
 const pageMeta = {
@@ -209,6 +219,83 @@ function remoteDisplayPanel(machine) {
   return `<section class="card remote-display-card">
     <div class="remote-display-head"><div><h2>Remote Display</h2><p>${machine.id} · reserved viewport untuk remote HMI/display melalui IP</p></div><span class="data-pill neutral">IP not configured</span></div>
     <div class="remote-display-viewport" role="img" aria-label="Placeholder remote display untuk ${machine.name}"></div>
+  </section>`;
+}
+
+const sensorTrendConfig = {
+  jetflow: [
+    { key: "main_temp", label: "Main Tank Temperature", tag: "TEMP_MAIN", unit: "°C", sv: 93, variance: 2.4, decimals: 1, color: "#078eaa" },
+    { key: "water_level", label: "Water Level", tag: "LEVEL_WATER", unit: "%", sv: 72, variance: 3.8, decimals: 1, color: "#4d8fd0" },
+    { key: "flow_meter", label: "Main Flow Meter", tag: "FLOW_MAIN", unit: "m³/h", sv: 125, variance: 7.2, decimals: 1, color: "#119b70" },
+    { key: "dosing_temp_1", label: "Dosing Tank 1 Temperature", tag: "TEMP_DOSING_01", unit: "°C", sv: 58, variance: 3.1, decimals: 1, color: "#8267c7" },
+    { key: "dosing_temp_2", label: "Dosing Tank 2 Temperature", tag: "TEMP_DOSING_02", unit: "°C", sv: 43, variance: 2.7, decimals: 1, color: "#d68b05" },
+    { key: "dosing_level", label: "Dosing Tank Level", tag: "LEVEL_DOSING", unit: "%", sv: 65, variance: 4.2, decimals: 1, color: "#db6d48" },
+  ],
+  calator: [
+    { key: "overfeed_out", label: "Overfeed Out Speed", tag: "SPD_OF_OUT", unit: "m/min", sv: 29.2, variance: 0.9, decimals: 1, color: "#078eaa" },
+    { key: "dancing_roller", label: "Dancing Roller", tag: "POS_DANCER", unit: "%", sv: 50, variance: 4.2, decimals: 1, color: "#4d8fd0" },
+    { key: "feeding_speed", label: "Feeding Speed", tag: "SPD_FEED", unit: "m/min", sv: 28.4, variance: 0.8, decimals: 1, color: "#119b70" },
+    { key: "squeezing_1", label: "Squeezing 1 Speed", tag: "SPD_SQ_01", unit: "m/min", sv: 28.1, variance: 0.75, decimals: 1, color: "#8267c7" },
+    { key: "squeezing_2", label: "Squeezing 2 Speed", tag: "SPD_SQ_02", unit: "m/min", sv: 27.9, variance: 0.75, decimals: 1, color: "#d68b05" },
+    { key: "folder_speed", label: "Folder Speed", tag: "SPD_FOLDER", unit: "m/min", sv: 27.6, variance: 0.8, decimals: 1, color: "#db6d48" },
+    { key: "plaiter_speed", label: "Plaiter Speed", tag: "SPD_PLAITER", unit: "m/min", sv: 27.4, variance: 0.85, decimals: 1, color: "#217d94" },
+  ],
+  dryer: [
+    { key: "line_speed", label: "Line Speed", tag: "SPD_LINE", unit: "m/min", sv: 29, variance: 1.1, decimals: 1, color: "#078eaa" },
+    { key: "chamber_1", label: "Chamber 1 Temperature", tag: "TEMP_CH_01", unit: "°C", sv: 148, variance: 4.5, decimals: 1, color: "#4d8fd0" },
+    { key: "chamber_3", label: "Chamber 3 Temperature", tag: "TEMP_CH_03", unit: "°C", sv: 150, variance: 4.8, decimals: 1, color: "#119b70" },
+    { key: "chamber_5", label: "Chamber 5 Temperature", tag: "TEMP_CH_05", unit: "°C", sv: 148, variance: 6.2, decimals: 1, color: "#d68b05" },
+    { key: "chamber_7", label: "Chamber 7 Temperature", tag: "TEMP_CH_07", unit: "°C", sv: 145, variance: 4.4, decimals: 1, color: "#8267c7" },
+    { key: "oil_supply", label: "Thermal Oil Supply", tag: "TEMP_OIL_SUP", unit: "°C", sv: 218, variance: 3.6, decimals: 1, color: "#db6d48" },
+  ],
+  kalender: [
+    { key: "temp_upper", label: "Upper Roll Temperature", tag: "TEMP_UPPER", unit: "°C", sv: 127, variance: 3.2, decimals: 1, color: "#078eaa" },
+    { key: "temp_lower", label: "Lower Roll Temperature", tag: "TEMP_LOWER", unit: "°C", sv: 127, variance: 3.0, decimals: 1, color: "#4d8fd0" },
+    { key: "overfeed", label: "Overfeed", tag: "OVERFEED", unit: "%", sv: 8.5, variance: 0.65, decimals: 1, color: "#119b70" },
+    { key: "load_upper", label: "Loadcell Upper", tag: "LOAD_UPPER", unit: "kN", sv: 4.8, variance: 0.24, decimals: 2, color: "#8267c7" },
+    { key: "load_lower", label: "Loadcell Lower", tag: "LOAD_LOWER", unit: "kN", sv: 4.8, variance: 0.24, decimals: 2, color: "#d68b05" },
+    { key: "fabric_width", label: "Fabric Width", tag: "WIDTH_FABRIC", unit: "cm", sv: 181, variance: 1.2, decimals: 1, color: "#db6d48" },
+  ],
+  chemical: [
+    { key: "transfer_flow", label: "Transfer Flow", tag: "FLOW_TRANSFER", unit: "kg/min", sv: 42.8, variance: 3.2, decimals: 1, color: "#078eaa" },
+    { key: "target_weight", label: "Batch Weight", tag: "WEIGHT_BATCH", unit: "kg", sv: 128, variance: 4.8, decimals: 1, color: "#4d8fd0" },
+    { key: "line_pressure", label: "Line Pressure", tag: "PRESS_LINE", unit: "bar", sv: 3.2, variance: 0.28, decimals: 2, color: "#119b70" },
+    { key: "tank_level", label: "Source Tank Level", tag: "LEVEL_SOURCE", unit: "%", sv: 70, variance: 5.4, decimals: 1, color: "#8267c7" },
+    { key: "pump_speed", label: "Transfer Pump Speed", tag: "SPD_PUMP", unit: "Hz", sv: 32, variance: 2.4, decimals: 1, color: "#d68b05" },
+  ],
+};
+
+function sensorTrendSeries(type, sensor) {
+  const count = { "1H": 36, "8H": 48, "24H": 60 }[state.sensorTrend.range] || 36;
+  const span = { "1H": 60, "8H": 8 * 60, "24H": 24 * 60 }[state.sensorTrend.range] * 60 * 1000;
+  const typePhase = ["jetflow", "calator", "dryer", "kalender", "chemical"].indexOf(type) * 0.43;
+  const keyPhase = sensor.key.length * 0.17;
+  const timestamps = Array.from({ length: count }, (_, index) => Date.now() - span + span * index / (count - 1));
+  const sv = timestamps.map((_, index) => sensor.sv + (index > count * 0.68 ? sensor.variance * 0.08 : 0));
+  const pv = sv.map((target, index) => target + Math.sin(index * 0.44 + typePhase + keyPhase) * sensor.variance * 0.52 + Math.cos(index * 0.17 + keyPhase) * sensor.variance * 0.18);
+  return { timestamps, sv, pv };
+}
+
+function sensorTrendPanel(type, machine) {
+  const sensors = sensorTrendConfig[type] || [];
+  const enabled = state.sensorTrend.enabled[type] || [];
+  const toggles = sensors.map((sensor) => `<label class="sensor-toggle ${enabled.includes(sensor.key) ? "active" : ""}"><input type="checkbox" data-sensor-toggle="${type}|${sensor.key}" ${enabled.includes(sensor.key) ? "checked" : ""}/><i style="--sensor-color:${sensor.color}"></i><span>${sensor.label}<small>${sensor.tag}</small></span></label>`).join("");
+  const rows = sensors.filter((sensor) => enabled.includes(sensor.key)).map((sensor) => {
+    const series = sensorTrendSeries(type, sensor);
+    const pv = series.pv.at(-1);
+    const sv = series.sv.at(-1);
+    const delta = pv - sv;
+    return `<article class="sensor-trend-row">
+      <div class="sensor-trend-row-head"><div><i style="background:${sensor.color}"></i><span><strong>${sensor.label}</strong><small>${sensor.tag} · ${sensor.unit}</small></span></div><div class="sensor-trend-readings"><span>PV<strong>${pv.toFixed(sensor.decimals)} ${sensor.unit}</strong></span><span>SV<strong>${sv.toFixed(sensor.decimals)} ${sensor.unit}</strong></span><span>Δ<strong class="${Math.abs(delta) > sensor.variance * .55 ? "warning" : ""}">${delta >= 0 ? "+" : ""}${delta.toFixed(sensor.decimals)} ${sensor.unit}</strong></span></div></div>
+      <div class="sensor-line-legend"><span><i style="background:${sensor.color}"></i>PV · Process Value</span><span><i style="border-color:${sensor.color}"></i>SV · Set Value</span></div>
+      <canvas class="sensor-trend-canvas" id="sensor-trend-${type}-${sensor.key}" aria-label="Trend PV dan SV ${sensor.label}"></canvas>
+    </article>`;
+  }).join("");
+  const ranges = ["1H", "8H", "24H"].map((range) => `<button class="segment ${state.sensorTrend.range === range ? "active" : ""}" data-sensor-range="${range}">${range}</button>`).join("");
+  return `<section class="card sensor-comparison-panel">
+    <div class="sensor-comparison-head"><div><span class="eyebrow">Machine sensor historian</span><h2>Sensor SV / PV Comparison</h2><p>${machine.id} · setiap sensor menggunakan skala engineering unit masing-masing.</p></div><div class="sensor-comparison-actions"><div class="sensor-line-key"><span><i></i>PV solid</span><span><i></i>SV dashed</span></div><div class="segmented">${ranges}</div></div></div>
+    <div class="sensor-toggle-toolbar"><div class="sensor-toggle-list">${toggles}</div><div class="sensor-bulk-actions"><button class="button ghost small" data-sensor-bulk="${type}|on">All On</button><button class="button ghost small" data-sensor-bulk="${type}|off">All Off</button></div></div>
+    <div class="sensor-trend-stack">${rows || `<div class="sensor-trend-empty"><strong>Semua sensor dalam kondisi OFF</strong><span>Aktifkan sensor melalui checkbox untuk menampilkan perbandingan trend SV dan PV.</span></div>`}</div>
   </section>`;
 }
 
@@ -591,6 +678,7 @@ function jetflowDetailPage() {
     ${pageHead("jetflow", selector(jetflows.filter((item) => item.area === machine.area), "jetflow"))}
     ${machineHero(machine, "JF", `${machine.winches} winches · ${machine.recipe} · Active step: ${machine.step}`)}
     ${remoteDisplayPanel(machine)}
+    ${sensorTrendPanel("jetflow", machine)}
     <section class="kpi-grid">
       ${kpi("Main Tank Temp", liveValue(92.6, "", .18, 1), "°C", "MT", "<strong>Target 93.0°C</strong>· holding")}
       ${kpi("Water Level", liveValue(72.4, "", .12, 1), "%", "LV", "<strong>Within range</strong>· target 72%", "success")}
@@ -672,6 +760,7 @@ function calatorDetailPage() {
     ${pageHead("calator", selector(calators.filter((item) => item.area === machine.area), "calator"))}
     ${machineHero(machine, "CL", `${machine.subtype} · ${machine.recipe} · Jetflow source JF-04`)}
     ${remoteDisplayPanel(machine)}
+    ${sensorTrendPanel("calator", machine)}
     <section class="kpi-grid">
       ${kpi("Overfeed Out Avg", liveValue(29.18, "", .08, 2), "m/min", "OF", "<strong>Balance 1.4%</strong>· within range")}
       ${kpi("Dancing Roller", liveValue(51.6, "", .35, 1), "%", "DR", "<strong>Center ±3%</strong>· stable", "success")}
@@ -726,6 +815,7 @@ function dryerDetailPage() {
     ${pageHead("dryer", selector(dryers.filter((item) => item.area === machine.area), "dryer"))}
     ${machineHero(machine, "DR", `${machine.chambers} chambers · ${machine.setup} · Calator source CL-03`)}
     ${remoteDisplayPanel(machine)}
+    ${sensorTrendPanel("dryer", machine)}
     <section class="kpi-grid">
       ${kpi("Machine Speed", liveValue(32.4, "", .08, 1), "m/min", "SP", "<strong>Target 32.5</strong>· stable")}
       ${kpi("Avg. Chamber Temp", liveValue(146.8, "", .12, 1), "°C", "TP", "<strong>7 / 8 ready</strong>· one deviation", "warning")}
@@ -765,6 +855,7 @@ function kalenderDetailPage() {
     ${pageHead("kalender", selector(kalenders.filter((item) => item.area === machine.area), "kalender"))}
     ${machineHero(machine, "KL", `${machine.setup} · Dryer source DR-02 · Cotton 220 GSM`)}
     ${remoteDisplayPanel(machine)}
+    ${sensorTrendPanel("kalender", machine)}
     <section class="kpi-grid">
       ${kpi("Loadcell Balance", liveValue(1.8, "", .05, 1), "%", "LC", "<strong>Within ±3%</strong>· stable", "success")}
       ${kpi("Temperature Upper", liveValue(126.4, "", .15, 1), "°C", "TU", "<strong>Target 127°C</strong>· good")}
@@ -949,6 +1040,7 @@ function chemicalDetailPage() {
     ${pageHead("chemical", selector(dispensers.filter((item) => item.area === machine.area), "chemical"))}
     ${machineHero(machine, "DSP", `${machine.areaLabel} · 7 chemical variants · Calator destination group`)}
     ${remoteDisplayPanel(machine)}
+    ${sensorTrendPanel("chemical", machine)}
     <section class="kpi-grid">
       ${kpi("Usage Today", "6,115", "kg", "CH", "<strong>81.5%</strong>of daily forecast")}
       ${kpi("Active Transfers", "1", "route", "TR", "<strong>CH-01 → CL-02</strong>· 64.5%")}
@@ -1217,6 +1309,28 @@ function bindPageEvents() {
       renderPage({ preserveScroll: true });
     });
   });
+  document.querySelectorAll("[data-sensor-toggle]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const [type, key] = checkbox.dataset.sensorToggle.split("|");
+      const enabled = state.sensorTrend.enabled[type];
+      if (checkbox.checked && !enabled.includes(key)) enabled.push(key);
+      if (!checkbox.checked) state.sensorTrend.enabled[type] = enabled.filter((item) => item !== key);
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-sensor-bulk]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const [type, action] = button.dataset.sensorBulk.split("|");
+      state.sensorTrend.enabled[type] = action === "on" ? sensorTrendConfig[type].map((sensor) => sensor.key) : [];
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-sensor-range]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.sensorTrend.range = button.dataset.sensorRange;
+      renderPage({ preserveScroll: true });
+    });
+  });
   document.querySelectorAll("[data-history-range]").forEach((button) => {
     button.addEventListener("click", () => selectHistoryRange(button.dataset.historyRange));
   });
@@ -1407,6 +1521,22 @@ function initPageCharts() {
     ], labels),
   };
   charts[state.page]?.();
+  if (state.drill[state.page]?.machine && sensorTrendConfig[state.page]) drawSensorComparisonTrends(state.page);
+}
+
+function drawSensorComparisonTrends(type) {
+  const enabled = state.sensorTrend.enabled[type] || [];
+  sensorTrendConfig[type].filter((sensor) => enabled.includes(sensor.key)).forEach((sensor) => {
+    const series = sensorTrendSeries(type, sensor);
+    drawLineChart(`sensor-trend-${type}-${sensor.key}`, [
+      { data: series.pv, color: sensor.color, fill: true },
+      { data: series.sv, color: sensor.color, dash: true },
+    ], series.timestamps, {
+      labelFormatter: (timestamp) => new Date(timestamp).toLocaleTimeString("id-ID", state.sensorTrend.range === "24H"
+        ? { day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }
+        : { hour: "2-digit", minute: "2-digit", hour12: false }),
+    });
+  });
 }
 
 function wave(length, start, amplitude, trend = 0, phase = 0) {

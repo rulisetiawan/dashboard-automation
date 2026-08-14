@@ -1622,6 +1622,288 @@ select:focus-visible {
   background-size: 28px 28px;
 }
 
+.sensor-comparison-panel {
+  margin-bottom: 13px;
+  padding: 17px;
+}
+
+.sensor-comparison-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.sensor-comparison-head h2 {
+  margin: 5px 0 4px;
+  font-size: 0.82rem;
+}
+
+.sensor-comparison-head p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.53rem;
+}
+
+.sensor-comparison-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sensor-line-key {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-3);
+  font-size: 0.48rem;
+  white-space: nowrap;
+}
+
+.sensor-line-key span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sensor-line-key i {
+  width: 17px;
+  height: 2px;
+  background: var(--primary);
+}
+
+.sensor-line-key span:last-child i {
+  height: 0;
+  border-top: 2px dashed var(--primary);
+  background: transparent;
+}
+
+.sensor-toggle-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.sensor-toggle-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sensor-toggle {
+  display: grid;
+  grid-template-columns: auto 7px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-width: 154px;
+  padding: 7px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: 140ms ease;
+}
+
+.sensor-toggle:hover,
+.sensor-toggle:focus-within,
+.sensor-toggle.active {
+  border-color: rgba(7, 142, 170, 0.28);
+  color: var(--ink-2);
+}
+
+.sensor-toggle.active {
+  background: #f6fbfc;
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.sensor-toggle input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.sensor-toggle > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--sensor-color);
+  opacity: 0.38;
+}
+
+.sensor-toggle.active > i {
+  opacity: 1;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--sensor-color), transparent 55%);
+}
+
+.sensor-toggle > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  font-size: 0.49rem;
+  font-weight: 600;
+}
+
+.sensor-toggle small {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: 0.41rem;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sensor-bulk-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.sensor-trend-stack {
+  display: grid;
+  gap: 9px;
+}
+
+.sensor-trend-row {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.sensor-trend-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sensor-trend-row-head > div:first-child {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.sensor-trend-row-head > div:first-child > i {
+  width: 8px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+}
+
+.sensor-trend-row-head > div:first-child span,
+.sensor-trend-row-head > div:first-child strong,
+.sensor-trend-row-head > div:first-child small {
+  display: block;
+}
+
+.sensor-trend-row-head > div:first-child strong {
+  font-size: 0.57rem;
+}
+
+.sensor-trend-row-head > div:first-child small {
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: 0.43rem;
+}
+
+.sensor-trend-readings {
+  display: flex;
+  gap: 6px;
+}
+
+.sensor-trend-readings span {
+  display: grid;
+  min-width: 94px;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: 0.42rem;
+  text-transform: uppercase;
+}
+
+.sensor-trend-readings strong {
+  color: var(--ink-2);
+  font-family: var(--font-data);
+  font-size: 0.5rem;
+  font-weight: 500;
+  text-transform: none;
+}
+
+.sensor-trend-readings strong.warning {
+  color: var(--warning);
+}
+
+.sensor-line-legend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 9px 2px 2px;
+  color: var(--ink-3);
+  font-size: 0.42rem;
+}
+
+.sensor-line-legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sensor-line-legend i {
+  width: 14px;
+  height: 2px;
+}
+
+.sensor-line-legend span:last-child i {
+  height: 0;
+  border-top: 2px dashed;
+}
+
+.sensor-trend-canvas {
+  display: block;
+  width: 100%;
+  height: 126px;
+}
+
+.sensor-trend-empty {
+  padding: 28px 18px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-3);
+  text-align: center;
+}
+
+.sensor-trend-empty strong,
+.sensor-trend-empty span {
+  display: block;
+}
+
+.sensor-trend-empty strong {
+  margin-bottom: 5px;
+  color: var(--ink-2);
+  font-size: 0.62rem;
+}
+
+.sensor-trend-empty span {
+  font-size: 0.51rem;
+}
+
 .machine-identity {
   display: flex;
   min-width: 0;
@@ -3310,6 +3592,19 @@ select:focus-visible {
     height: 240px;
   }
 
+  .sensor-comparison-head {
+    flex-direction: column;
+  }
+
+  .sensor-comparison-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .sensor-toggle-toolbar {
+    flex-direction: column;
+  }
+
   .process-flow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3542,6 +3837,50 @@ select:focus-visible {
 
   .electrical-path i {
     transform: rotate(90deg);
+  }
+
+  .sensor-comparison-panel {
+    padding: 14px;
+  }
+
+  .sensor-comparison-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sensor-toggle-list,
+  .sensor-toggle,
+  .sensor-bulk-actions {
+    width: 100%;
+  }
+
+  .sensor-toggle {
+    min-width: 0;
+  }
+
+  .sensor-bulk-actions .button {
+    flex: 1;
+  }
+
+  .sensor-trend-row-head {
+    flex-direction: column;
+  }
+
+  .sensor-trend-readings {
+    width: 100%;
+  }
+
+  .sensor-trend-readings span {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .sensor-line-legend {
+    justify-content: flex-start;
+  }
+
+  .sensor-trend-canvas {
+    height: 116px;
   }
 
   .fleet-summary,

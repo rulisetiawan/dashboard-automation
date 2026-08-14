@@ -4,6 +4,29 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.9 — 14 Agustus 2026
+
+**Status:** Machine sensor SV/PV comparison selesai
+
+### Ditambahkan
+
+- Panel Sensor SV/PV Comparison pada seluruh detail mesin.
+- Checkbox ON/OFF per sensor serta tombol All On dan All Off.
+- Mini-trend per sensor dengan PV solid dan SV dashed.
+- Current PV, SV, deviation, unit, serta tag sensor.
+- Pilihan range 1H, 8H, dan 24H.
+
+### Diubah
+
+- Sensor dengan engineering unit berbeda menggunakan chart dan skala terpisah.
+- Interaksi sensor mempertahankan posisi scroll halaman.
+
+### Batasan
+
+- Series dan tolerance sensor masih simulated.
+
+---
+
 ## Frontend Dashboard V1.8 — 14 Agustus 2026
 
 **Status:** In-place dashboard interaction selesai
