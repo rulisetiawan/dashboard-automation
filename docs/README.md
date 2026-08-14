@@ -15,7 +15,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `chemicals/Chemical_Dispensing_Transfer_Concept_v1.1.md` | 1.1 | Aktif | Konsep tujuh varian chemical dan lima dispensing pada area Depan, Belakang, serta Timur |
 | `dashboard/Dashboard_V1_Concept_v1.1.md` | 1.1 | Aktif | Konsep dashboard real-time/historical dengan multi-speed Calator, machine monitoring, alarm, data health, utility, dan chemical |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
-| `releases/Frontend_V1.6.md` | 1.6 | Selesai | Electrical Distribution dengan pie chart interaktif untuk Cubical, MDP, SDP, serta detail equipment |
+| `releases/Frontend_V1.7.md` | 1.7 | Selesai | Consumption donut memfilter ranking mesin berdasarkan area/lane tanpa meninggalkan overview |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
 ## Aturan pembaruan

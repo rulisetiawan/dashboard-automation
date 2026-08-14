@@ -4,6 +4,29 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.7 — 14 Agustus 2026
+
+**Status:** Area-linked machine ranking selesai
+
+### Ditambahkan
+
+- Filter ranking mesin melalui segmen donut atau legend area.
+- Active highlight untuk area/lane yang sedang dipilih.
+- Scope area dan jumlah mesin pada judul ranking.
+- Tombol reset `All Areas` / `All Lanes`.
+
+### Diubah
+
+- Klik area pada consumption donut tidak lagi langsung membuka halaman area.
+- Ranking sebelah kanan diperbarui pada overview yang sama.
+- Area machine list tetap dibuka melalui card pada bagian Area Status.
+
+### Batasan
+
+- Ranking masih menggunakan simulated consumption data.
+
+---
+
 ## Frontend Dashboard V1.6 — 14 Agustus 2026
 
 **Status:** Electrical Distribution mapping selesai

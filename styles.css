@@ -2860,7 +2860,8 @@ select:focus-visible {
 }
 
 .resource-donut circle:hover,
-.resource-donut circle:focus-visible {
+.resource-donut circle:focus-visible,
+.resource-donut circle.selected {
   stroke-width: 37;
   opacity: 0.86;
   outline: none;
@@ -2923,10 +2924,16 @@ select:focus-visible {
 }
 
 .resource-legend-row:hover,
-.resource-legend-row:focus-visible {
+.resource-legend-row:focus-visible,
+.resource-legend-row.active {
   border-color: var(--line);
   background: var(--surface-2);
   outline: none;
+}
+
+.resource-legend-row.active {
+  border-color: rgba(7, 142, 170, 0.32);
+  box-shadow: inset 2px 0 0 var(--primary);
 }
 
 .resource-legend-row i {
@@ -2948,6 +2955,44 @@ select:focus-visible {
 
 .resource-legend-row small {
   color: var(--ink-3);
+}
+
+.resource-filter-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: -7px 0 13px;
+  color: var(--ink-3);
+  font-size: 0.49rem;
+}
+
+.resource-filter-status strong {
+  color: var(--primary);
+  font-family: var(--font-data);
+  font-size: 0.52rem;
+  font-weight: 500;
+}
+
+.resource-filter-status button {
+  margin-left: auto;
+  padding: 4px 7px;
+  border: 1px solid rgba(7, 142, 170, 0.2);
+  border-radius: 5px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-family: var(--font-data);
+  font-size: 0.46rem;
+  cursor: pointer;
+}
+
+.resource-filter-status button:hover,
+.resource-filter-status button:focus-visible {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.ranking-reset-button {
+  white-space: nowrap;
 }
 
 .management-coverage {
@@ -3441,6 +3486,15 @@ select:focus-visible {
 
   .resource-legend-row {
     grid-template-columns: 8px minmax(70px, 1fr) 42px 76px;
+  }
+
+  .resource-filter-status {
+    flex-wrap: wrap;
+  }
+
+  .resource-filter-status button {
+    width: 100%;
+    margin-left: 0;
   }
 
   .management-coverage {

@@ -30,6 +30,13 @@ const state = {
       kalender: "steam",
       chemical: "chemical",
     },
+    area: {
+      jetflow: null,
+      calator: null,
+      dryer: null,
+      kalender: null,
+      chemical: null,
+    },
   },
   utility: {
     electricalLevel: "cubical",
@@ -423,6 +430,7 @@ function metricTotal(type, metricKey, items = fleetFor(type)) {
 function resourceBreakdown(type) {
   const config = managementConfig[type];
   const metricKey = state.management.metric[type];
+  const selectedArea = state.management.area[type];
   const metric = config.metrics[metricKey];
   const areas = processAreas[type].map((area, index) => {
     const items = fleetFor(type).filter((machine) => machine.area === area.code);
@@ -433,17 +441,19 @@ function resourceBreakdown(type) {
   let used = 0;
   const segments = areas.map((area) => {
     const length = total ? area.value / total * circumference : 0;
-    const segment = `<circle cx="80" cy="80" r="64" fill="none" stroke="${managementColors[area.index]}" stroke-width="32" stroke-dasharray="${length.toFixed(2)} ${(circumference - length).toFixed(2)}" stroke-dashoffset="${(-used).toFixed(2)}" transform="rotate(-90 80 80)" data-resource-area="${type}|${area.code}|${metricKey}" tabindex="0"><title>${area.label}: ${formatManagementValue(area.value, metric.unit)} ${metric.unit}</title></circle>`;
+    const segment = `<circle class="${selectedArea === area.code ? "selected" : ""}" cx="80" cy="80" r="64" fill="none" stroke="${managementColors[area.index]}" stroke-width="32" stroke-dasharray="${length.toFixed(2)} ${(circumference - length).toFixed(2)}" stroke-dashoffset="${(-used).toFixed(2)}" transform="rotate(-90 80 80)" data-resource-area="${type}|${area.code}|${metricKey}" tabindex="0"><title>${area.label}: ${formatManagementValue(area.value, metric.unit)} ${metric.unit}</title></circle>`;
     used += length;
     return segment;
   }).join("");
   const tabs = Object.entries(config.metrics).map(([key, item]) => `<button class="segment ${metricKey === key ? "active" : ""}" data-management-metric="${type}|${key}">${item.short}</button>`).join("");
   const legend = areas.map((area) => {
     const percent = total ? area.value / total * 100 : 0;
-    return `<button class="resource-legend-row" data-resource-area="${type}|${area.code}|${metricKey}"><i style="background:${managementColors[area.index]}"></i><span>${type === "jetflow" ? area.label : `Area ${area.label}`}</span><strong>${percent.toFixed(1)}%</strong><small>${formatManagementValue(area.value, metric.unit)} ${metric.unit}</small></button>`;
+    return `<button class="resource-legend-row ${selectedArea === area.code ? "active" : ""}" data-resource-area="${type}|${area.code}|${metricKey}"><i style="background:${managementColors[area.index]}"></i><span>${type === "jetflow" ? area.label : `Area ${area.label}`}</span><strong>${percent.toFixed(1)}%</strong><small>${formatManagementValue(area.value, metric.unit)} ${metric.unit}</small></button>`;
   }).join("");
-  return panel(`${metric.label} by ${type === "jetflow" ? "Lane" : "Area"}`, "Klik segmen atau area untuk membuka ranking mesin.", `
+  const scopeLabel = selectedArea ? (processAreas[type].find((area) => area.code === selectedArea)?.label || selectedArea) : `Semua ${type === "jetflow" ? "Lane" : "Area"}`;
+  return panel(`${metric.label} by ${type === "jetflow" ? "Lane" : "Area"}`, "Klik segmen atau area untuk memfilter ranking mesin di sebelah kanan.", `
     <div class="metric-tabs segmented">${tabs}</div>
+    <div class="resource-filter-status"><span>Ranking scope</span><strong>${type === "jetflow" && selectedArea ? scopeLabel : selectedArea ? `Area ${scopeLabel}` : scopeLabel}</strong>${selectedArea ? `<button data-ranking-reset="${type}">Reset · All ${type === "jetflow" ? "Lanes" : "Areas"}</button>` : ""}</div>
     <div class="resource-donut-wrap">
       <div class="resource-donut" aria-label="Distribusi ${metric.label}"><svg viewBox="0 0 160 160" role="img">${segments}</svg><div><strong>${formatManagementValue(total, metric.unit)}</strong><small>${metric.unit}</small></div></div>
       <div class="resource-legend">${legend}</div>
@@ -454,10 +464,14 @@ function resourceBreakdown(type) {
 
 function consumptionRanking(type) {
   const metricKey = state.management.metric[type];
+  const selectedArea = state.management.area[type];
   const metric = managementConfig[type].metrics[metricKey];
-  const ranked = fleetFor(type).map((machine) => ({ machine, value: machineMetricValue(type, machine, metricKey) })).sort((a, b) => b.value - a.value).slice(0, 5);
+  const area = processAreas[type].find((item) => item.code === selectedArea);
+  const scopedFleet = selectedArea ? fleetFor(type).filter((machine) => machine.area === selectedArea) : fleetFor(type);
+  const ranked = scopedFleet.map((machine) => ({ machine, value: machineMetricValue(type, machine, metricKey) })).sort((a, b) => b.value - a.value).slice(0, 5);
   const max = ranked[0]?.value || 1;
-  return panel(`Top ${metric.short} Consumers`, `${formatDateTime(state.history.start, true)} — ${formatDateTime(state.history.end, true)}`, `<div class="ranking-list">${ranked.map((item, index) => `<button class="ranking-row" data-machine-target="${type}|${item.machine.id}"><span class="ranking-number">${index + 1}</span><span class="ranking-copy"><strong>${item.machine.id}</strong><small>${item.machine.areaLabel} · ${item.machine.state}</small><i><b style="width:${item.value / max * 100}%"></b></i></span><span class="ranking-value">${formatManagementValue(item.value, metric.unit)}<small>${metric.unit}</small></span></button>`).join("")}</div>`, `<span class="data-pill neutral">Selected range</span>`);
+  const scope = area ? `${type === "jetflow" ? area.label : `Area ${area.label}`} · ${scopedFleet.length} machines` : `All ${type === "jetflow" ? "lanes" : "areas"} · ${scopedFleet.length} machines`;
+  return panel(`Top ${metric.short} Consumers${area ? ` · ${type === "jetflow" ? area.label : `Area ${area.label}`}` : ""}`, `${scope} · ${formatDateTime(state.history.start, true)} — ${formatDateTime(state.history.end, true)}`, `<div class="ranking-list">${ranked.map((item, index) => `<button class="ranking-row" data-machine-target="${type}|${item.machine.id}"><span class="ranking-number">${index + 1}</span><span class="ranking-copy"><strong>${item.machine.id}</strong><small>${item.machine.areaLabel} · ${item.machine.state}</small><i><b style="width:${item.value / max * 100}%"></b></i></span><span class="ranking-value">${formatManagementValue(item.value, metric.unit)}<small>${metric.unit}</small></span></button>`).join("")}</div>`, `${area ? `<button class="button ghost small ranking-reset-button" data-ranking-reset="${type}">All ${type === "jetflow" ? "Lanes" : "Areas"}</button>` : ""}<span class="data-pill ${area ? "good" : "neutral"}">${area ? "AREA FILTER" : "SELECTED RANGE"}</span>`);
 }
 
 function downtimePareto(type) {
@@ -1157,12 +1171,18 @@ function bindPageEvents() {
     const openResourceArea = () => {
       const [type, area, metric] = button.dataset.resourceArea.split("|");
       state.management.metric[type] = metric;
-      state.drill[type] = { area, machine: null };
+      state.management.area[type] = area;
       renderPage();
     };
     button.addEventListener("click", openResourceArea);
     button.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openResourceArea(); }
+    });
+  });
+  document.querySelectorAll("[data-ranking-reset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.management.area[button.dataset.rankingReset] = null;
+      renderPage();
     });
   });
   document.getElementById("electrical-level-select")?.addEventListener("change", (event) => {
