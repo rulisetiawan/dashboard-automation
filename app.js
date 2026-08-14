@@ -308,22 +308,69 @@ function selector(items, page) {
   `;
 }
 
+function productionOutputDataset() {
+  const datasets = {
+    "1H": {
+      labels: ["13:05", "13:10", "13:15", "13:20", "13:25", "13:30", "13:35", "13:40", "13:45", "13:50", "13:55", "14:00"],
+      values: [142, 158, 166, 171, 182, 175, 188, 194, 201, 196, 209, 216],
+      interval: "5 min",
+      scope: "Last 1 hour",
+    },
+    "8H": {
+      labels: ["06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00"],
+      values: [1960, 2140, 2260, 2380, 2250, 2470, 2580, 2380],
+      interval: "hour",
+      scope: "Current 8-hour shift",
+    },
+    "24H": {
+      labels: ["00:00", "02:00", "04:00", "06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"],
+      values: [2940, 2780, 3020, 3240, 3580, 3860, 4010, 4160, 3950, 4210, 4090, 3840],
+      interval: "2 hours",
+      scope: "Last 24 hours",
+    },
+    "7D": {
+      labels: ["08 Agu", "09 Agu", "10 Agu", "11 Agu", "12 Agu", "13 Agu", "14 Agu"],
+      values: [41820, 43680, 42940, 45210, 44780, 46120, 45560],
+      interval: "day",
+      scope: "Last 7 days",
+    },
+  };
+  const selected = datasets[state.range] || datasets["8H"];
+  const total = selected.values.reduce((sum, value) => sum + value, 0);
+  return {
+    ...selected,
+    total,
+    average: total / selected.values.length,
+    peak: Math.max(...selected.values),
+  };
+}
+
+function formatProductionOutput(value) {
+  return Number(value).toLocaleString("id-ID", { maximumFractionDigits: 0 });
+}
+
 function overviewPage() {
   const alarmItems = alarms.filter((a) => !a.ack).slice(0, 3).map(alarmRow).join("");
   const productionFleet = [...jetflows, ...calators, ...dryers, ...kalenders];
   const runningMachines = statusCount(productionFleet, "running");
+  const productionOutput = productionOutputDataset();
   return `
     ${pageHead("overview", `<button class="button" data-page-target="health">⊕ Data health</button><button class="button primary" data-page-target="trends">⌗ Open trends</button>`)}
     <section class="kpi-grid">
       ${kpi("Machines Running", runningMachines, "/ 133", "MC", `<strong>${(runningMachines / 133 * 100).toFixed(1)}%</strong>simulated fleet state`, "success")}
-      ${kpi("Active Output", "18,420", "m", "OP", "<strong>↑ 4.8%</strong>vs previous shift")}
+      ${kpi("Good Production Output", formatProductionOutput(productionOutput.total), "m", "OP", `<strong>${state.range}</strong>· ${productionOutput.scope}`)}
       ${kpi("Electrical Demand", "1.84", "MW", "EL", "<strong class='danger'>92%</strong>of demand baseline", "warning")}
       ${kpi("Unack. Alarms", "4", "events", "AL", "<strong class='danger'>2 critical</strong>require action", "danger")}
     </section>
     <section class="grid-2">
-      ${panel("Production Throughput", "Output aktual terhadap shift target · meter kain", `
+      ${panel("Production Output by Interval", `Good fabric output · ${productionOutput.scope} · meter kain`, `
+        <div class="throughput-summary">
+          <div><span>Total Output</span><strong>${formatProductionOutput(productionOutput.total)} <small>m</small></strong></div>
+          <div><span>Average / ${productionOutput.interval}</span><strong>${formatProductionOutput(productionOutput.average)} <small>m</small></strong></div>
+          <div><span>Peak / ${productionOutput.interval}</span><strong>${formatProductionOutput(productionOutput.peak)} <small>m</small></strong></div>
+        </div>
         <div class="chart-container"><canvas id="overview-chart" class="chart-canvas"></canvas></div>
-      `, `<div class="legend"><span class="legend-item"><i class="legend-swatch" style="background:#078eaa"></i>Actual</span><span class="legend-item"><i class="legend-swatch" style="background:#8b999f"></i>Target</span></div>`)}
+      `, rangeButtons())}
       ${panel("Requires Attention", "Exception paling penting saat ini", `<div class="alarm-list">${alarmItems}</div>`, `<button class="button ghost small" data-page-target="alarms">View all →</button>`)}
     </section>
     <section class="grid-equal">
@@ -1541,10 +1588,16 @@ function showToast(title, detail) {
 function initPageCharts() {
   const labels = Array.from({ length: 32 }, (_, i) => i);
   const charts = {
-    overview: () => drawLineChart("overview-chart", [
-      { data: wave(32, 560, 45, 12, .3), color: "#078eaa", fill: true },
-      { data: wave(32, 590, 8, 11, 1.4), color: "#8b999f", dash: true },
-    ], labels),
+    overview: () => {
+      const productionOutput = productionOutputDataset();
+      drawBarChart(
+        "overview-chart",
+        productionOutput.values,
+        productionOutput.labels,
+        productionOutput.values.map(() => "#078eaa"),
+        { showValues: true }
+      );
+    },
     jetflow: () => drawLineChart("jetflow-chart", [
       { data: wave(32, 78, 4, .55, .2), color: "#078eaa", fill: true },
       { data: wave(32, 79, .4, .5, 0), color: "#8b999f", dash: true },
@@ -1676,7 +1729,7 @@ function drawLineChart(id, series, labels, options = {}) {
   ctx.textAlign = "left";
 }
 
-function drawBarChart(id, data, labels, colors) {
+function drawBarChart(id, data, labels, colors, options = {}) {
   const canvas = document.getElementById(id);
   if (!canvas) return;
   const rect = canvas.getBoundingClientRect();
@@ -1695,6 +1748,7 @@ function drawBarChart(id, data, labels, colors) {
   const plotH = height - pad.top - pad.bottom;
   const gap = plotW / data.length;
   const barW = Math.min(42, gap * .58);
+  const labelStep = gap < 31 ? 2 : 1;
   for (let i = 0; i < 4; i += 1) {
     const y = pad.top + plotH / 3 * i;
     ctx.strokeStyle = "rgba(19,46,57,.08)";
@@ -1712,9 +1766,17 @@ function drawBarChart(id, data, labels, colors) {
     ctx.fillStyle = colors[i] || "#078eaa";
     roundedRect(ctx, x, y, barW, h, 5);
     ctx.fill();
-    ctx.fillStyle = "#8b999f";
-    ctx.textAlign = "center";
-    ctx.fillText(labels[i], x + barW / 2, height - 7);
+    if (options.showValues) {
+      ctx.fillStyle = "#53666e";
+      ctx.font = "9px DM Mono, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(formatAxis(value), x + barW / 2, Math.max(10, y - 5));
+    }
+    if (i % labelStep === 0 || i === data.length - 1) {
+      ctx.fillStyle = "#8b999f";
+      ctx.textAlign = "center";
+      ctx.fillText(labels[i], x + barW / 2, height - 7);
+    }
   });
   ctx.textAlign = "left";
 }

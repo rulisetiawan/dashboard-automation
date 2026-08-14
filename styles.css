@@ -1100,6 +1100,44 @@ select:focus-visible {
   height: 260px;
 }
 
+.throughput-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.throughput-summary > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.throughput-summary span {
+  color: var(--ink-3);
+  font-size: 0.64rem;
+  line-height: 1.3;
+}
+
+.throughput-summary strong {
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.throughput-summary small {
+  color: var(--ink-3);
+  font-size: 0.56rem;
+  font-weight: 500;
+}
+
 .chart-container.compact {
   height: 210px;
 }
@@ -3718,6 +3756,10 @@ select:focus-visible {
   :root {
     --sidebar-width: 248px;
     --topbar-height: 62px;
+  }
+
+  .throughput-summary {
+    grid-template-columns: 1fr;
   }
 
   .sidebar {
