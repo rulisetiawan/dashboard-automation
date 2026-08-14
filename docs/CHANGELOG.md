@@ -4,6 +4,27 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.1 — 14 Agustus 2026
+
+**Status:** Custom range dan interactive historical trend selesai
+
+### Ditambahkan
+
+- Preset 1H, 8H, 24H, 7D, dan 30D.
+- Custom Start Date & Time dan End Date & Time.
+- Validasi custom range.
+- Drag, touch swipe, mouse wheel, serta keyboard navigation pada trend.
+- Timeline navigator yang dapat digeser.
+- Zoom in, zoom out, dan Fit Range.
+- Label sumbu waktu yang menyesuaikan visible duration.
+
+### Batasan
+
+- Historical series masih menggunakan simulated data.
+- Query historian, downsampling server-side, Save View, dan Export CSV belum terhubung.
+
+---
+
 ## Plant Machine and Area Mapping v1.1 — 14 Agustus 2026
 
 **Status:** Mapping dispensing ditambahkan

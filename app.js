@@ -7,6 +7,13 @@ const state = {
     kalender: "KL-02",
   },
   range: "8H",
+  history: {
+    preset: "8H",
+    start: Date.now() - 8 * 60 * 60 * 1000,
+    end: Date.now(),
+    viewStart: 0.72,
+    viewFraction: 0.28,
+  },
 };
 
 const pageMeta = {
@@ -278,6 +285,22 @@ function eventTable(rows) {
 
 function rangeButtons() {
   return `<div class="segmented">${["1H", "8H", "24H", "7D"].map((r) => `<button class="segment ${state.range === r ? "active" : ""}" data-range="${r}">${r}</button>`).join("")}</div>`;
+}
+
+function historyRangeButtons() {
+  return `<div class="segmented history-presets">${["1H", "8H", "24H", "7D", "30D"].map((range) => `<button class="segment ${state.history.preset === range ? "active" : ""}" data-history-range="${range}">${range}</button>`).join("")}<button class="segment ${state.history.preset === "CUSTOM" ? "active" : ""}" data-history-range="CUSTOM">Custom</button></div>`;
+}
+
+function toDateTimeLocal(timestamp) {
+  const date = new Date(timestamp);
+  const offset = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(timestamp - offset).toISOString().slice(0, 16);
+}
+
+function formatDateTime(timestamp, compact = false) {
+  return new Date(timestamp).toLocaleString("id-ID", compact
+    ? { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }
+    : { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function calatorPage() {
@@ -552,18 +575,29 @@ function alarmsPage() {
 }
 
 function trendsPage() {
+  const fullRange = `${formatDateTime(state.history.start)} — ${formatDateTime(state.history.end)} WIB`;
+  const customVisible = state.history.preset === "CUSTOM" ? "" : "hidden";
   return `
     ${pageHead("trends", `<button class="button">Save view</button><button class="button primary">Export CSV</button>`)}
-    <section class="card filter-bar">
-      <select class="select-control"><option>Jetflow 02</option><option>Calator Bianco 01</option><option>Dryer 01</option><option>Kalender 02</option></select>
-      <select class="select-control"><option>Current Shift</option><option>Last 8 Hours</option><option>Last 24 Hours</option><option>Custom Range</option></select>
-      <input class="search-control" placeholder="Tambah tag atau parameter..." />
-      <button class="button">+ Add tag</button>
+    <section class="card history-filter">
+      <div class="history-filter-main">
+        <label class="field-group"><span>Machine</span><select class="select-control"><option>Jetflow 02</option><option>Calator Bianco 01</option><option>Dryer 01</option><option>Kalender 02</option></select></label>
+        <div class="field-group range-field"><span>Time range</span>${historyRangeButtons()}</div>
+        <label class="field-group tag-search"><span>Parameters</span><input class="search-control" placeholder="Tambah tag atau parameter..." /></label>
+        <button class="button add-tag-button">+ Add tag</button>
+      </div>
+      <div class="custom-range-row ${customVisible}" id="custom-range-row">
+        <label class="date-field"><span>Start date & time</span><input type="datetime-local" id="history-start" value="${toDateTimeLocal(state.history.start)}" /></label>
+        <span class="range-arrow">→</span>
+        <label class="date-field"><span>End date & time</span><input type="datetime-local" id="history-end" value="${toDateTimeLocal(state.history.end)}" /></label>
+        <button class="button primary" id="apply-history-range">Apply range</button>
+        <span class="range-help">Waktu menggunakan zona WIB</span>
+      </div>
     </section>
     <section class="card panel">
       <div class="panel-head">
-        <div><h2 class="panel-title">Historical Trend Explorer</h2><p class="panel-subtitle">JF-02 · DB-260814-032 · 06:00—14:00 WIB</p></div>
-        <div class="panel-actions">${rangeButtons()}</div>
+        <div><h2 class="panel-title">Historical Trend Explorer</h2><p class="panel-subtitle" id="history-range-summary">JF-02 · ${fullRange}</p></div>
+        <div class="panel-actions trend-actions"><button class="button small" id="trend-zoom-out" title="Perlebar window">−</button><button class="button small" id="trend-zoom-in" title="Persempit window">+</button><button class="button small" id="trend-fit">Fit range</button></div>
       </div>
       <div class="tag-chip-list">
         <span class="tag-chip"><i style="background:#078eaa"></i>Main Tank Temperature</span>
@@ -571,7 +605,11 @@ function trendsPage() {
         <span class="tag-chip"><i style="background:#119b70"></i>Water Level</span>
         <span class="tag-chip"><i style="background:#d68b05"></i>Steam Pressure</span>
       </div>
-      <div class="chart-container tall"><canvas id="trends-chart" class="chart-canvas"></canvas></div>
+      <div class="trend-window-bar"><span id="history-visible-label">Visible window</span><span>Drag chart atau navigator untuk menggeser waktu</span></div>
+      <div class="chart-container tall interactive-chart"><canvas id="trends-chart" class="chart-canvas" tabindex="0" aria-label="Historical trend. Geser kiri atau kanan untuk menelusuri waktu."></canvas><div class="drag-hint">↔ Drag to explore</div></div>
+      <div class="trend-navigator" id="trend-navigator" role="slider" tabindex="0" aria-label="Posisi waktu historical" aria-valuemin="0" aria-valuemax="100">
+        <div class="navigator-track"><div class="navigator-selection" id="navigator-selection"><span></span><span></span></div></div>
+      </div>
     </section>
     <section class="grid-equal">
       ${panel("State Timeline", "Machine state dan recipe step", `
@@ -675,6 +713,15 @@ function bindPageEvents() {
       renderPage();
     });
   });
+  document.querySelectorAll("[data-history-range]").forEach((button) => {
+    button.addEventListener("click", () => selectHistoryRange(button.dataset.historyRange));
+  });
+  const applyHistory = document.getElementById("apply-history-range");
+  if (applyHistory) applyHistory.addEventListener("click", applyCustomHistoryRange);
+  document.getElementById("trend-zoom-in")?.addEventListener("click", () => zoomHistoricalTrend(0.68));
+  document.getElementById("trend-zoom-out")?.addEventListener("click", () => zoomHistoricalTrend(1.45));
+  document.getElementById("trend-fit")?.addEventListener("click", fitHistoricalTrend);
+  if (state.page === "trends") bindHistoricalPan();
   document.querySelectorAll("[data-ack-id]").forEach((button) => {
     button.addEventListener("click", () => acknowledgeAlarm(Number(button.dataset.ackId)));
   });
@@ -690,6 +737,63 @@ function navigate(page) {
   state.page = page;
   renderPage();
   closeSidebar();
+}
+
+function selectHistoryRange(range) {
+  if (range === "CUSTOM") {
+    state.history.preset = "CUSTOM";
+    document.querySelectorAll("[data-history-range]").forEach((button) => button.classList.toggle("active", button.dataset.historyRange === "CUSTOM"));
+    document.getElementById("custom-range-row")?.classList.remove("hidden");
+    document.getElementById("history-start")?.focus();
+    return;
+  }
+  const durationMap = { "1H": 1, "8H": 8, "24H": 24, "7D": 24 * 7, "30D": 24 * 30 };
+  const end = Date.now();
+  state.history.preset = range;
+  state.history.end = end;
+  state.history.start = end - durationMap[range] * 60 * 60 * 1000;
+  resetHistoricalViewport();
+  renderPage();
+}
+
+function applyCustomHistoryRange() {
+  const startValue = document.getElementById("history-start")?.value;
+  const endValue = document.getElementById("history-end")?.value;
+  const start = new Date(startValue).getTime();
+  const end = new Date(endValue).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    showToast("Range belum lengkap", "Pilih start date dan end date terlebih dahulu.");
+    return;
+  }
+  if (start >= end) {
+    showToast("Range tidak valid", "End date harus lebih besar dari start date.");
+    return;
+  }
+  state.history.preset = "CUSTOM";
+  state.history.start = start;
+  state.history.end = end;
+  resetHistoricalViewport();
+  renderPage();
+}
+
+function resetHistoricalViewport() {
+  state.history.viewFraction = 0.28;
+  state.history.viewStart = 1 - state.history.viewFraction;
+}
+
+function fitHistoricalTrend() {
+  state.history.viewStart = 0;
+  state.history.viewFraction = 1;
+  drawHistoricalTrend();
+}
+
+function zoomHistoricalTrend(multiplier) {
+  const oldFraction = state.history.viewFraction;
+  const center = state.history.viewStart + oldFraction / 2;
+  const nextFraction = clamp(oldFraction * multiplier, 0.05, 1);
+  state.history.viewFraction = nextFraction;
+  state.history.viewStart = clamp(center - nextFraction / 2, 0, 1 - nextFraction);
+  drawHistoricalTrend();
 }
 
 function acknowledgeAlarm(id) {
@@ -770,12 +874,7 @@ function initPageCharts() {
     ], labels),
     chemical: () => drawBarChart("chemical-chart", chemicals.map((c) => c[2]), chemicals.map((c) => c[0]), chemicals.map((c) => c[4])),
     alarms: () => drawBarChart("alarm-chart", [18, 12, 9, 7, 5, 4], ["Tangle", "Temp", "Speed", "Steam", "Data", "Drive"], ["#d9485c", "#d68b05", "#d68b05", "#d68b05", "#8b999f", "#8b999f"]),
-    trends: () => drawLineChart("trends-chart", [
-      { data: wave(48, 72, 8, .52, .2), color: "#078eaa", fill: true },
-      { data: wave(48, 74, .5, .48, 0), color: "#8b999f", dash: true },
-      { data: wave(48, 68, 2.0, .08, 1.2), color: "#119b70" },
-      { data: wave(48, 63, 1.2, .02, 2.1), color: "#d68b05" },
-    ], Array.from({ length: 48 }, (_, i) => i)),
+    trends: drawHistoricalTrend,
     health: () => drawLineChart("health-chart", [
       { data: wave(32, 46, 2.2, .06, .2), color: "#078eaa", fill: true },
       { data: wave(32, 23, 3.4, .02, 1.8), color: "#119b70" },
@@ -788,7 +887,7 @@ function wave(length, start, amplitude, trend = 0, phase = 0) {
   return Array.from({ length }, (_, i) => start + Math.sin(i * .42 + phase) * amplitude + Math.cos(i * .17 + phase) * amplitude * .28 + i * trend);
 }
 
-function drawLineChart(id, series, labels) {
+function drawLineChart(id, series, labels, options = {}) {
   const canvas = document.getElementById(id);
   if (!canvas) return;
   const rect = canvas.getBoundingClientRect();
@@ -855,7 +954,8 @@ function drawLineChart(id, series, labels) {
     const x = xAt(idx, labels.length);
     ctx.fillStyle = "#8b999f";
     ctx.textAlign = i === 0 ? "left" : i === tickCount - 1 ? "right" : "center";
-    ctx.fillText(timeLabel(idx, labels.length), x, height - 5);
+    const label = options.labelFormatter ? options.labelFormatter(labels[idx], idx, labels) : timeLabel(idx, labels.length);
+    ctx.fillText(label, x, height - 5);
   }
   ctx.textAlign = "left";
 }
@@ -924,6 +1024,157 @@ function timeLabel(index, length) {
   const start = 6 * 60;
   const minutes = start + Math.round(index / Math.max(1, length - 1) * 8 * 60);
   return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function historicalDataset() {
+  const count = 720;
+  const span = state.history.end - state.history.start;
+  const timestamps = Array.from({ length: count }, (_, index) => state.history.start + span * index / (count - 1));
+  const values = timestamps.map((timestamp, index) => {
+    const cycle = timestamp / 3600000;
+    const step = Math.floor(index / 90) % 2;
+    return {
+      temperature: 90 + Math.sin(cycle * 1.7) * 3.8 + Math.cos(index * .09) * 1.2 + step * 1.7,
+      setpoint: 91.5 + Math.sin(cycle * .42) * .45 + step * 1.35,
+      level: 70 + Math.sin(cycle * 1.08 + 1.4) * 2.2 + Math.cos(index * .045) * .7,
+      steam: 66 + Math.sin(cycle * 2.1 + 2.2) * 1.5 + Math.cos(index * .15) * .5,
+    };
+  });
+  return { timestamps, values };
+}
+
+function drawHistoricalTrend() {
+  const canvas = document.getElementById("trends-chart");
+  if (!canvas) return;
+  const { timestamps, values } = historicalDataset();
+  const visibleCount = Math.max(24, Math.round(timestamps.length * state.history.viewFraction));
+  const maxStartIndex = Math.max(0, timestamps.length - visibleCount);
+  const startIndex = Math.min(maxStartIndex, Math.round(state.history.viewStart * (timestamps.length - 1)));
+  const endIndex = Math.min(timestamps.length, startIndex + visibleCount);
+  const visibleTimestamps = timestamps.slice(startIndex, endIndex);
+  const visibleValues = values.slice(startIndex, endIndex);
+  const visibleSpan = visibleTimestamps.at(-1) - visibleTimestamps[0];
+  drawLineChart("trends-chart", [
+    { data: visibleValues.map((item) => item.temperature), color: "#078eaa", fill: true },
+    { data: visibleValues.map((item) => item.setpoint), color: "#8b999f", dash: true },
+    { data: visibleValues.map((item) => item.level), color: "#119b70" },
+    { data: visibleValues.map((item) => item.steam), color: "#d68b05" },
+  ], visibleTimestamps, { labelFormatter: (timestamp) => historicalAxisLabel(timestamp, visibleSpan) });
+  updateHistoricalViewportUI(visibleTimestamps[0], visibleTimestamps.at(-1));
+}
+
+function historicalAxisLabel(timestamp, visibleSpan) {
+  const date = new Date(timestamp);
+  if (visibleSpan <= 24 * 60 * 60 * 1000) {
+    return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+  if (visibleSpan <= 7 * 24 * 60 * 60 * 1000) {
+    return date.toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+  return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
+}
+
+function updateHistoricalViewportUI(visibleStart, visibleEnd) {
+  const summary = document.getElementById("history-range-summary");
+  if (summary) summary.textContent = `JF-02 · ${formatDateTime(state.history.start)} — ${formatDateTime(state.history.end)} WIB`;
+  const visibleLabel = document.getElementById("history-visible-label");
+  if (visibleLabel) visibleLabel.textContent = `Visible: ${formatDateTime(visibleStart, true)} — ${formatDateTime(visibleEnd, true)} WIB`;
+  const selection = document.getElementById("navigator-selection");
+  if (selection) {
+    selection.style.left = `${state.history.viewStart * 100}%`;
+    selection.style.width = `${state.history.viewFraction * 100}%`;
+  }
+  const navigator = document.getElementById("trend-navigator");
+  if (navigator) {
+    const range = 1 - state.history.viewFraction;
+    navigator.setAttribute("aria-valuenow", range ? Math.round(state.history.viewStart / range * 100) : "0");
+    navigator.setAttribute("aria-valuetext", `${formatDateTime(visibleStart, true)} sampai ${formatDateTime(visibleEnd, true)}`);
+  }
+}
+
+function shiftHistoricalTrend(delta) {
+  state.history.viewStart = clamp(state.history.viewStart + delta, 0, 1 - state.history.viewFraction);
+  drawHistoricalTrend();
+}
+
+function handleHistoricalKey(event) {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  event.preventDefault();
+  const direction = event.key === "ArrowLeft" ? -1 : 1;
+  shiftHistoricalTrend(direction * state.history.viewFraction * .12);
+}
+
+function bindHistoricalPan() {
+  const canvas = document.getElementById("trends-chart");
+  const navigator = document.getElementById("trend-navigator");
+  const selection = document.getElementById("navigator-selection");
+  if (!canvas || !navigator || !selection) return;
+
+  let canvasPointer = null;
+  let canvasOriginX = 0;
+  let canvasOriginStart = 0;
+  canvas.addEventListener("pointerdown", (event) => {
+    canvasPointer = event.pointerId;
+    canvasOriginX = event.clientX;
+    canvasOriginStart = state.history.viewStart;
+    canvas.setPointerCapture(event.pointerId);
+    canvas.classList.add("dragging");
+  });
+  canvas.addEventListener("pointermove", (event) => {
+    if (canvasPointer !== event.pointerId) return;
+    const width = Math.max(1, canvas.getBoundingClientRect().width);
+    const delta = (event.clientX - canvasOriginX) / width * state.history.viewFraction;
+    state.history.viewStart = clamp(canvasOriginStart - delta, 0, 1 - state.history.viewFraction);
+    drawHistoricalTrend();
+  });
+  const stopCanvasDrag = (event) => {
+    if (canvasPointer !== event.pointerId) return;
+    canvasPointer = null;
+    canvas.classList.remove("dragging");
+  };
+  canvas.addEventListener("pointerup", stopCanvasDrag);
+  canvas.addEventListener("pointercancel", stopCanvasDrag);
+  canvas.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    const direction = Math.sign(event.deltaX || event.deltaY);
+    shiftHistoricalTrend(direction * state.history.viewFraction * .08);
+  }, { passive: false });
+  canvas.addEventListener("keydown", handleHistoricalKey);
+
+  let navigatorPointer = null;
+  let navigatorOriginX = 0;
+  let navigatorOriginStart = 0;
+  navigator.addEventListener("pointerdown", (event) => {
+    const rect = navigator.getBoundingClientRect();
+    if (!event.target.closest(".navigator-selection")) {
+      const next = (event.clientX - rect.left) / Math.max(1, rect.width) - state.history.viewFraction / 2;
+      state.history.viewStart = clamp(next, 0, 1 - state.history.viewFraction);
+      drawHistoricalTrend();
+    }
+    navigatorPointer = event.pointerId;
+    navigatorOriginX = event.clientX;
+    navigatorOriginStart = state.history.viewStart;
+    navigator.setPointerCapture(event.pointerId);
+    navigator.classList.add("dragging");
+  });
+  navigator.addEventListener("pointermove", (event) => {
+    if (navigatorPointer !== event.pointerId) return;
+    const width = Math.max(1, navigator.getBoundingClientRect().width);
+    state.history.viewStart = clamp(navigatorOriginStart + (event.clientX - navigatorOriginX) / width, 0, 1 - state.history.viewFraction);
+    drawHistoricalTrend();
+  });
+  const stopNavigatorDrag = (event) => {
+    if (navigatorPointer !== event.pointerId) return;
+    navigatorPointer = null;
+    navigator.classList.remove("dragging");
+  };
+  navigator.addEventListener("pointerup", stopNavigatorDrag);
+  navigator.addEventListener("pointercancel", stopNavigatorDrag);
+  navigator.addEventListener("keydown", handleHistoricalKey);
 }
 
 function updateLiveNumbers() {

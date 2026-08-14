@@ -827,6 +827,41 @@ select:focus-visible {
   height: 100%;
 }
 
+.interactive-chart {
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, rgba(7, 142, 170, 0.018), transparent);
+}
+
+.interactive-chart .chart-canvas {
+  cursor: grab;
+  outline: none;
+  touch-action: none;
+}
+
+.interactive-chart .chart-canvas:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(7, 142, 170, 0.35);
+}
+
+.interactive-chart .chart-canvas.dragging {
+  cursor: grabbing;
+}
+
+.drag-hint {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  padding: 5px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: 0.48rem;
+  pointer-events: none;
+}
+
 .legend {
   flex-wrap: wrap;
   gap: 12px;
@@ -1664,6 +1699,154 @@ select:focus-visible {
   padding: 12px;
 }
 
+.history-filter {
+  margin-bottom: 13px;
+  padding: 13px;
+}
+
+.history-filter-main {
+  display: grid;
+  grid-template-columns: minmax(155px, 0.7fr) minmax(360px, auto) minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.field-group,
+.date-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field-group > span,
+.date-field > span {
+  color: var(--ink-3);
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.history-filter .select-control,
+.history-filter .search-control {
+  width: 100%;
+  min-width: 0;
+}
+
+.history-presets {
+  width: max-content;
+}
+
+.history-presets .segment {
+  min-width: 38px;
+}
+
+.add-tag-button {
+  margin-top: 18px;
+}
+
+.custom-range-row {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  margin-top: 13px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.custom-range-row.hidden {
+  display: none;
+}
+
+.date-field input {
+  width: 220px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-family: var(--font-data);
+  font-size: 0.6rem;
+}
+
+.range-arrow {
+  padding-bottom: 10px;
+  color: var(--ink-3);
+}
+
+.range-help {
+  align-self: center;
+  color: var(--ink-3);
+  font-size: 0.53rem;
+}
+
+.trend-window-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 13px;
+  color: var(--ink-3);
+  font-size: 0.53rem;
+}
+
+.trend-window-bar span:first-child {
+  color: var(--ink-2);
+  font-family: var(--font-data);
+}
+
+.trend-navigator {
+  position: relative;
+  height: 34px;
+  margin: 7px 7px 0 42px;
+  padding: 10px 0;
+  cursor: pointer;
+  outline: none;
+  touch-action: none;
+}
+
+.trend-navigator:focus-visible {
+  border-radius: 5px;
+  box-shadow: 0 0 0 2px rgba(7, 142, 170, 0.25);
+}
+
+.navigator-track {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: repeating-linear-gradient(90deg, #edf3f4 0, #edf3f4 12%, #e4ecee 12.2%, #edf3f4 12.5%);
+}
+
+.navigator-selection {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  min-width: 12px;
+  border: 1px solid var(--primary);
+  border-radius: 5px;
+  background: rgba(7, 142, 170, 0.22);
+  cursor: grab;
+}
+
+.trend-navigator.dragging .navigator-selection {
+  cursor: grabbing;
+}
+
+.navigator-selection span {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+
+.navigator-selection span:first-child { left: 3px; }
+.navigator-selection span:last-child { right: 3px; }
+
 .search-control {
   min-width: 220px;
   flex: 1;
@@ -1806,6 +1989,14 @@ select:focus-visible {
 
   .grid-3 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .history-filter-main {
+    grid-template-columns: minmax(150px, 0.7fr) minmax(350px, 1.3fr) auto;
+  }
+
+  .history-filter-main .tag-search {
+    grid-column: 1 / 3;
   }
 }
 
@@ -1989,6 +2180,45 @@ select:focus-visible {
 
   .chart-container {
     height: 230px;
+  }
+
+  .history-filter-main {
+    grid-template-columns: 1fr;
+  }
+
+  .history-filter-main .tag-search {
+    grid-column: auto;
+  }
+
+  .range-field {
+    overflow-x: auto;
+    padding-bottom: 3px;
+  }
+
+  .add-tag-button {
+    margin-top: 0;
+  }
+
+  .custom-range-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .date-field input {
+    width: 100%;
+  }
+
+  .range-arrow {
+    display: none;
+  }
+
+  .trend-window-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .trend-navigator {
+    margin-left: 38px;
   }
 
   .utility-node.depth-1 { margin-left: 10px; }
