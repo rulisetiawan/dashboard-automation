@@ -4,6 +4,39 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Plant Machine and Area Mapping v1.1 — 14 Agustus 2026
+
+**Status:** Mapping dispensing ditambahkan
+
+### Ditambahkan
+
+- Satu dispensing Calator di area Depan.
+- Dua dispensing Calator di area Belakang.
+- Dua dispensing Calator di area Timur.
+- Total lima dispensing yang mendukung 18 Calator.
+- Usulan ID `DSP-DPN-01`, `DSP-BLK-01`–`02`, dan `DSP-TMR-01`–`02`.
+- Rasio jumlah dispensing terhadap Calator per area.
+
+### Diubah
+
+- Total aset mesin terpetakan berubah dari 133 menjadi 138.
+- Total tetap dibedakan menjadi 133 mesin proses produksi dan 5 mesin dispensing pendukung.
+- Chemical Dispensing and Transfer Concept diperbarui menjadi v1.1.
+
+---
+
+## Chemical Dispensing and Transfer Concept v1.1 — 14 Agustus 2026
+
+**Status:** Topology area dispensing diperbarui
+
+### Ditambahkan
+
+- Jumlah serta lokasi lima mesin dispensing.
+- Hubungan awal lima dispensing dengan 18 Calator berdasarkan area.
+- Kebutuhan mapping source–route–destination untuk setiap dispensing.
+
+---
+
 ## Plant Machine and Area Mapping v1.0 — 14 Agustus 2026
 
 **Status:** Baseline master mapping dibuat
