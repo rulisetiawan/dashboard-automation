@@ -4,6 +4,24 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.3 — 14 Agustus 2026
+
+**Status:** Remote display placeholder selesai
+
+### Ditambahkan
+
+- Kotak Remote Display pada detail Jetflow, Calator, Dryer, Kalender, dan Dispensing.
+- Machine ID context pada header remote display.
+- Status `IP not configured`.
+- Layout responsive untuk desktop dan mobile.
+
+### Batasan
+
+- Belum ada koneksi IP, streaming, authentication, atau remote control.
+- Viewport masih berupa placeholder kosong.
+
+---
+
 ## Frontend Dashboard V1.2 — 14 Agustus 2026
 
 **Status:** Hierarchical process navigation selesai

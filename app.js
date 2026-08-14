@@ -185,6 +185,13 @@ function machineHero(machine, code, meta) {
   `;
 }
 
+function remoteDisplayPanel(machine) {
+  return `<section class="card remote-display-card">
+    <div class="remote-display-head"><div><h2>Remote Display</h2><p>${machine.id} · reserved viewport untuk remote HMI/display melalui IP</p></div><span class="data-pill neutral">IP not configured</span></div>
+    <div class="remote-display-viewport" role="img" aria-label="Placeholder remote display untuk ${machine.name}"></div>
+  </section>`;
+}
+
 function selector(items, page) {
   return `
     <select class="select-control" data-machine-select="${page}" aria-label="Pilih mesin">
@@ -378,6 +385,7 @@ function jetflowDetailPage() {
     ${processBreadcrumb("jetflow", machine)}
     ${pageHead("jetflow", selector(jetflows.filter((item) => item.area === machine.area), "jetflow"))}
     ${machineHero(machine, "JF", `${machine.winches} winches · ${machine.recipe} · Active step: ${machine.step}`)}
+    ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Main Tank Temp", liveValue(92.6, "", .18, 1), "°C", "MT", "<strong>Target 93.0°C</strong>· holding")}
       ${kpi("Water Level", liveValue(72.4, "", .12, 1), "%", "LV", "<strong>Within range</strong>· target 72%", "success")}
@@ -458,6 +466,7 @@ function calatorDetailPage() {
     ${processBreadcrumb("calator", machine)}
     ${pageHead("calator", selector(calators.filter((item) => item.area === machine.area), "calator"))}
     ${machineHero(machine, "CL", `${machine.subtype} · ${machine.recipe} · Jetflow source JF-04`)}
+    ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Overfeed Out Avg", liveValue(29.18, "", .08, 2), "m/min", "OF", "<strong>Balance 1.4%</strong>· within range")}
       ${kpi("Dancing Roller", liveValue(51.6, "", .35, 1), "%", "DR", "<strong>Center ±3%</strong>· stable", "success")}
@@ -511,6 +520,7 @@ function dryerDetailPage() {
     ${processBreadcrumb("dryer", machine)}
     ${pageHead("dryer", selector(dryers.filter((item) => item.area === machine.area), "dryer"))}
     ${machineHero(machine, "DR", `${machine.chambers} chambers · ${machine.setup} · Calator source CL-03`)}
+    ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Machine Speed", liveValue(32.4, "", .08, 1), "m/min", "SP", "<strong>Target 32.5</strong>· stable")}
       ${kpi("Avg. Chamber Temp", liveValue(146.8, "", .12, 1), "°C", "TP", "<strong>7 / 8 ready</strong>· one deviation", "warning")}
@@ -549,6 +559,7 @@ function kalenderDetailPage() {
     ${processBreadcrumb("kalender", machine)}
     ${pageHead("kalender", selector(kalenders.filter((item) => item.area === machine.area), "kalender"))}
     ${machineHero(machine, "KL", `${machine.setup} · Dryer source DR-02 · Cotton 220 GSM`)}
+    ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Loadcell Balance", liveValue(1.8, "", .05, 1), "%", "LC", "<strong>Within ±3%</strong>· stable", "success")}
       ${kpi("Temperature Upper", liveValue(126.4, "", .15, 1), "°C", "TU", "<strong>Target 127°C</strong>· good")}
@@ -665,6 +676,7 @@ function chemicalDetailPage() {
     ${processBreadcrumb("chemical", machine)}
     ${pageHead("chemical", selector(dispensers.filter((item) => item.area === machine.area), "chemical"))}
     ${machineHero(machine, "DSP", `${machine.areaLabel} · 7 chemical variants · Calator destination group`)}
+    ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Usage Today", "6,115", "kg", "CH", "<strong>81.5%</strong>of daily forecast")}
       ${kpi("Active Transfers", "1", "route", "TR", "<strong>CH-01 → CL-02</strong>· 64.5%")}

@@ -1585,6 +1585,42 @@ select:focus-visible {
   padding: 16px 18px;
 }
 
+.remote-display-card {
+  margin-bottom: 13px;
+  padding: 16px;
+}
+
+.remote-display-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.remote-display-head h2 {
+  margin: 0 0 4px;
+  font-size: 0.76rem;
+}
+
+.remote-display-head p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.55rem;
+}
+
+.remote-display-viewport {
+  width: 100%;
+  min-height: 330px;
+  border: 1px dashed #b9c8cd;
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(90deg, rgba(19, 46, 57, 0.018) 1px, transparent 1px),
+    linear-gradient(rgba(19, 46, 57, 0.018) 1px, transparent 1px),
+    #f4f7f8;
+  background-size: 28px 28px;
+}
+
 .machine-identity {
   display: flex;
   min-width: 0;
@@ -2469,6 +2505,15 @@ select:focus-visible {
   .machine-hero-meta {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .remote-display-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .remote-display-viewport {
+    min-height: 220px;
   }
 
   .panel {
