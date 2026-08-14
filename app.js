@@ -1,0 +1,966 @@
+const state = {
+  page: "overview",
+  selected: {
+    jetflow: "JF-02",
+    calator: "CL-B01",
+    dryer: "DR-01",
+    kalender: "KL-02",
+  },
+  range: "8H",
+};
+
+const pageMeta = {
+  overview: ["Plant Overview", "Live Operations", "Seluruh proses, mesin, utilitas, dan exception dalam satu tampilan."],
+  jetflow: ["Jetflow", "Dyeing Process", "Monitoring batch, tank, dosing, winch, pump, steam, dan alarm."],
+  calator: ["Calator", "Washing Process", "Multi-speed, Overfeed Out, dancing roller, chemical, dan output."],
+  dryer: ["Dryer", "Drying Process", "Speed, multi-chamber temperature, thermal oil, dan output."],
+  kalender: ["Kalender", "Finishing Process", "Upper-lower balance, overfeed, width, motor, dan quality context."],
+  utilities: ["Plant Utilities", "Resource Monitoring", "Electrical, water, steam, dan thermal oil supply-to-consumer."],
+  chemical: ["Chemical Processing", "Dispensing & Transfer", "Tujuh varian chemical, transfer queue, route, dan daily usage."],
+  alarms: ["Alarms & Events", "Exception Center", "Alarm aktif, acknowledgement, equipment event, dan impact context."],
+  trends: ["Historical Trends", "Investigation Workspace", "Bandingkan actual, setpoint, machine state, dan alarm dalam satu timeline."],
+  health: ["Data Health", "Collector & Tag Quality", "Koneksi PLC, gateway, meter, stale tag, dan historian health."],
+};
+
+const jetflows = [
+  { id: "JF-01", name: "Jetflow 01", winches: 2, state: "running", batch: "DB-260814-031", recipe: "NAVY-R12", step: "Heating", progress: 68 },
+  { id: "JF-02", name: "Jetflow 02", winches: 5, state: "running", batch: "DB-260814-032", recipe: "BLACK-R08", step: "Holding", progress: 81 },
+  { id: "JF-03", name: "Jetflow 03", winches: 8, state: "warning", batch: "DB-260814-034", recipe: "OLIVE-R03", step: "Dosing", progress: 44 },
+  { id: "JF-04", name: "Jetflow 04", winches: 5, state: "idle", batch: "—", recipe: "—", step: "Ready", progress: 0 },
+];
+
+const calators = [
+  { id: "CL-01", name: "Calator 01", subtype: "Standard", state: "running", batch: "DB-260814-028", recipe: "WASH-S04", progress: 74 },
+  { id: "CL-B01", name: "Calator Bianco 01", subtype: "Bianco", state: "running", batch: "DB-260814-029", recipe: "SOFT-B12", progress: 62 },
+  { id: "CL-B02", name: "Calator Bianco 02", subtype: "Bianco", state: "warning", batch: "DB-260814-030", recipe: "SOFT-B08", progress: 51 },
+];
+
+const dryers = [
+  { id: "DR-01", name: "Dryer 01", chambers: 8, state: "running", batch: "DB-260814-024", setup: "DRY-COT-18", progress: 72 },
+  { id: "DR-02", name: "Dryer 02", chambers: 6, state: "running", batch: "DB-260814-025", setup: "DRY-POL-22", progress: 49 },
+  { id: "DR-03", name: "Dryer 03", chambers: 8, state: "fault", batch: "DB-260814-026", setup: "DRY-COT-16", progress: 31 },
+];
+
+const kalenders = [
+  { id: "KL-01", name: "Kalender 01", state: "running", batch: "DB-260814-021", setup: "FIN-COT-07", progress: 78 },
+  { id: "KL-02", name: "Kalender 02", state: "running", batch: "DB-260814-022", setup: "FIN-POL-05", progress: 65 },
+  { id: "KL-03", name: "Kalender 03", state: "warning", batch: "DB-260814-023", setup: "FIN-COT-09", progress: 39 },
+];
+
+const alarms = [
+  { id: 1, severity: "critical", title: "Tangle limit aktif", detail: "Limit tangle Winch 3 terdeteksi selama 18 detik.", source: "JF-03 · Winch 3", time: "10:38:42", ack: false },
+  { id: 2, severity: "critical", title: "Chamber 05 under-temperature", detail: "Temperatur aktual 134.2°C, target 148.0°C.", source: "DR-03 · Chamber 05", time: "10:36:18", ack: false },
+  { id: 3, severity: "warning", title: "Overfeed Out imbalance", detail: "Spread channel atas-bawah melewati tolerance 4.2%.", source: "CL-B02 · Overfeed Out", time: "10:31:09", ack: false },
+  { id: 4, severity: "warning", title: "Steam header pressure low", detail: "Tekanan header berada di bawah baseline heating.", source: "Utility · Steam Header A", time: "10:24:51", ack: false },
+  { id: 5, severity: "warning", title: "Fabric width approaching limit", detail: "Lebar aktual 179.1 cm, target 181.0 cm.", source: "KL-03 · Width Sensor", time: "10:17:33", ack: true },
+];
+
+const connectors = [
+  ["GW-DYE-01", "Jetflow PLC Group A", "OPC UA", "Online", "16 ms", "8,420", "99.98%"],
+  ["GW-WASH-01", "Calator & Dispensing", "Modbus TCP", "Online", "22 ms", "4,816", "99.94%"],
+  ["GW-FIN-01", "Dryer & Kalender", "OPC UA", "Online", "19 ms", "7,240", "99.97%"],
+  ["GW-UTL-01", "Utility Meters", "Modbus TCP", "Degraded", "184 ms", "2,168", "98.71%"],
+  ["GW-BLR-01", "Steam / Thermal Oil", "OPC UA", "Online", "27 ms", "1,036", "99.91%"],
+];
+
+const chemicals = [
+  ["CH-01", "Softener A", 1840, 2000, "#078eaa"],
+  ["CH-02", "Softener B", 1260, 1500, "#4d8fd0"],
+  ["CH-03", "Washing Agent", 980, 1200, "#119b70"],
+  ["CH-04", "Anti-static", 460, 800, "#8267c7"],
+  ["CH-05", "Fixing Agent", 740, 900, "#d68b05"],
+  ["CH-06", "Neutralizer", 510, 700, "#db6d48"],
+  ["CH-07", "Special Finish", 325, 600, "#c55f92"],
+];
+
+function statusPill(value) {
+  const labels = { running: "Running", warning: "Warning", fault: "Fault", idle: "Idle", offline: "Offline" };
+  return `<span class="status-pill ${value}">${labels[value] || value}</span>`;
+}
+
+function liveValue(value, unit = "", variance = 0.2, decimals = 1) {
+  return `<span class="live-number" data-live data-value="${value}" data-variance="${variance}" data-decimals="${decimals}">${Number(value).toFixed(decimals)}</span><small>${unit}</small>`;
+}
+
+function pageHead(page, actions = "") {
+  const meta = pageMeta[page];
+  return `
+    <section class="page-head">
+      <div>
+        <div class="eyebrow">${meta[1]}</div>
+        <h1>${meta[0]}</h1>
+        <p>${meta[2]}</p>
+      </div>
+      <div class="head-actions">${actions}</div>
+    </section>
+  `;
+}
+
+function panel(title, subtitle, content, actions = "", classes = "") {
+  return `
+    <article class="card panel ${classes}">
+      <div class="panel-head">
+        <div><h2 class="panel-title">${title}</h2><p class="panel-subtitle">${subtitle}</p></div>
+        ${actions ? `<div class="panel-actions">${actions}</div>` : ""}
+      </div>
+      ${content}
+    </article>
+  `;
+}
+
+function kpi(label, value, unit, icon, foot, tone = "") {
+  return `
+    <article class="card kpi-card">
+      <div class="kpi-top"><span class="kpi-label">${label}</span><span class="kpi-icon ${tone}">${icon}</span></div>
+      <div class="kpi-value">${value}<small>${unit}</small></div>
+      <div class="kpi-foot">${foot}</div>
+    </article>
+  `;
+}
+
+function machineHero(machine, code, meta) {
+  return `
+    <section class="card machine-hero">
+      <div class="machine-identity">
+        <div class="machine-avatar">${code}</div>
+        <div>
+          <h2>${machine.name} ${statusPill(machine.state)}</h2>
+          <p>${meta}</p>
+        </div>
+      </div>
+      <div class="machine-hero-meta">
+        <div class="hero-meta-item"><span>Batch</span><strong>${machine.batch}</strong></div>
+        <div class="hero-meta-item"><span>Progress</span><strong>${machine.progress}%</strong></div>
+        <div class="hero-meta-item"><span>Last update</span><strong>NOW · 18ms</strong></div>
+      </div>
+    </section>
+  `;
+}
+
+function selector(items, page) {
+  return `
+    <select class="select-control" data-machine-select="${page}" aria-label="Pilih mesin">
+      ${items.map((m) => `<option value="${m.id}" ${state.selected[page] === m.id ? "selected" : ""}>${m.name}</option>`).join("")}
+    </select>
+    <button class="button" data-page-target="trends">⌗ Historical</button>
+  `;
+}
+
+function overviewPage() {
+  const alarmItems = alarms.filter((a) => !a.ack).slice(0, 3).map(alarmRow).join("");
+  return `
+    ${pageHead("overview", `<button class="button" data-page-target="health">⊕ Data health</button><button class="button primary" data-page-target="trends">⌗ Open trends</button>`)}
+    <section class="kpi-grid">
+      ${kpi("Machines Running", "27", "/ 31", "MC", "<strong>87.1%</strong>plant availability", "success")}
+      ${kpi("Active Output", "18,420", "m", "OP", "<strong>↑ 4.8%</strong>vs previous shift")}
+      ${kpi("Electrical Demand", "1.84", "MW", "EL", "<strong class='danger'>92%</strong>of demand baseline", "warning")}
+      ${kpi("Unack. Alarms", "4", "events", "AL", "<strong class='danger'>2 critical</strong>require action", "danger")}
+    </section>
+    <section class="grid-2">
+      ${panel("Production Throughput", "Output aktual terhadap shift target · meter kain", `
+        <div class="chart-container"><canvas id="overview-chart" class="chart-canvas"></canvas></div>
+      `, `<div class="legend"><span class="legend-item"><i class="legend-swatch" style="background:#078eaa"></i>Actual</span><span class="legend-item"><i class="legend-swatch" style="background:#8b999f"></i>Target</span></div>`)}
+      ${panel("Requires Attention", "Exception paling penting saat ini", `<div class="alarm-list">${alarmItems}</div>`, `<button class="button ghost small" data-page-target="alarms">View all →</button>`)}
+    </section>
+    <section class="grid-equal">
+      ${panel("Textile Process Flow", "Status real-time dari pencelupan sampai finishing", `
+        <div class="process-flow">
+          ${processNode("Jetflow", "Pencelupan", "jetflow", 10, 1, 1)}
+          ${processNode("Calator", "Pencucian", "calator", 7, 1, 0)}
+          ${processNode("Dryer", "Pengeringan", "dryer", 5, 0, 1)}
+          ${processNode("Kalender", "Finishing", "kalender", 4, 1, 0)}
+        </div>
+      `)}
+      ${panel("Utility Snapshot", "Supply utama dan current demand", `
+        <div class="metric-grid">
+          ${metricTile("Electrical", liveValue(1.84, "MW", .02, 2), "Main incomer · PF 0.94")}
+          ${metricTile("Steam Header", liveValue(7.8, "bar", .08, 1), "Jetflow + Kalender")}
+          ${metricTile("Thermal Oil", liveValue(218.4, "°C", .25, 1), "Dryer supply")}
+          ${metricTile("Water Flow", liveValue(184, "m³/h", 1.2, 0), "All production")}
+          ${metricTile("Chemical Today", "6,115<small>kg</small>", "7 variants")}
+          ${metricTile("Data Good", "99.4<small>%</small>", "248.6K active tags")}
+        </div>
+      `, `<button class="button ghost small" data-page-target="utilities">Open utilities →</button>`)}
+    </section>
+    ${panel("Active Process Runs", "Material, recipe, progress, dan machine state", activeRunsTable(), `<button class="button ghost small">Export view</button>`)}
+  `;
+}
+
+function processNode(name, subtitle, page, running, warning, fault) {
+  return `
+    <div class="process-node" data-page-target="${page}" role="button" tabindex="0">
+      <div class="process-node-top"><div><strong>${name}</strong><small>${subtitle}</small></div>${fault ? statusPill("fault") : warning ? statusPill("warning") : statusPill("running")}</div>
+      <div class="node-metrics">
+        <div class="node-metric"><strong>${running}</strong><small>Run</small></div>
+        <div class="node-metric"><strong>${warning}</strong><small>Warn</small></div>
+        <div class="node-metric"><strong>${fault}</strong><small>Fault</small></div>
+      </div>
+    </div>
+  `;
+}
+
+function metricTile(label, value, target) {
+  return `<div class="metric-tile"><div class="metric-label"><span>${label}</span><span class="quality-pill good">Good</span></div><div class="metric-value">${value}</div><div class="metric-target">${target}</div></div>`;
+}
+
+function activeRunsTable() {
+  const rows = [
+    ["DB-260814-032", "Jetflow 02", "BLACK-R08", "Holding", 81, "12:14"],
+    ["DB-260814-029", "Calator Bianco 01", "SOFT-B12", "Running", 62, "11:42"],
+    ["DB-260814-024", "Dryer 01", "DRY-COT-18", "Running", 72, "11:28"],
+    ["DB-260814-022", "Kalender 02", "FIN-POL-05", "Running", 65, "11:16"],
+  ];
+  return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Process Run</th><th>Machine</th><th>Recipe / Setup</th><th>Step</th><th>Progress</th><th>ETA</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td class="mono">${r[2]}</td><td>${r[3]}</td><td><span class="progress"><i class="progress-track"><i class="progress-fill" style="width:${r[4]}%"></i></i><span class="mono">${r[4]}%</span></span></td><td class="mono">${r[5]}</td></tr>`).join("")}
+  </tbody></table></div>`;
+}
+
+function alarmRow(a) {
+  return `
+    <div class="alarm-row ${a.severity}">
+      <div class="alarm-copy"><strong>${a.title}</strong><span>${a.detail}</span><small>${a.source}</small></div>
+      <div class="alarm-meta"><span class="alarm-time">${a.time}</span>${a.ack ? `<span class="data-pill neutral">ACK</span>` : `<button class="button small" data-ack-id="${a.id}">Acknowledge</button>`}</div>
+    </div>
+  `;
+}
+
+function jetflowPage() {
+  const machine = jetflows.find((m) => m.id === state.selected.jetflow) || jetflows[0];
+  const winches = Array.from({ length: machine.winches }, (_, i) => {
+    const warn = machine.id === "JF-03" && i === 2;
+    return `<div class="winch-card"><div class="winch-card-head"><strong>Winch ${i + 1}</strong><i class="equipment-state ${warn ? "warning" : ""}"></i></div><div class="card-reading">${liveValue(42 + i * .7, "Hz", .25, 1)}</div><div class="card-caption">Motor · ${warn ? "Tangle detected" : "Limit clear"}</div><div class="mini-bar"><span style="width:${65 + i * 3}%"></span></div></div>`;
+  }).join("");
+  return `
+    ${pageHead("jetflow", selector(jetflows, "jetflow"))}
+    ${machineHero(machine, "JF", `${machine.winches} winches · ${machine.recipe} · Active step: ${machine.step}`)}
+    <section class="kpi-grid">
+      ${kpi("Main Tank Temp", liveValue(92.6, "", .18, 1), "°C", "MT", "<strong>Target 93.0°C</strong>· holding")}
+      ${kpi("Water Level", liveValue(72.4, "", .12, 1), "%", "LV", "<strong>Within range</strong>· target 72%", "success")}
+      ${kpi("Flow Meter", liveValue(124.8, "", .7, 1), "m³/h", "FL", "<strong>↑ 1.2%</strong>stable flow")}
+      ${kpi("Steam Header", liveValue(7.8, "", .07, 1), "bar", "ST", "<strong class='danger'>Low baseline</strong>· 8.1 bar", "warning")}
+    </section>
+    <section class="grid-2">
+      ${panel("Main Process Trend", "Temperature, setpoint, dan water level · last 60 minutes", `<div class="chart-container"><canvas id="jetflow-chart" class="chart-canvas"></canvas></div>`, rangeButtons())}
+      ${panel("Tank & Dosing", "Live tank condition and data quality", `
+        <div class="metric-grid">
+          ${metricTile("Main tank", liveValue(92.6, "°C", .15, 1), "Temperature · SP 93.0")}
+          ${metricTile("Dosing tank 1", liveValue(58.2, "°C", .18, 1), "Level 64.8%")}
+          ${metricTile("Dosing tank 2", liveValue(42.7, "°C", .16, 1), "Level 37.2%")}
+          ${metricTile("Main pump", "46.2<small>A</small>", "Running · 1,482 rpm")}
+          ${metricTile("Dosing pump 1", "18.4<small>Hz</small>", "Running")}
+          ${metricTile("Dosing pump 2", "0.0<small>Hz</small>", "Ready")}
+        </div>
+      `)}
+    </section>
+    ${panel(`Dynamic Winch Group · ${machine.winches} units`, "Jumlah winch mengikuti konfigurasi mesin; setiap winch memiliki motor dan tangle limit.", `<div class="winch-grid">${winches}</div>`)}
+    <section class="grid-equal">
+      ${panel("Driven Equipment", "Motor, pump, circulation, dan mixer status", equipmentGrid([
+        ["Main Pump", "46.2 A", "Running"], ["Circulation", "38.7 Hz", "Running"], ["Dosing Pump 1", "18.4 Hz", "Running"],
+        ["Dosing Pump 2", "0.0 Hz", "Ready"], ["Mixer 1", "22.1 Hz", "Running"], ["Mixer 2", "0.0 Hz", "Ready"]
+      ]))}
+      ${panel("Batch Events", "State, dosing, steam, dan alarm timeline", eventTable([
+        ["10:38:42", "Alarm", "Winch 3 tangle limit activated", "Warning"],
+        ["10:24:11", "Process", "Holding temperature reached", "Good"],
+        ["10:02:44", "Utility", "Steam header pressure below baseline", "Warning"],
+        ["09:46:08", "Recipe", "Dosing step 04 completed", "Good"],
+      ]))}
+    </section>
+  `;
+}
+
+function equipmentGrid(items) {
+  return `<div class="equipment-list">${items.map((it) => `<div class="equipment-row" style="grid-template-columns:35px minmax(0,1fr) auto"><span class="equipment-icon">M</span><div class="equipment-copy"><strong>${it[0]}</strong><span>${it[1]} · 1,284 operating hours</span></div><span class="data-pill ${it[2] === "Running" ? "good" : "neutral"}">${it[2]}</span></div>`).join("")}</div>`;
+}
+
+function eventTable(rows) {
+  return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Type</th><th>Event</th><th>Status</th></tr></thead><tbody>${rows.map((r) => `<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td><span class="data-pill ${r[3] === "Good" ? "good" : "warning"}">${r[3]}</span></td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function rangeButtons() {
+  return `<div class="segmented">${["1H", "8H", "24H", "7D"].map((r) => `<button class="segment ${state.range === r ? "active" : ""}" data-range="${r}">${r}</button>`).join("")}</div>`;
+}
+
+function calatorPage() {
+  const machine = calators.find((m) => m.id === state.selected.calator) || calators[0];
+  const isBianco = machine.subtype === "Bianco";
+  const standard = [
+    ["Feeding", 28.4], ["Squeezing 1", 28.1], ["Squeezing 2", 27.9], ["Overfeed Atas", 29.3],
+    ["Overfeed Bawah", 29.0], ["Folder", 27.6], ["Plaiter", 27.4]
+  ];
+  const bianco = [
+    ["OF In Bawah 1", 27.8], ["OF In Bawah 2", 27.9], ["OF In Atas 3", 28.1], ["OF In Atas 4", 28.0],
+    ["Feeding", 28.2], ["Squeezing 1", 28.0], ["Squeezing 2", 27.7], ["OF Out Bawah 1", 29.2],
+    ["OF Out Bawah 2", 29.0], ["OF Out Atas 3", 29.4], ["OF Out Atas 4", 29.1], ["Folder", 27.5], ["Plaiter", 27.3]
+  ];
+  const speeds = isBianco ? bianco : standard;
+  return `
+    ${pageHead("calator", selector(calators, "calator"))}
+    ${machineHero(machine, "CL", `${machine.subtype} · ${machine.recipe} · Jetflow source JF-04`)}
+    <section class="kpi-grid">
+      ${kpi("Overfeed Out Avg", liveValue(29.18, "", .08, 2), "m/min", "OF", "<strong>Balance 1.4%</strong>· within range")}
+      ${kpi("Dancing Roller", liveValue(51.6, "", .35, 1), "%", "DR", "<strong>Center ±3%</strong>· stable", "success")}
+      ${kpi("Output Today", "4,860", "m", "OP", "<strong>↑ 3.2%</strong>vs shift plan")}
+      ${kpi("Chemical Usage", "184.6", "kg", "CH", "<strong>98.7%</strong>recipe adherence")}
+    </section>
+    <section class="grid-2">
+      ${panel(`Multi-Speed Profile · ${machine.subtype}`, "Actual speed dari feeding sampai plaiter", `<div class="speed-grid">${speeds.map(speedCard).join("")}</div>`)}
+      ${panel("Critical Process", "Overfeed Out, dancing roller, dan current transfer", `
+        <div class="metric-grid">
+          ${metricTile("OF Out spread", liveValue(0.42, "m/min", .03, 2), "Limit 0.60")}
+          ${metricTile("Dancing roller", liveValue(51.6, "%", .3, 1), "Center 50.0")}
+          ${metricTile("Folder ratio", liveValue(0.944, "", .002, 3), "vs OF Out")}
+          ${metricTile("Chemical route", "P-04", "CH-02 → CL-B01")}
+          ${metricTile("Transfer status", "DONE", "182.4 / 184.0 kg")}
+          ${metricTile("Good output", "4,738<small>m</small>", "97.5%")}
+        </div>
+      `)}
+    </section>
+    <section class="grid-2">
+      ${panel("Overfeed Out & Dancing Roller", "Historical relationship · current process run", `<div class="chart-container"><canvas id="calator-chart" class="chart-canvas"></canvas></div>`, rangeButtons())}
+      ${panel("Speed Synchronization", "Difference dan ratio antarstage", `
+        ${balanceRows([
+          ["Feeding → SQ-1", 52, "+0.7%"], ["SQ-1 → SQ-2", 48, "+1.1%"], ["OF In → OF Out", 56, "+3.8%"],
+          ["OF Out upper/lower", 51, "1.4%"], ["OF Out → Folder", 45, "-5.6%"], ["Folder → Plaiter", 49, "0.7%"]
+        ])}
+      `)}
+    </section>
+    ${panel("Process Run History", "Chemical, speed, slowdown, output, dan quality context", eventTable([
+      ["10:31:09", "Warning", "Overfeed Out spread reached 0.62 m/min", "Warning"],
+      ["10:18:24", "Chemical", "CH-02 transfer completed · 182.4 kg", "Good"],
+      ["10:05:18", "Speed", "Running speed reached recipe window", "Good"],
+      ["09:58:02", "Process", "Process run DB-260814-029 started", "Good"],
+    ]))}
+  `;
+}
+
+function speedCard(item, index) {
+  const warn = item[0].includes("Out Atas 4") && index % 3 === 0;
+  return `<div class="speed-card"><div class="speed-card-head"><strong>${item[0]}</strong><i class="equipment-state ${warn ? "warning" : ""}"></i></div><div class="card-reading">${liveValue(item[1], "m/min", .06, 1)}</div><div class="card-caption">SP ${(item[1] + .1).toFixed(1)} · ${warn ? "Check balance" : "Good"}</div><div class="mini-bar"><span style="width:${Math.min(94, item[1] * 2.8)}%"></span></div></div>`;
+}
+
+function balanceRows(rows) {
+  return `<div>${rows.map((r) => `<div class="balance-row"><span class="balance-label">${r[0]}</span><div class="balance-track"><i class="balance-indicator" style="left:${r[1]}%"></i></div><span class="balance-value">${r[2]}</span></div>`).join("")}</div>`;
+}
+
+function dryerPage() {
+  const machine = dryers.find((m) => m.id === state.selected.dryer) || dryers[0];
+  const temps = Array.from({ length: machine.chambers }, (_, i) => ({ actual: 142 + i * 1.2 + (i === 4 ? -9 : 0), sp: 144 + i * 1.0 }));
+  return `
+    ${pageHead("dryer", selector(dryers, "dryer"))}
+    ${machineHero(machine, "DR", `${machine.chambers} chambers · ${machine.setup} · Calator source CL-03`)}
+    <section class="kpi-grid">
+      ${kpi("Machine Speed", liveValue(32.4, "", .08, 1), "m/min", "SP", "<strong>Target 32.5</strong>· stable")}
+      ${kpi("Avg. Chamber Temp", liveValue(146.8, "", .12, 1), "°C", "TP", "<strong>7 / 8 ready</strong>· one deviation", "warning")}
+      ${kpi("Thermal Oil Supply", liveValue(218.4, "", .22, 1), "°C", "TO", "<strong>ΔT 21.7°C</strong>· normal", "success")}
+      ${kpi("Output Today", "6,420", "m", "OP", "<strong>↑ 2.6%</strong>vs shift target")}
+    </section>
+    ${panel(`Chamber Temperature Heatmap · ${machine.chambers} zones`, "Actual, setpoint, dan deviation setiap chamber", `
+      <div class="heatmap-grid">${temps.map((t, i) => `<div class="heatmap-cell ${Math.abs(t.actual - t.sp) > 5 ? "warning" : ""}"><strong>CH-${String(i + 1).padStart(2, "0")}</strong><span>${t.actual.toFixed(1)}°</span><small>SP ${t.sp.toFixed(1)} · Δ ${(t.actual - t.sp).toFixed(1)}</small></div>`).join("")}</div>
+    `)}
+    <section class="grid-2">
+      ${panel("Speed & Temperature Profile", "Actual versus setpoint · current run", `<div class="chart-container"><canvas id="dryer-chart" class="chart-canvas"></canvas></div>`, rangeButtons())}
+      ${panel("Drying Context", "Input, output, utility, dan quality risk", `
+        <div class="metric-grid">
+          ${metricTile("Moisture inlet", "42.8<small>%</small>", "Manual sample")}
+          ${metricTile("Moisture outlet", "8.4<small>%</small>", "Target 8.0–9.0")}
+          ${metricTile("Residence time", "4.82<small>min</small>", "Calculated")}
+          ${metricTile("Oil supply", "218.4<small>°C</small>", "Return 196.7")}
+          ${metricTile("Energy intensity", "0.84<small>kWh/kg</small>", "Baseline 0.82")}
+          ${metricTile("Risk length", "168<small>m</small>", "CH-05 deviation")}
+        </div>
+      `)}
+    </section>
+    ${panel("Chamber & Drive Events", "Heating, fan, drive, thermal oil, dan positional risk", eventTable([
+      ["10:36:18", "Alarm", "Chamber 05 under-temperature · segment 3,240–3,408 m", "Warning"],
+      ["10:22:04", "Utility", "Thermal oil supply recovered to 218°C", "Good"],
+      ["10:10:41", "Speed", "Speed reduced to 29.0 m/min for 42 sec", "Warning"],
+      ["09:51:12", "Process", "All chambers ready · run started", "Good"],
+    ]))}
+  `;
+}
+
+function kalenderPage() {
+  const machine = kalenders.find((m) => m.id === state.selected.kalender) || kalenders[0];
+  const motors = ["Inlet", "Expander L", "Expander R", "Upper Felt", "Lower Felt", "Cooling Belt", "Conveyor Belt", "Plaiter", "Conveyor Table", "Up Down Table"];
+  return `
+    ${pageHead("kalender", selector(kalenders, "kalender"))}
+    ${machineHero(machine, "KL", `${machine.setup} · Dryer source DR-02 · Cotton 220 GSM`)}
+    <section class="kpi-grid">
+      ${kpi("Loadcell Balance", liveValue(1.8, "", .05, 1), "%", "LC", "<strong>Within ±3%</strong>· stable", "success")}
+      ${kpi("Temperature Upper", liveValue(126.4, "", .15, 1), "°C", "TU", "<strong>Target 127°C</strong>· good")}
+      ${kpi("Overfeed", liveValue(8.6, "", .04, 1), "%", "OF", "<strong>Target 8.5%</strong>· stable")}
+      ${kpi("Fabric Width", liveValue(181.2, "", .06, 1), "cm", "FW", "<strong>Target 181.0</strong>· good", "success")}
+    </section>
+    <section class="grid-2">
+      ${panel("Upper / Lower Balance", "Mechanical, thermal, expander, dan felt synchronization", balanceRows([
+        ["Loadcell U/L", 52, "1.8%"], ["Temperature U/L", 49, "0.6°C"], ["Expander L/R", 51, "0.9%"],
+        ["Upper/Lower Felt", 48, "1.2%"], ["Dancing Roller", 54, "53.8%"], ["Fabric Width", 50, "181.2 cm"]
+      ]))}
+      ${panel("Live Process Measurements", "Input sampai output finishing", `
+        <div class="metric-grid">
+          ${metricTile("Temp inlet", liveValue(74.8, "°C", .12, 1), "From Dryer")}
+          ${metricTile("Temp upper", liveValue(126.4, "°C", .13, 1), "SP 127.0")}
+          ${metricTile("Temp lower", liveValue(125.8, "°C", .13, 1), "SP 127.0")}
+          ${metricTile("Loadcell upper", liveValue(4.82, "kN", .02, 2), "Within range")}
+          ${metricTile("Loadcell lower", liveValue(4.73, "kN", .02, 2), "Within range")}
+          ${metricTile("Dancing roller", liveValue(53.8, "%", .22, 1), "Center 50.0")}
+        </div>
+      `)}
+    </section>
+    <section class="grid-2">
+      ${panel("Finishing Process Trend", "Loadcell, temperature, overfeed, dan fabric width", `<div class="chart-container"><canvas id="kalender-chart" class="chart-canvas"></canvas></div>`, rangeButtons())}
+      ${panel("Quality Context", "Target dan latest inspection result", `
+        <div class="ring-wrap">
+          <div class="ring" style="--value:94;--ring-color:#119b70"><div class="ring-copy"><strong>94.2%</strong><small>Quality score</small></div></div>
+          <div class="ring-stats">
+            <div class="ring-stat"><span>Gramasi</span><strong>221.4 GSM</strong></div>
+            <div class="ring-stat"><span>Bowing</span><strong>1.2%</strong></div>
+            <div class="ring-stat"><span>Shrinkage</span><strong>-3.4%</strong></div>
+            <div class="ring-stat"><span>Fabric width</span><strong>181.2 cm</strong></div>
+          </div>
+        </div>
+      `)}
+    </section>
+    ${panel("Motor & Driven Equipment", "Status dari inlet sampai output table", `<div class="motor-grid">${motors.map((m, i) => `<div class="motor-card"><div class="motor-card-head"><strong>${m}</strong><i class="equipment-state ${i === 8 ? "warning" : ""}"></i></div><div class="card-reading">${(24 + i * 1.2).toFixed(1)}<small>Hz</small></div><div class="card-caption">${i === 8 ? "Current above baseline" : "Running · Good"}</div></div>`).join("")}</div>`)}
+  `;
+}
+
+function utilitiesPage() {
+  return `
+    ${pageHead("utilities", `<select class="select-control"><option>All utilities</option><option>Electrical</option><option>Water</option><option>Steam</option><option>Thermal Oil</option></select><button class="button" data-page-target="trends">⌗ Historical</button>`)}
+    <section class="kpi-grid">
+      ${kpi("Electrical Demand", liveValue(1.84, "", .02, 2), "MW", "EL", "<strong>Peak 1.96 MW</strong>· 10:12")}
+      ${kpi("Water Consumption", "1,284", "m³", "WA", "<strong>82.4%</strong>daily baseline")}
+      ${kpi("Steam Production", liveValue(12.8, "", .09, 1), "t/h", "ST", "<strong class='danger'>Pressure 7.8 bar</strong>", "warning")}
+      ${kpi("Thermal Oil Supply", liveValue(218.4, "", .2, 1), "°C", "TO", "<strong>3 Dryers</strong>active demand", "success")}
+    </section>
+    <section class="grid-2">
+      ${panel("Plant Electrical Demand", "Power, target baseline, dan peak demand", `<div class="chart-container"><canvas id="utility-chart" class="chart-canvas"></canvas></div>`, rangeButtons())}
+      ${panel("Energy Balance", "Upstream versus downstream metering coverage", `
+        <div class="ring-wrap">
+          <div class="ring" style="--value:92;--ring-color:#078eaa"><div class="ring-copy"><strong>92.4%</strong><small>Metered</small></div></div>
+          <div class="ring-stats">
+            <div class="ring-stat"><span>Main incomer</span><strong>14.82 MWh</strong></div>
+            <div class="ring-stat"><span>Downstream sum</span><strong>13.69 MWh</strong></div>
+            <div class="ring-stat"><span>Unmetered</span><strong>0.72 MWh</strong></div>
+            <div class="ring-stat"><span>Difference</span><strong>0.41 MWh</strong></div>
+          </div>
+        </div>
+      `)}
+    </section>
+    <section class="grid-equal">
+      ${panel("Electrical Distribution", "Cubicle → MDP → SDP → machine meter", `<div class="utility-tree">${utilityTree()}</div>`)}
+      ${panel("Boiler & Water", "Supply status and affected consumers", `
+        <div class="metric-grid">
+          ${metricTile("Steam boiler", "RUN", "Load 78.4%")}
+          ${metricTile("Steam header", liveValue(7.8, "bar", .06, 1), "Baseline 8.1")}
+          ${metricTile("Steam consumers", "9<small>units</small>", "Jetflow + Kalender")}
+          ${metricTile("Oil boiler", "RUN", "Load 71.2%")}
+          ${metricTile("Oil supply/return", "218/197<small>°C</small>", "ΔT 21.7")}
+          ${metricTile("Water flow", liveValue(184, "m³/h", 1, 0), "32 machine meters")}
+        </div>
+      `)}
+    </section>
+    ${panel("Machine Energy Intensity", "Consumption terhadap good output · current shift", energyTable())}
+  `;
+}
+
+function utilityTree() {
+  const rows = [
+    [0, "CB", "Main Cubicle A", "1.12 MW", "running"],
+    [1, "MD", "MDP-A · Dyeing", "684 kW", "running"],
+    [2, "SD", "SDP-A1 · Jetflow", "428 kW", "running"],
+    [3, "MC", "JF-01 / JF-02 / JF-03", "392 kW", "running"],
+    [2, "SD", "SDP-A2 · Washing", "218 kW", "running"],
+    [0, "CB", "Main Cubicle B", "724 kW", "running"],
+    [1, "MD", "MDP-B · Finishing", "598 kW", "running"],
+    [2, "SD", "SDP-B1 · Dryer", "364 kW", "warning"],
+  ];
+  return rows.map((r) => `<div class="utility-node depth-${r[0]}"><div class="utility-name"><span>${r[1]}</span><strong>${r[2]}</strong></div><span class="utility-reading">${r[3]}</span>${statusPill(r[4])}</div>`).join("");
+}
+
+function energyTable() {
+  const rows = [
+    ["Jetflow 02", "DB-260814-032", "486.2 kWh", "2.18 kWh/kg", "+3.1%", "Good"],
+    ["Calator B01", "DB-260814-029", "128.6 kWh", "0.027 kWh/m", "-1.8%", "Good"],
+    ["Dryer 01", "DB-260814-024", "382.4 kWh", "0.84 kWh/kg", "+6.4%", "Warning"],
+    ["Kalender 02", "DB-260814-022", "94.7 kWh", "0.021 kWh/m", "-0.7%", "Good"],
+  ];
+  return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Machine</th><th>Process Run</th><th>Energy</th><th>Intensity</th><th>vs Baseline</th><th>Data</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r[0]}</td><td class="mono">${r[1]}</td><td class="mono">${r[2]}</td><td class="mono">${r[3]}</td><td class="mono">${r[4]}</td><td><span class="data-pill ${r[5] === "Good" ? "good" : "warning"}">${r[5]}</span></td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function chemicalPage() {
+  const transactions = [
+    ["TR-28419", "CH-02", "CL-B01", "184.0 kg", "182.4 kg", "P-04", "Completed"],
+    ["TR-28420", "CH-01", "CL-02", "128.0 kg", "82.6 kg", "P-02", "Transfer"],
+    ["TR-28421", "CH-05", "CL-01", "94.0 kg", "—", "P-05", "Queued"],
+    ["TR-28418", "CH-03", "CL-B02", "110.0 kg", "108.1 kg", "P-03", "Partial"],
+  ];
+  return `
+    ${pageHead("chemical", `<select class="select-control"><option>Today · Shift A</option><option>Last 24 hours</option><option>This week</option></select><button class="button" data-page-target="trends">⌗ Historical</button>`)}
+    <section class="kpi-grid">
+      ${kpi("Usage Today", "6,115", "kg", "CH", "<strong>81.5%</strong>of daily forecast")}
+      ${kpi("Active Transfers", "1", "route", "TR", "<strong>CH-01 → CL-02</strong>· 64.5%")}
+      ${kpi("Request Queue", "2", "requests", "RQ", "<strong>Avg wait 02:14</strong>")}
+      ${kpi("Usage Variance", "1.8", "%", "VR", "<strong>Within ±3%</strong>tolerance", "success")}
+    </section>
+    ${panel("Seven Chemical Variants", "Daily usage, forecast, dan availability", `<div class="chemical-grid">${chemicals.map((c) => {
+      const pct = Math.round(c[2] / c[3] * 100);
+      return `<div class="chemical-card"><div class="chemical-card-head"><strong>${c[0]} · ${c[1]}</strong><i class="equipment-state"></i></div><div class="card-reading">${c[2].toLocaleString()}<small>kg</small></div><div class="card-caption">${pct}% of ${c[3].toLocaleString()} kg forecast</div><div class="mini-bar"><span style="width:${pct}%;background:${c[4]}"></span></div></div>`;
+    }).join("")}</div>`)}
+    <section class="grid-2">
+      ${panel("Daily Usage by Variant", "Accumulated chemical usage · kg", `<div class="chart-container"><canvas id="chemical-chart" class="chart-canvas"></canvas></div>`)}
+      ${panel("Transfer Route", "Current source-to-Calator path", `
+        <div class="utility-tree">
+          <div class="utility-node"><div class="utility-name"><span>TK</span><strong>CH-01 Source Tank</strong></div><span class="utility-reading">68.4%</span>${statusPill("running")}</div>
+          <div class="utility-node depth-1"><div class="utility-name"><span>DS</span><strong>Dispensing Unit 01</strong></div><span class="utility-reading">82.6 / 128 kg</span>${statusPill("running")}</div>
+          <div class="utility-node depth-2"><div class="utility-name"><span>PP</span><strong>Pipe Route P-02</strong></div><span class="utility-reading">42.8 kg/min</span>${statusPill("running")}</div>
+          <div class="utility-node depth-3"><div class="utility-name"><span>CL</span><strong>Calator 02</strong></div><span class="utility-reading">Destination</span>${statusPill("running")}</div>
+        </div>
+      `)}
+    </section>
+    ${panel("Dispensing Transactions", "Request, target, actual, route, dan transfer status", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Request</th><th>Chemical</th><th>Destination</th><th>Target</th><th>Actual</th><th>Route</th><th>Status</th></tr></thead><tbody>${transactions.map((r) => `<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="mono">${r[3]}</td><td class="mono">${r[4]}</td><td class="mono">${r[5]}</td><td><span class="data-pill ${r[6] === "Completed" ? "good" : r[6] === "Partial" ? "warning" : "neutral"}">${r[6]}</span></td></tr>`).join("")}</tbody></table></div>`)}
+  `;
+}
+
+function alarmsPage() {
+  return `
+    ${pageHead("alarms", `<button class="button" id="ack-all">Acknowledge visible</button><button class="button primary" data-page-target="trends">Open event timeline</button>`)}
+    <section class="kpi-grid">
+      ${kpi("Critical Active", "2", "alarms", "CR", "<strong class='danger'>Oldest 08:14</strong>", "danger")}
+      ${kpi("Warning Active", "3", "alarms", "WR", "<strong>2 unacknowledged</strong>", "warning")}
+      ${kpi("Avg Response", "01:42", "min", "RT", "<strong>↓ 18 sec</strong>vs previous shift", "success")}
+      ${kpi("Communication", "1", "event", "CM", "<strong>Utility GW degraded</strong>", "warning")}
+    </section>
+    <section class="card filter-bar">
+      <input class="search-control" id="alarm-search" placeholder="Cari alarm, machine, atau equipment..." />
+      <select class="select-control" id="alarm-severity"><option value="all">All severity</option><option value="critical">Critical</option><option value="warning">Warning</option></select>
+      <select class="select-control"><option>All areas</option><option>Dyeing</option><option>Finishing</option><option>Utilities</option></select>
+    </section>
+    <section class="grid-2">
+      ${panel("Active Alarms", "Live alarm list · sorted by severity", `<div id="alarm-page-list" class="alarm-list">${alarms.map(alarmRow).join("")}</div>`)}
+      ${panel("Event Sequence", "State dan event terakhir sebelum alarm critical", eventTable([
+        ["10:38:42.418", "Alarm", "JF-03 Winch 3 tangle limit active", "Warning"],
+        ["10:38:41.904", "Drive", "Winch 3 current increased to 28.4 A", "Warning"],
+        ["10:38:40.122", "Process", "Winch 3 speed variation +8.2%", "Warning"],
+        ["10:37:54.710", "Recipe", "Dosing step 03 active", "Good"],
+        ["10:36:11.028", "State", "Jetflow running · all winches good", "Good"],
+      ]))}
+    </section>
+    ${panel("Alarm Frequency · Current Shift", "Recurring alarm groups dan total duration", `<div class="chart-container compact"><canvas id="alarm-chart" class="chart-canvas"></canvas></div>`)}
+  `;
+}
+
+function trendsPage() {
+  return `
+    ${pageHead("trends", `<button class="button">Save view</button><button class="button primary">Export CSV</button>`)}
+    <section class="card filter-bar">
+      <select class="select-control"><option>Jetflow 02</option><option>Calator Bianco 01</option><option>Dryer 01</option><option>Kalender 02</option></select>
+      <select class="select-control"><option>Current Shift</option><option>Last 8 Hours</option><option>Last 24 Hours</option><option>Custom Range</option></select>
+      <input class="search-control" placeholder="Tambah tag atau parameter..." />
+      <button class="button">+ Add tag</button>
+    </section>
+    <section class="card panel">
+      <div class="panel-head">
+        <div><h2 class="panel-title">Historical Trend Explorer</h2><p class="panel-subtitle">JF-02 · DB-260814-032 · 06:00—14:00 WIB</p></div>
+        <div class="panel-actions">${rangeButtons()}</div>
+      </div>
+      <div class="tag-chip-list">
+        <span class="tag-chip"><i style="background:#078eaa"></i>Main Tank Temperature</span>
+        <span class="tag-chip"><i style="background:#8b999f"></i>Temperature Setpoint</span>
+        <span class="tag-chip"><i style="background:#119b70"></i>Water Level</span>
+        <span class="tag-chip"><i style="background:#d68b05"></i>Steam Pressure</span>
+      </div>
+      <div class="chart-container tall"><canvas id="trends-chart" class="chart-canvas"></canvas></div>
+    </section>
+    <section class="grid-equal">
+      ${panel("State Timeline", "Machine state dan recipe step", `
+        <div class="utility-tree">
+          <div class="utility-node"><div class="utility-name"><span>06</span><strong>Filling</strong></div><span class="utility-reading">06:00—06:18</span>${statusPill("running")}</div>
+          <div class="utility-node"><div class="utility-name"><span>07</span><strong>Dosing</strong></div><span class="utility-reading">06:18—07:02</span>${statusPill("running")}</div>
+          <div class="utility-node"><div class="utility-name"><span>08</span><strong>Heating</strong></div><span class="utility-reading">07:02—09:24</span>${statusPill("running")}</div>
+          <div class="utility-node"><div class="utility-name"><span>09</span><strong>Holding</strong></div><span class="utility-reading">09:24—Now</span>${statusPill("running")}</div>
+        </div>
+      `)}
+      ${panel("Events in Range", "Alarm dan perubahan penting pada chart", eventTable([
+        ["07:22:18", "Utility", "Steam pressure dipped to 7.4 bar", "Warning"],
+        ["08:10:42", "Process", "Heating rate below recipe baseline", "Warning"],
+        ["09:24:02", "Recipe", "Holding target reached", "Good"],
+        ["10:24:11", "Quality", "Temperature stability window passed", "Good"],
+      ]))}
+    </section>
+  `;
+}
+
+function healthPage() {
+  const tagRows = [
+    ["JF-03.WINCH_03.TANGLE_LIMIT", "Jetflow 03 / Winch 3", "Good", "10:42:18.420", "12 ms"],
+    ["DR-03.CH_05.TEMP_ACT", "Dryer 03 / Chamber 05", "Good", "10:42:18.401", "18 ms"],
+    ["UTL.MDP_B.POWER_KW", "MDP-B / Power Meter", "Stale", "10:41:56.102", "22 sec"],
+    ["CL-B02.OF_OUT_U4.SPEED", "Calator Bianco 02", "Good", "10:42:18.387", "24 ms"],
+    ["KL-03.FABRIC_WIDTH.ACT", "Kalender 03 / Width", "Good", "10:42:18.372", "29 ms"],
+  ];
+  return `
+    ${pageHead("health", `<button class="button">Run health check</button><button class="button primary">Download report</button>`)}
+    <section class="kpi-grid">
+      ${kpi("Good Data", "99.42", "%", "GD", "<strong>247,158 tags</strong>healthy", "success")}
+      ${kpi("Stale Tags", "184", "tags", "ST", "<strong class='danger'>+46</strong>since 10:40", "warning")}
+      ${kpi("Bad / No Data", "62", "tags", "BD", "<strong>0.02%</strong>of active tags", "danger")}
+      ${kpi("Collector Latency", "24", "ms", "LT", "<strong>p95 118ms</strong>· normal", "success")}
+    </section>
+    <section class="grid-2">
+      ${panel("Connector Health", "Gateway, protocol, latency, dan data availability", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Gateway</th><th>Source</th><th>Protocol</th><th>Status</th><th>Latency</th><th>Tags</th><th>Availability</th></tr></thead><tbody>${connectors.map((r) => `<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td><span class="data-pill ${r[3] === "Online" ? "good" : "warning"}">${r[3]}</span></td><td class="mono">${r[4]}</td><td class="mono">${r[5]}</td><td class="mono">${r[6]}</td></tr>`).join("")}</tbody></table></div>`)}
+      ${panel("Data Quality Distribution", "Good, stale, uncertain, bad, dan no-data", `
+        <div class="ring-wrap">
+          <div class="ring" style="--value:99.4;--ring-color:#119b70"><div class="ring-copy"><strong>99.4%</strong><small>Good data</small></div></div>
+          <div class="ring-stats">
+            <div class="ring-stat"><span>Good</span><strong>247,158</strong></div>
+            <div class="ring-stat"><span>Stale</span><strong>184</strong></div>
+            <div class="ring-stat"><span>Uncertain</span><strong>1,196</strong></div>
+            <div class="ring-stat"><span>Bad / No data</span><strong>62</strong></div>
+          </div>
+        </div>
+      `)}
+    </section>
+    ${panel("Tag Health Inspector", "Nilai tanpa kualitas baik tidak dianggap valid oleh dashboard", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Tag</th><th>Asset</th><th>Quality</th><th>Last Update</th><th>Age</th></tr></thead><tbody>${tagRows.map((r) => `<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td><span class="quality-pill ${r[2].toLowerCase()}">${r[2]}</span></td><td class="mono">${r[3]}</td><td class="mono">${r[4]}</td></tr>`).join("")}</tbody></table></div>`)}
+    <section class="grid-equal">
+      ${panel("Ingestion Rate", "Samples per second dan processing latency", `<div class="chart-container compact"><canvas id="health-chart" class="chart-canvas"></canvas></div>`)}
+      ${panel("System Services", "Collector, historian, API, dan alarm engine", equipmentGrid([
+        ["Edge Collectors", "5 / 5 healthy", "Running"], ["Real-time Stream", "48.2K msg/s", "Running"],
+        ["Historian", "24 ms write latency", "Running"], ["Alarm Engine", "12 ms evaluation", "Running"],
+        ["Dashboard API", "p95 86 ms", "Running"], ["Backup Service", "Last backup 02:00", "Ready"]
+      ]))}
+    </section>
+  `;
+}
+
+function renderPage() {
+  const content = document.getElementById("page-content");
+  const renderers = {
+    overview: overviewPage,
+    jetflow: jetflowPage,
+    calator: calatorPage,
+    dryer: dryerPage,
+    kalender: kalenderPage,
+    utilities: utilitiesPage,
+    chemical: chemicalPage,
+    alarms: alarmsPage,
+    trends: trendsPage,
+    health: healthPage,
+  };
+  content.innerHTML = (renderers[state.page] || overviewPage)();
+  document.getElementById("breadcrumb-page").textContent = pageMeta[state.page][0];
+  document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === state.page));
+  bindPageEvents();
+  requestAnimationFrame(initPageCharts);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function bindPageEvents() {
+  document.querySelectorAll("[data-page-target]").forEach((el) => {
+    el.addEventListener("click", () => navigate(el.dataset.pageTarget));
+    el.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") navigate(el.dataset.pageTarget);
+    });
+  });
+  document.querySelectorAll("[data-machine-select]").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.selected[select.dataset.machineSelect] = select.value;
+      renderPage();
+    });
+  });
+  document.querySelectorAll("[data-range]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.range = button.dataset.range;
+      renderPage();
+    });
+  });
+  document.querySelectorAll("[data-ack-id]").forEach((button) => {
+    button.addEventListener("click", () => acknowledgeAlarm(Number(button.dataset.ackId)));
+  });
+  const ackAll = document.getElementById("ack-all");
+  if (ackAll) ackAll.addEventListener("click", acknowledgeAll);
+  const alarmSearch = document.getElementById("alarm-search");
+  const alarmSeverity = document.getElementById("alarm-severity");
+  if (alarmSearch) alarmSearch.addEventListener("input", filterAlarms);
+  if (alarmSeverity) alarmSeverity.addEventListener("change", filterAlarms);
+}
+
+function navigate(page) {
+  state.page = page;
+  renderPage();
+  closeSidebar();
+}
+
+function acknowledgeAlarm(id) {
+  const alarm = alarms.find((item) => item.id === id);
+  if (!alarm) return;
+  alarm.ack = true;
+  updateAlarmCounts();
+  showToast("Alarm acknowledged", `${alarm.source} · ${alarm.title}`);
+  renderPage();
+}
+
+function acknowledgeAll() {
+  alarms.forEach((alarm) => { alarm.ack = true; });
+  updateAlarmCounts();
+  showToast("Visible alarms acknowledged", "Acknowledgement tercatat pada sesi demo.");
+  renderPage();
+}
+
+function filterAlarms() {
+  const query = (document.getElementById("alarm-search")?.value || "").toLowerCase();
+  const severity = document.getElementById("alarm-severity")?.value || "all";
+  const list = document.getElementById("alarm-page-list");
+  if (!list) return;
+  const filtered = alarms.filter((a) => {
+    const matchQuery = [a.title, a.detail, a.source].join(" ").toLowerCase().includes(query);
+    const matchSeverity = severity === "all" || a.severity === severity;
+    return matchQuery && matchSeverity;
+  });
+  list.innerHTML = filtered.length ? filtered.map(alarmRow).join("") : `<div class="empty-state"><strong>Tidak ada alarm</strong><span>Ubah filter atau kata pencarian.</span></div>`;
+  list.querySelectorAll("[data-ack-id]").forEach((button) => button.addEventListener("click", () => acknowledgeAlarm(Number(button.dataset.ackId))));
+}
+
+function updateAlarmCounts() {
+  const count = alarms.filter((a) => !a.ack).length;
+  document.getElementById("nav-alarm-count").textContent = count;
+  document.getElementById("header-alarm-count").textContent = count;
+}
+
+function showToast(title, detail) {
+  const root = document.getElementById("toast-root");
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.innerHTML = `<strong>${title}</strong>${detail}`;
+  root.appendChild(toast);
+  window.setTimeout(() => toast.remove(), 3200);
+}
+
+function initPageCharts() {
+  const labels = Array.from({ length: 32 }, (_, i) => i);
+  const charts = {
+    overview: () => drawLineChart("overview-chart", [
+      { data: wave(32, 560, 45, 12, .3), color: "#078eaa", fill: true },
+      { data: wave(32, 590, 8, 11, 1.4), color: "#8b999f", dash: true },
+    ], labels),
+    jetflow: () => drawLineChart("jetflow-chart", [
+      { data: wave(32, 78, 4, .55, .2), color: "#078eaa", fill: true },
+      { data: wave(32, 79, .4, .5, 0), color: "#8b999f", dash: true },
+      { data: wave(32, 70, 1.8, .08, 1.2), color: "#119b70" },
+    ], labels),
+    calator: () => drawLineChart("calator-chart", [
+      { data: wave(32, 29.1, .25, .008, .2), color: "#078eaa", fill: true },
+      { data: wave(32, 28.8, .18, .008, 1.5), color: "#4d8fd0" },
+      { data: wave(32, 27.5, .12, .003, 2.4), color: "#d68b05" },
+    ], labels),
+    dryer: () => drawLineChart("dryer-chart", [
+      { data: wave(32, 146, 2.4, .1, .3), color: "#078eaa", fill: true },
+      { data: wave(32, 148, .25, .05, 0), color: "#8b999f", dash: true },
+      { data: wave(32, 140, 3.1, .12, 1.8), color: "#d68b05" },
+    ], labels),
+    kalender: () => drawLineChart("kalender-chart", [
+      { data: wave(32, 126, 1.2, .03, .3), color: "#078eaa", fill: true },
+      { data: wave(32, 123, 1.0, .03, 1.5), color: "#4d8fd0" },
+      { data: wave(32, 118, .7, .01, 2.2), color: "#119b70" },
+    ], labels),
+    utilities: () => drawLineChart("utility-chart", [
+      { data: wave(32, 1.58, .12, .014, .2), color: "#078eaa", fill: true },
+      { data: wave(32, 1.75, .02, .009, 0), color: "#d68b05", dash: true },
+    ], labels),
+    chemical: () => drawBarChart("chemical-chart", chemicals.map((c) => c[2]), chemicals.map((c) => c[0]), chemicals.map((c) => c[4])),
+    alarms: () => drawBarChart("alarm-chart", [18, 12, 9, 7, 5, 4], ["Tangle", "Temp", "Speed", "Steam", "Data", "Drive"], ["#d9485c", "#d68b05", "#d68b05", "#d68b05", "#8b999f", "#8b999f"]),
+    trends: () => drawLineChart("trends-chart", [
+      { data: wave(48, 72, 8, .52, .2), color: "#078eaa", fill: true },
+      { data: wave(48, 74, .5, .48, 0), color: "#8b999f", dash: true },
+      { data: wave(48, 68, 2.0, .08, 1.2), color: "#119b70" },
+      { data: wave(48, 63, 1.2, .02, 2.1), color: "#d68b05" },
+    ], Array.from({ length: 48 }, (_, i) => i)),
+    health: () => drawLineChart("health-chart", [
+      { data: wave(32, 46, 2.2, .06, .2), color: "#078eaa", fill: true },
+      { data: wave(32, 23, 3.4, .02, 1.8), color: "#119b70" },
+    ], labels),
+  };
+  charts[state.page]?.();
+}
+
+function wave(length, start, amplitude, trend = 0, phase = 0) {
+  return Array.from({ length }, (_, i) => start + Math.sin(i * .42 + phase) * amplitude + Math.cos(i * .17 + phase) * amplitude * .28 + i * trend);
+}
+
+function drawLineChart(id, series, labels) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, rect.width * ratio);
+  canvas.height = Math.max(1, rect.height * ratio);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(ratio, ratio);
+  const width = rect.width;
+  const height = rect.height;
+  const pad = { top: 18, right: 12, bottom: 25, left: 42 };
+  const all = series.flatMap((s) => s.data);
+  let min = Math.min(...all);
+  let max = Math.max(...all);
+  const spread = max - min || 1;
+  min -= spread * .14;
+  max += spread * .14;
+  ctx.clearRect(0, 0, width, height);
+  ctx.font = "9px DM Mono, monospace";
+  ctx.fillStyle = "#8b999f";
+  ctx.strokeStyle = "rgba(19,46,57,.08)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i += 1) {
+    const y = pad.top + ((height - pad.top - pad.bottom) / 4) * i;
+    ctx.beginPath();
+    ctx.setLineDash([3, 5]);
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(width - pad.right, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const value = max - ((max - min) / 4) * i;
+    ctx.fillText(formatAxis(value), 2, y + 3);
+  }
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const xAt = (i, len) => pad.left + (i / Math.max(1, len - 1)) * plotW;
+  const yAt = (value) => pad.top + (1 - (value - min) / (max - min)) * plotH;
+  series.forEach((line) => {
+    ctx.beginPath();
+    ctx.lineWidth = line.dash ? 1.4 : 2;
+    ctx.strokeStyle = line.color;
+    ctx.setLineDash(line.dash ? [6, 6] : []);
+    line.data.forEach((value, i) => {
+      const x = xAt(i, line.data.length);
+      const y = yAt(value);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (line.fill) {
+      ctx.lineTo(xAt(line.data.length - 1, line.data.length), height - pad.bottom);
+      ctx.lineTo(pad.left, height - pad.bottom);
+      ctx.closePath();
+      const gradient = ctx.createLinearGradient(0, pad.top, 0, height - pad.bottom);
+      gradient.addColorStop(0, line.color + "26");
+      gradient.addColorStop(1, line.color + "00");
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    }
+  });
+  const tickCount = Math.min(6, labels.length);
+  for (let i = 0; i < tickCount; i += 1) {
+    const idx = Math.round((labels.length - 1) * i / (tickCount - 1));
+    const x = xAt(idx, labels.length);
+    ctx.fillStyle = "#8b999f";
+    ctx.textAlign = i === 0 ? "left" : i === tickCount - 1 ? "right" : "center";
+    ctx.fillText(timeLabel(idx, labels.length), x, height - 5);
+  }
+  ctx.textAlign = "left";
+}
+
+function drawBarChart(id, data, labels, colors) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, rect.width * ratio);
+  canvas.height = Math.max(1, rect.height * ratio);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(ratio, ratio);
+  const width = rect.width;
+  const height = rect.height;
+  const pad = { top: 15, right: 10, bottom: 28, left: 35 };
+  const max = Math.max(...data) * 1.16;
+  ctx.clearRect(0, 0, width, height);
+  ctx.font = "9px DM Mono, monospace";
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const gap = plotW / data.length;
+  const barW = Math.min(42, gap * .58);
+  for (let i = 0; i < 4; i += 1) {
+    const y = pad.top + plotH / 3 * i;
+    ctx.strokeStyle = "rgba(19,46,57,.08)";
+    ctx.setLineDash([3, 5]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(width - pad.right, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  data.forEach((value, i) => {
+    const h = value / max * plotH;
+    const x = pad.left + gap * i + (gap - barW) / 2;
+    const y = pad.top + plotH - h;
+    ctx.fillStyle = colors[i] || "#078eaa";
+    roundedRect(ctx, x, y, barW, h, 5);
+    ctx.fill();
+    ctx.fillStyle = "#8b999f";
+    ctx.textAlign = "center";
+    ctx.fillText(labels[i], x + barW / 2, height - 7);
+  });
+  ctx.textAlign = "left";
+}
+
+function roundedRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+function formatAxis(value) {
+  if (Math.abs(value) >= 1000) return (value / 1000).toFixed(1) + "K";
+  if (Math.abs(value) < 10) return value.toFixed(1);
+  return Math.round(value).toString();
+}
+
+function timeLabel(index, length) {
+  const start = 6 * 60;
+  const minutes = start + Math.round(index / Math.max(1, length - 1) * 8 * 60);
+  return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+}
+
+function updateLiveNumbers() {
+  document.querySelectorAll("[data-live]").forEach((el) => {
+    const base = Number(el.dataset.value);
+    const variance = Number(el.dataset.variance || .1);
+    const decimals = Number(el.dataset.decimals || 1);
+    const next = base + (Math.random() - .5) * variance * 2;
+    el.textContent = next.toFixed(decimals);
+  });
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById("header-clock").textContent = now.toLocaleTimeString("id-ID", { hour12: false });
+}
+
+function openSidebar() {
+  document.getElementById("sidebar").classList.add("open");
+}
+
+function closeSidebar() {
+  document.getElementById("sidebar").classList.remove("open");
+}
+
+document.getElementById("main-nav").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-page]");
+  if (button) navigate(button.dataset.page);
+});
+document.getElementById("alarm-shortcut").addEventListener("click", () => navigate("alarms"));
+document.getElementById("menu-button").addEventListener("click", openSidebar);
+document.getElementById("sidebar-close").addEventListener("click", closeSidebar);
+document.getElementById("sidebar-backdrop").addEventListener("click", closeSidebar);
+window.addEventListener("resize", () => requestAnimationFrame(initPageCharts));
+
+updateAlarmCounts();
+updateClock();
+renderPage();
+window.setInterval(updateClock, 1000);
+window.setInterval(updateLiveNumbers, 1800);

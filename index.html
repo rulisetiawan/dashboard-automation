@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#edf2f3" />
+    <meta
+      name="description"
+      content="PulseGrid V1 — real-time and historical monitoring dashboard for textile manufacturing."
+    />
+    <title>PulseGrid V1 — Textile Operations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><span></span></div>
+          <div class="brand-copy">
+            <strong>PULSE<span>GRID</span></strong>
+            <small>TEXTILE OPS · V1</small>
+          </div>
+          <button class="sidebar-close" id="sidebar-close" aria-label="Tutup navigasi">×</button>
+        </div>
+
+        <nav class="nav" id="main-nav" aria-label="Navigasi utama">
+          <div class="nav-group-label">Operations</div>
+          <button class="nav-item active" data-page="overview">
+            <span class="nav-icon">⌁</span><span class="nav-text">Plant Overview</span>
+          </button>
+          <button class="nav-item" data-page="jetflow">
+            <span class="nav-icon">◉</span><span class="nav-text">Jetflow</span>
+            <span class="nav-count">12</span>
+          </button>
+          <button class="nav-item" data-page="calator">
+            <span class="nav-icon">≈</span><span class="nav-text">Calator</span>
+            <span class="nav-count">8</span>
+          </button>
+          <button class="nav-item" data-page="dryer">
+            <span class="nav-icon">≋</span><span class="nav-text">Dryer</span>
+            <span class="nav-count">6</span>
+          </button>
+          <button class="nav-item" data-page="kalender">
+            <span class="nav-icon">⊜</span><span class="nav-text">Kalender</span>
+            <span class="nav-count">5</span>
+          </button>
+
+          <div class="nav-group-label">Resources</div>
+          <button class="nav-item" data-page="utilities">
+            <span class="nav-icon">ϟ</span><span class="nav-text">Utilities</span>
+          </button>
+          <button class="nav-item" data-page="chemical">
+            <span class="nav-icon">◇</span><span class="nav-text">Chemical</span>
+          </button>
+
+          <div class="nav-group-label">Intelligence</div>
+          <button class="nav-item" data-page="alarms">
+            <span class="nav-icon">△</span><span class="nav-text">Alarms & Events</span>
+            <span class="nav-alert" id="nav-alarm-count">4</span>
+          </button>
+          <button class="nav-item" data-page="trends">
+            <span class="nav-icon">⌗</span><span class="nav-text">Historical Trends</span>
+          </button>
+          <button class="nav-item" data-page="health">
+            <span class="nav-icon">⊕</span><span class="nav-text">Data Health</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="system-health">
+            <span class="pulse-dot"></span>
+            <div><strong>Collector online</strong><small>248.6K TAGS · 24 ms</small></div>
+          </div>
+          <div class="environment-tag">READ-ONLY ENVIRONMENT</div>
+        </div>
+      </aside>
+
+      <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button class="menu-button" id="menu-button" aria-label="Buka navigasi">☰</button>
+            <div class="breadcrumb">
+              <span>Jakarta Plant</span><span class="crumb-separator">/</span><strong id="breadcrumb-page">Overview</strong>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            <div class="live-indicator"><span class="pulse-dot"></span><span>LIVE</span><strong id="header-clock">--:--:--</strong></div>
+            <button class="shift-button" id="shift-button"><span>Shift A</span><strong>06:00—14:00</strong></button>
+            <button class="icon-button" id="alarm-shortcut" aria-label="Buka alarm">
+              <span>△</span><i id="header-alarm-count">4</i>
+            </button>
+            <button class="user-button" aria-label="Profil pengguna">
+              <span class="avatar">AR</span><span class="user-copy"><strong>Adi Rahman</strong><small>Shift Leader</small></span>
+            </button>
+          </div>
+        </header>
+
+        <div id="page-content" class="page-content" aria-live="polite"></div>
+      </main>
+    </div>
+
+    <div id="toast-root" class="toast-root" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
