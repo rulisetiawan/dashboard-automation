@@ -52,6 +52,13 @@ const state = {
       chemical: ["transfer_flow", "target_weight", "line_pressure"],
     },
   },
+  batchInvestigation: {
+    jetflow: { machineId: null, batch: null },
+    calator: { machineId: null, batch: null },
+    dryer: { machineId: null, batch: null },
+    kalender: { machineId: null, batch: null },
+    chemical: { machineId: null, batch: null },
+  },
 };
 
 const pageMeta = {
@@ -265,12 +272,48 @@ const sensorTrendConfig = {
   ],
 };
 
-function sensorTrendSeries(type, sensor) {
+function selectedBatchFor(type, machine) {
+  const selection = state.batchInvestigation[type];
+  return selection?.machineId === machine.id ? selection.batch : null;
+}
+
+function batchSeed(batch) {
+  return [...batch].reduce((total, character, index) => total + character.charCodeAt(0) * (index + 1), 0);
+}
+
+function batchInvestigationPanel(type, machine) {
+  const selectedBatch = selectedBatchFor(type, machine);
+  const suggestions = [machine.batch, historicalBatchFor(machine, 1), historicalBatchFor(machine, 2)]
+    .filter((batch, index, items) => batch && batch !== "—" && items.indexOf(batch) === index);
+  return `<section class="card batch-investigation-card">
+    <div class="batch-investigation-copy"><span class="eyebrow">Batch historian lookup</span><h2>Search Production Batch</h2><p>Masukkan nomor batch untuk memuat trend sensor SV/PV dan abnormality log khusus batch tersebut.</p></div>
+    <form class="batch-search-form" data-batch-form="${type}|${machine.id}">
+      <label for="batch-search-${type}">Batch number</label>
+      <div class="batch-search-row"><input class="search-control batch-search-input" id="batch-search-${type}" data-batch-input="${type}" value="${selectedBatch || ""}" placeholder="Contoh: DB-260814-032" autocomplete="off" maxlength="32"/><button class="button primary" type="submit">Search batch</button>${selectedBatch ? `<button class="button ghost" type="button" data-batch-clear="${type}|${machine.id}">Clear</button>` : ""}</div>
+      <div class="batch-suggestion-row"><span>Recent batches</span>${suggestions.map((batch) => `<button type="button" data-batch-suggestion="${type}|${machine.id}|${batch}">${batch}</button>`).join("")}</div>
+    </form>
+    ${selectedBatch ? `<div class="batch-active-context"><span class="kpi-scope historical">BATCH LOADED</span><strong>${selectedBatch}</strong><small>${machine.id} · trend dan log menggunakan scope batch yang sama</small></div>` : ""}
+  </section>`;
+}
+
+function batchTrendWorkspace(type, machine) {
+  const selectedBatch = selectedBatchFor(type, machine);
+  if (selectedBatch) return sensorTrendPanel(type, machine);
+  return `<section class="card batch-analysis-empty"><div class="batch-empty-icon">⌕</div><strong>Trend dan log belum dimuat</strong><span>Cari nomor batch di atas untuk menampilkan perbandingan SV/PV dan seluruh abnormal event pada batch tersebut.</span></section>`;
+}
+
+function batchAbnormalLog(type, machine) {
+  return selectedBatchFor(type, machine) ? abnormalProcessLog(type, machine) : "";
+}
+
+function sensorTrendSeries(type, sensor, batch) {
   const count = { "1H": 36, "8H": 48, "24H": 60 }[state.sensorTrend.range] || 36;
   const span = { "1H": 60, "8H": 8 * 60, "24H": 24 * 60 }[state.sensorTrend.range] * 60 * 1000;
   const typePhase = ["jetflow", "calator", "dryer", "kalender", "chemical"].indexOf(type) * 0.43;
-  const keyPhase = sensor.key.length * 0.17;
-  const timestamps = Array.from({ length: count }, (_, index) => Date.now() - span + span * index / (count - 1));
+  const seed = batchSeed(batch);
+  const keyPhase = sensor.key.length * 0.17 + seed % 19 * 0.07;
+  const batchEnd = new Date("2026-08-14T14:00:00+07:00").getTime() - seed % 96 * 30 * 60 * 1000;
+  const timestamps = Array.from({ length: count }, (_, index) => batchEnd - span + span * index / (count - 1));
   const sv = timestamps.map((_, index) => sensor.sv + (index > count * 0.68 ? sensor.variance * 0.08 : 0));
   const pv = sv.map((target, index) => target + Math.sin(index * 0.44 + typePhase + keyPhase) * sensor.variance * 0.52 + Math.cos(index * 0.17 + keyPhase) * sensor.variance * 0.18);
   return { timestamps, sv, pv };
@@ -279,9 +322,10 @@ function sensorTrendSeries(type, sensor) {
 function sensorTrendPanel(type, machine) {
   const sensors = sensorTrendConfig[type] || [];
   const enabled = state.sensorTrend.enabled[type] || [];
+  const selectedBatch = selectedBatchFor(type, machine);
   const toggles = sensors.map((sensor) => `<label class="sensor-toggle ${enabled.includes(sensor.key) ? "active" : ""}"><input type="checkbox" data-sensor-toggle="${type}|${sensor.key}" ${enabled.includes(sensor.key) ? "checked" : ""}/><i style="--sensor-color:${sensor.color}"></i><span>${sensor.label}<small>${sensor.tag}</small></span></label>`).join("");
   const rows = sensors.filter((sensor) => enabled.includes(sensor.key)).map((sensor) => {
-    const series = sensorTrendSeries(type, sensor);
+    const series = sensorTrendSeries(type, sensor, selectedBatch);
     const pv = series.pv.at(-1);
     const sv = series.sv.at(-1);
     const delta = pv - sv;
@@ -293,7 +337,7 @@ function sensorTrendPanel(type, machine) {
   }).join("");
   const ranges = ["1H", "8H", "24H"].map((range) => `<button class="segment ${state.sensorTrend.range === range ? "active" : ""}" data-sensor-range="${range}">${range}</button>`).join("");
   return `<section class="card sensor-comparison-panel">
-    <div class="sensor-comparison-head"><div><span class="eyebrow">Machine sensor historian</span><h2>Sensor SV / PV Comparison</h2><p>${machine.id} · setiap sensor menggunakan skala engineering unit masing-masing.</p></div><div class="sensor-comparison-actions"><div class="sensor-line-key"><span><i></i>PV solid</span><span><i></i>SV dashed</span></div><div class="segmented">${ranges}</div></div></div>
+    <div class="sensor-comparison-head"><div><span class="eyebrow">Machine sensor historian</span><h2>Sensor SV / PV Comparison</h2><p>${machine.id} · batch ${selectedBatch} · setiap sensor menggunakan skala engineering unit masing-masing.</p></div><div class="sensor-comparison-actions"><span class="data-pill neutral">${selectedBatch}</span><div class="sensor-line-key"><span><i></i>PV solid</span><span><i></i>SV dashed</span></div><div class="segmented">${ranges}</div></div></div>
     <div class="sensor-toggle-toolbar"><div class="sensor-toggle-list">${toggles}</div><div class="sensor-bulk-actions"><button class="button ghost small" data-sensor-bulk="${type}|on">All On</button><button class="button ghost small" data-sensor-bulk="${type}|off">All Off</button></div></div>
     <div class="sensor-trend-stack">${rows || `<div class="sensor-trend-empty"><strong>Semua sensor dalam kondisi OFF</strong><span>Aktifkan sensor melalui checkbox untuk menampilkan perbandingan trend SV dan PV.</span></div>`}</div>
   </section>`;
@@ -750,7 +794,6 @@ function jetflowDetailPage() {
     ${pageHead("jetflow", selector(jetflows.filter((item) => item.area === machine.area), "jetflow"))}
     ${machineHero(machine, "JF", `${machine.winches} winches · ${machine.recipe} · Active step: ${machine.step}`)}
     ${remoteDisplayPanel(machine)}
-    ${sensorTrendPanel("jetflow", machine)}
     <section class="kpi-grid">
       ${kpi("Main Tank Temp", liveValue(92.6, "", .18, 1), "°C", "MT", "<strong>Target 93.0°C</strong>· holding")}
       ${kpi("Water Level", liveValue(72.4, "", .12, 1), "%", "LV", "<strong>Within range</strong>· target 72%", "success")}
@@ -758,7 +801,6 @@ function jetflowDetailPage() {
       ${kpi("Steam Header", liveValue(7.8, "", .07, 1), "bar", "ST", "<strong class='danger'>Low baseline</strong>· 8.1 bar", "warning")}
     </section>
     <section class="grid-2 abnormal-log-layout">
-      ${abnormalProcessLog("jetflow", machine)}
       ${panel("Tank & Dosing", "Live tank condition and data quality", `
         <div class="metric-grid">
           ${metricTile("Main tank", liveValue(92.6, "°C", .15, 1), "Temperature · SP 93.0")}
@@ -783,6 +825,9 @@ function jetflowDetailPage() {
         ["09:46:08", "Recipe", "Dosing step 04 completed", "Good"],
       ]))}
     </section>
+    ${batchInvestigationPanel("jetflow", machine)}
+    ${batchTrendWorkspace("jetflow", machine)}
+    ${batchAbnormalLog("jetflow", machine)}
   `;
 }
 
@@ -827,6 +872,14 @@ const abnormalLogTemplates = {
     ["14 Aug · 07:54:26", "07:59:18", "Lower Roll Temperature", "127.0 °C", "121.7 °C", "-5.3 °C", 4.9, "Bowing correction instability", "Recovered"],
     ["13 Aug · 22:32:15", "22:38:08", "Dancing Roller", "50.0 %", "57.6 %", "+7.6 %", 5.9, "Fabric tension outside center window", "Acknowledged"],
   ],
+  chemical: [
+    ["14 Aug · 10:28:14", "10:31:42", "Transfer Flow", "42.8 kg/min", "36.7 kg/min", "-6.1 kg/min", 3.5, "Chemical delivery below requested rate", "Open"],
+    ["14 Aug · 10:04:27", "10:06:10", "Line Pressure", "3.20 bar", "2.74 bar", "-0.46 bar", 1.7, "Transfer stability outside tolerance", "Recovered"],
+    ["14 Aug · 09:46:08", "09:48:36", "Batch Weight", "184.0 kg", "178.2 kg", "-5.8 kg", 2.5, "Delivered chemical below recipe target", "Acknowledged"],
+    ["14 Aug · 08:52:19", "08:55:41", "Source Tank Level", "70.0 %", "62.8 %", "-7.2 %", 3.4, "Low source availability during request", "Recovered"],
+    ["14 Aug · 07:41:55", "07:44:18", "Transfer Pump Speed", "32.0 Hz", "27.6 Hz", "-4.4 Hz", 2.4, "Extended chemical transfer duration", "Recovered"],
+    ["13 Aug · 22:08:31", "22:13:22", "Route Valve Feedback", "Open", "Intermediate", "Mismatch", 4.9, "Transfer route confirmation delayed", "Acknowledged"],
+  ],
 };
 
 function historicalBatchFor(machine, index) {
@@ -836,22 +889,22 @@ function historicalBatchFor(machine, index) {
 }
 
 function abnormalProcessLog(type, machine) {
-  const limits = { "1H": 2, "8H": 4, "24H": 5, "7D": 6 };
-  const rows = abnormalLogTemplates[type].slice(0, limits[state.range] || 5).map((row, index) => ({
-    start: row[0], end: row[1], parameter: row[2], sv: row[3], pv: row[4], deviation: row[5], minutes: row[6], impact: row[7], status: row[8], batch: historicalBatchFor(machine, index),
+  const selectedBatch = selectedBatchFor(type, machine);
+  const eventCount = 3 + batchSeed(selectedBatch) % 4;
+  const rows = abnormalLogTemplates[type].slice(0, eventCount).map((row) => ({
+    start: row[0], end: row[1], parameter: row[2], sv: row[3], pv: row[4], deviation: row[5], minutes: row[6], impact: row[7], status: row[8], batch: selectedBatch,
   }));
   const totalMinutes = rows.reduce((sum, row) => sum + row.minutes, 0);
   const open = rows.filter((row) => row.status === "Open").length;
-  const batches = new Set(rows.map((row) => row.batch)).size;
   const tableRows = rows.map((row) => {
     const tone = row.status === "Open" ? "danger" : row.status === "Recovered" ? "good" : "neutral";
     return `<tr><td class="mono abnormal-time">${row.start}</td><td class="mono">${row.end}</td><td class="mono">${row.batch}</td><td><strong>${row.parameter}</strong></td><td class="mono">${row.sv}</td><td class="mono">${row.pv}</td><td class="mono abnormal-deviation">${row.deviation}</td><td class="mono">${row.minutes.toFixed(1)} min</td><td>${row.impact}</td><td><span class="data-pill ${tone}">${row.status}</span></td></tr>`;
   }).join("");
-  return panel("Production Abnormality Log", `Setpoint miss dan process deviation · ${machine.id}`, `
-    <div class="abnormal-log-summary"><div><span>Events in range</span><strong>${rows.length}</strong></div><div><span>Open abnormality</span><strong class="${open ? "danger" : ""}">${open}</strong></div><div><span>Affected batches</span><strong>${batches}</strong></div><div><span>Total deviation</span><strong>${totalMinutes.toFixed(1)} min</strong></div></div>
+  return panel("Production Abnormality Log", `Setpoint miss dan process deviation · ${machine.id} · batch ${selectedBatch}`, `
+    <div class="abnormal-log-summary"><div><span>Events in batch</span><strong>${rows.length}</strong></div><div><span>Open abnormality</span><strong class="${open ? "danger" : ""}">${open}</strong></div><div><span>Batch scope</span><strong class="batch-log-id">${selectedBatch}</strong></div><div><span>Total deviation</span><strong>${totalMinutes.toFixed(1)} min</strong></div></div>
     <div class="table-wrap abnormal-log-wrap"><table class="data-table abnormal-log-table"><thead><tr><th>Start Time</th><th>End Time</th><th>Batch No.</th><th>Parameter</th><th>SV</th><th>Worst PV</th><th>Deviation</th><th>Duration</th><th>Process Impact</th><th>Status</th></tr></thead><tbody>${tableRows}</tbody></table></div>
-    <div class="abnormal-log-foot"><span>Demo log · event dibuat saat PV berada di luar tolerance SV selama configured delay.</span><button class="button ghost small">Export abnormal log</button></div>
-  `, rangeButtons(), "abnormal-log-panel");
+    <div class="abnormal-log-foot"><span>Demo log · seluruh event dibatasi pada nomor batch yang dipilih.</span><button class="button ghost small">Export batch log</button></div>
+  `, `<span class="data-pill neutral">${selectedBatch}</span>`, "abnormal-log-panel");
 }
 
 function rangeButtons() {
@@ -892,7 +945,6 @@ function calatorDetailPage() {
     ${pageHead("calator", selector(calators.filter((item) => item.area === machine.area), "calator"))}
     ${machineHero(machine, "CL", `${machine.subtype} · ${machine.recipe} · Jetflow source JF-04`)}
     ${remoteDisplayPanel(machine)}
-    ${sensorTrendPanel("calator", machine)}
     <section class="kpi-grid">
       ${kpi("Overfeed Out Avg", liveValue(29.18, "", .08, 2), "m/min", "OF", "<strong>Balance 1.4%</strong>· within range")}
       ${kpi("Dancing Roller", liveValue(51.6, "", .35, 1), "%", "DR", "<strong>Center ±3%</strong>· stable", "success")}
@@ -913,7 +965,6 @@ function calatorDetailPage() {
       `)}
     </section>
     <section class="grid-2 abnormal-log-layout">
-      ${abnormalProcessLog("calator", machine)}
       ${panel("Speed Synchronization", "Difference dan ratio antarstage", `
         ${balanceRows([
           ["Feeding → SQ-1", 52, "+0.7%"], ["SQ-1 → SQ-2", 48, "+1.1%"], ["OF In → OF Out", 56, "+3.8%"],
@@ -927,6 +978,9 @@ function calatorDetailPage() {
       ["10:05:18", "Speed", "Running speed reached recipe window", "Good"],
       ["09:58:02", "Process", "Process run DB-260814-029 started", "Good"],
     ]))}
+    ${batchInvestigationPanel("calator", machine)}
+    ${batchTrendWorkspace("calator", machine)}
+    ${batchAbnormalLog("calator", machine)}
   `;
 }
 
@@ -947,7 +1001,6 @@ function dryerDetailPage() {
     ${pageHead("dryer", selector(dryers.filter((item) => item.area === machine.area), "dryer"))}
     ${machineHero(machine, "DR", `${machine.chambers} chambers · ${machine.setup} · Calator source CL-03`)}
     ${remoteDisplayPanel(machine)}
-    ${sensorTrendPanel("dryer", machine)}
     <section class="kpi-grid">
       ${kpi("Machine Speed", liveValue(32.4, "", .08, 1), "m/min", "SP", "<strong>Target 32.5</strong>· stable")}
       ${kpi("Avg. Chamber Temp", liveValue(146.8, "", .12, 1), "°C", "TP", "<strong>7 / 8 ready</strong>· one deviation", "warning")}
@@ -958,7 +1011,6 @@ function dryerDetailPage() {
       <div class="heatmap-grid">${temps.map((t, i) => `<div class="heatmap-cell ${Math.abs(t.actual - t.sp) > 5 ? "warning" : ""}"><strong>CH-${String(i + 1).padStart(2, "0")}</strong><span>${t.actual.toFixed(1)}°</span><small>SP ${t.sp.toFixed(1)} · Δ ${(t.actual - t.sp).toFixed(1)}</small></div>`).join("")}</div>
     `)}
     <section class="grid-2 abnormal-log-layout">
-      ${abnormalProcessLog("dryer", machine)}
       ${panel("Drying Context", "Input, output, utility, dan quality risk", `
         <div class="metric-grid">
           ${metricTile("Moisture inlet", "42.8<small>%</small>", "Manual sample")}
@@ -976,6 +1028,9 @@ function dryerDetailPage() {
       ["10:10:41", "Speed", "Speed reduced to 29.0 m/min for 42 sec", "Warning"],
       ["09:51:12", "Process", "All chambers ready · run started", "Good"],
     ]))}
+    ${batchInvestigationPanel("dryer", machine)}
+    ${batchTrendWorkspace("dryer", machine)}
+    ${batchAbnormalLog("dryer", machine)}
   `;
 }
 
@@ -987,7 +1042,6 @@ function kalenderDetailPage() {
     ${pageHead("kalender", selector(kalenders.filter((item) => item.area === machine.area), "kalender"))}
     ${machineHero(machine, "KL", `${machine.setup} · Dryer source DR-02 · Cotton 220 GSM`)}
     ${remoteDisplayPanel(machine)}
-    ${sensorTrendPanel("kalender", machine)}
     <section class="kpi-grid">
       ${kpi("Loadcell Balance", liveValue(1.8, "", .05, 1), "%", "LC", "<strong>Within ±3%</strong>· stable", "success")}
       ${kpi("Temperature Upper", liveValue(126.4, "", .15, 1), "°C", "TU", "<strong>Target 127°C</strong>· good")}
@@ -1011,7 +1065,6 @@ function kalenderDetailPage() {
       `)}
     </section>
     <section class="grid-2 abnormal-log-layout">
-      ${abnormalProcessLog("kalender", machine)}
       ${panel("Quality Context", "Target dan latest inspection result", `
         <div class="ring-wrap">
           <div class="ring" style="--value:94;--ring-color:#119b70"><div class="ring-copy"><strong>94.2%</strong><small>Quality score</small></div></div>
@@ -1025,6 +1078,9 @@ function kalenderDetailPage() {
       `)}
     </section>
     ${panel("Motor & Driven Equipment", "Status dari inlet sampai output table", `<div class="motor-grid">${motors.map((m, i) => `<div class="motor-card"><div class="motor-card-head"><strong>${m}</strong><i class="equipment-state ${i === 8 ? "warning" : ""}"></i></div><div class="card-reading">${(24 + i * 1.2).toFixed(1)}<small>Hz</small></div><div class="card-caption">${i === 8 ? "Current above baseline" : "Running · Good"}</div></div>`).join("")}</div>`)}
+    ${batchInvestigationPanel("kalender", machine)}
+    ${batchTrendWorkspace("kalender", machine)}
+    ${batchAbnormalLog("kalender", machine)}
   `;
 }
 
@@ -1172,7 +1228,6 @@ function chemicalDetailPage() {
     ${pageHead("chemical", selector(dispensers.filter((item) => item.area === machine.area), "chemical"))}
     ${machineHero(machine, "DSP", `${machine.areaLabel} · 7 chemical variants · Calator destination group`)}
     ${remoteDisplayPanel(machine)}
-    ${sensorTrendPanel("chemical", machine)}
     <section class="kpi-grid">
       ${kpi("Usage Today", "6,115", "kg", "CH", "<strong>81.5%</strong>of daily forecast")}
       ${kpi("Active Transfers", "1", "route", "TR", "<strong>CH-01 → CL-02</strong>· 64.5%")}
@@ -1195,6 +1250,9 @@ function chemicalDetailPage() {
       `)}
     </section>
     ${panel("Dispensing Transactions", "Request, target, actual, route, dan transfer status", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Request</th><th>Chemical</th><th>Destination</th><th>Target</th><th>Actual</th><th>Route</th><th>Status</th></tr></thead><tbody>${transactions.map((r) => `<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="mono">${r[3]}</td><td class="mono">${r[4]}</td><td class="mono">${r[5]}</td><td><span class="data-pill ${r[6] === "Completed" ? "good" : r[6] === "Partial" ? "warning" : "neutral"}">${r[6]}</span></td></tr>`).join("")}</tbody></table></div>`)}
+    ${batchInvestigationPanel("chemical", machine)}
+    ${batchTrendWorkspace("chemical", machine)}
+    ${batchAbnormalLog("chemical", machine)}
   `;
 }
 
@@ -1349,6 +1407,22 @@ function renderPage({ preserveScroll = false } = {}) {
   });
 }
 
+function normalizeBatchNumber(value) {
+  return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 32);
+}
+
+function loadBatchInvestigation(type, machineId, rawBatch) {
+  const batch = normalizeBatchNumber(rawBatch);
+  if (!batch) {
+    showToast("Batch number required", "Masukkan nomor batch sebelum memuat trend dan abnormality log.");
+    document.querySelector(`[data-batch-input="${type}"]`)?.focus();
+    return;
+  }
+  state.batchInvestigation[type] = { machineId, batch };
+  showToast("Batch historian loaded", `${machineId} · ${batch}`);
+  renderPage({ preserveScroll: true });
+}
+
 function bindPageEvents() {
   document.querySelectorAll("[data-page-target]").forEach((el) => {
     el.addEventListener("click", () => navigate(el.dataset.pageTarget));
@@ -1361,6 +1435,26 @@ function bindPageEvents() {
       state.selected[select.dataset.machineSelect] = select.value;
       if (state.drill[select.dataset.machineSelect]) state.drill[select.dataset.machineSelect].machine = select.value;
       renderPage();
+    });
+  });
+  document.querySelectorAll("[data-batch-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const [type, machineId] = form.dataset.batchForm.split("|");
+      loadBatchInvestigation(type, machineId, form.querySelector("[data-batch-input]")?.value);
+    });
+  });
+  document.querySelectorAll("[data-batch-suggestion]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const [type, machineId, batch] = button.dataset.batchSuggestion.split("|");
+      loadBatchInvestigation(type, machineId, batch);
+    });
+  });
+  document.querySelectorAll("[data-batch-clear]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const [type] = button.dataset.batchClear.split("|");
+      state.batchInvestigation[type] = { machineId: null, batch: null };
+      renderPage({ preserveScroll: true });
     });
   });
   document.querySelectorAll("[data-area-target]").forEach((card) => {
@@ -1663,9 +1757,12 @@ function initPageCharts() {
 }
 
 function drawSensorComparisonTrends(type) {
+  const machine = fleetFor(type).find((item) => item.id === state.selected[type]);
+  const selectedBatch = machine ? selectedBatchFor(type, machine) : null;
+  if (!selectedBatch) return;
   const enabled = state.sensorTrend.enabled[type] || [];
   sensorTrendConfig[type].filter((sensor) => enabled.includes(sensor.key)).forEach((sensor) => {
-    const series = sensorTrendSeries(type, sensor);
+    const series = sensorTrendSeries(type, sensor, selectedBatch);
     drawLineChart(`sensor-trend-${type}-${sensor.key}`, [
       { data: series.pv, color: sensor.color, fill: true },
       { data: series.sv, color: sensor.color, dash: true },

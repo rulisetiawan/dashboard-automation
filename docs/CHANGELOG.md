@@ -4,6 +4,28 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.14 — 14 Agustus 2026
+
+**Status:** Batch-scoped sensor investigation selesai
+
+### Ditambahkan
+
+- Pencarian nomor batch pada detail Jetflow, Calator, Dryer, Kalender, dan Chemical Dispensing.
+- Recent batch shortcuts, Batch Loaded context, dan fungsi Clear.
+- Chemical Dispensing abnormality log.
+
+### Diubah
+
+- Trend SV/PV dan abnormality log hanya muncul setelah batch dipilih.
+- Trend dan log menggunakan satu nomor batch yang sama.
+- Workspace investigasi batch ditempatkan setelah seluruh nilai dan panel live.
+
+### Batasan
+
+- Lookup batch, trend, dan log masih simulated serta belum terhubung ke MES/historian aktual.
+
+---
+
 ## Frontend Dashboard V1.13 — 14 Agustus 2026
 
 **Status:** Live dan historical Plant Overview dipisahkan

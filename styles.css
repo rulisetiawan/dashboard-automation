@@ -1660,6 +1660,149 @@ select:focus-visible {
   background-size: 28px 28px;
 }
 
+.batch-investigation-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(380px, 1.28fr);
+  align-items: start;
+  gap: 18px;
+  margin-bottom: 13px;
+  padding: 17px;
+}
+
+.batch-investigation-copy h2 {
+  margin: 5px 0 5px;
+  font-size: 0.82rem;
+}
+
+.batch-investigation-copy p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.53rem;
+  line-height: 1.6;
+}
+
+.batch-search-form {
+  display: grid;
+  gap: 7px;
+}
+
+.batch-search-form > label {
+  color: var(--ink-3);
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.batch-search-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.batch-search-input {
+  min-width: 0;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: var(--font-data);
+}
+
+.batch-search-row .batch-search-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.batch-suggestion-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.batch-suggestion-row > span {
+  margin-right: 2px;
+  color: var(--ink-3);
+  font-size: 0.46rem;
+}
+
+.batch-suggestion-row button {
+  min-height: 25px;
+  padding: 0 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-family: var(--font-data);
+  font-size: 0.47rem;
+  cursor: pointer;
+}
+
+.batch-suggestion-row button:hover {
+  border-color: rgba(7, 142, 170, 0.28);
+  background: var(--surface-hover);
+  color: var(--primary);
+}
+
+.batch-active-context {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.batch-active-context strong {
+  color: var(--primary);
+  font-family: var(--font-data);
+  font-size: 0.64rem;
+}
+
+.batch-active-context small {
+  color: var(--ink-3);
+  font-size: 0.48rem;
+}
+
+.batch-analysis-empty {
+  display: grid;
+  min-height: 210px;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  margin-bottom: 13px;
+  padding: 30px 18px;
+  border-style: dashed;
+  color: var(--ink-3);
+  text-align: center;
+}
+
+.batch-empty-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 2px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-family: var(--font-data);
+  font-size: 1rem;
+}
+
+.batch-analysis-empty strong {
+  color: var(--ink-2);
+  font-size: 0.67rem;
+}
+
+.batch-analysis-empty span {
+  max-width: 560px;
+  font-size: 0.52rem;
+  line-height: 1.6;
+}
+
 .sensor-comparison-panel {
   margin-bottom: 13px;
   padding: 17px;
@@ -1974,6 +2117,13 @@ select:focus-visible {
   font-family: var(--font-data);
   font-size: 0.66rem;
   font-weight: 500;
+}
+
+.abnormal-log-summary .batch-log-id {
+  overflow: hidden;
+  font-size: 0.54rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .abnormal-log-summary strong.danger,
@@ -3728,6 +3878,14 @@ select:focus-visible {
     flex-direction: column;
   }
 
+  .batch-investigation-card {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-active-context {
+    grid-column: auto;
+  }
+
   .sensor-comparison-actions {
     width: 100%;
     justify-content: space-between;
@@ -3981,6 +4139,16 @@ select:focus-visible {
 
   .sensor-comparison-panel {
     padding: 14px;
+  }
+
+  .batch-search-row,
+  .batch-active-context {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .batch-search-row .button {
+    width: 100%;
   }
 
   .sensor-comparison-actions {
