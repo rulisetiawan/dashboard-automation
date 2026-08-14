@@ -461,7 +461,7 @@ function overviewPage() {
         <div><span>Average / ${productionOutput.interval}</span><strong>${formatProductionOutput(productionOutput.average)} <small>m</small></strong></div>
         <div><span>Peak / ${productionOutput.interval}</span><strong>${formatProductionOutput(productionOutput.peak)} <small>m</small></strong></div>
       </div>
-      <div class="chart-container"><canvas id="overview-chart" class="chart-canvas"></canvas></div>
+      <div class="chart-container production-bar-chart"><canvas id="overview-chart" class="chart-canvas"></canvas></div>
     `)}
   `;
 }
@@ -1714,7 +1714,7 @@ function initPageCharts() {
         productionOutput.values,
         productionOutput.labels,
         productionOutput.values.map(() => "#078eaa"),
-        { showValues: true }
+        { showValues: true, standard: true, unit: "m" }
       );
     },
     jetflow: () => drawLineChart("jetflow-chart", [
@@ -1862,37 +1862,56 @@ function drawBarChart(id, data, labels, colors, options = {}) {
   ctx.scale(ratio, ratio);
   const width = rect.width;
   const height = rect.height;
-  const pad = { top: 15, right: 10, bottom: 28, left: 35 };
-  const max = Math.max(...data) * 1.16;
+  const pad = options.standard
+    ? { top: 30, right: 14, bottom: 34, left: 54 }
+    : { top: 15, right: 10, bottom: 28, left: 35 };
+  const rawMax = Math.max(...data);
+  const magnitude = 10 ** Math.floor(Math.log10(Math.max(1, rawMax)));
+  const max = options.standard ? Math.ceil(rawMax / magnitude) * magnitude : rawMax * 1.16;
   ctx.clearRect(0, 0, width, height);
   ctx.font = "9px DM Mono, monospace";
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   const gap = plotW / data.length;
-  const barW = Math.min(42, gap * .58);
+  const barW = options.standard ? gap * .76 : Math.min(42, gap * .58);
   const labelStep = gap < 31 ? 2 : 1;
-  for (let i = 0; i < 4; i += 1) {
-    const y = pad.top + plotH / 3 * i;
+  const gridLines = options.standard ? 5 : 4;
+  for (let i = 0; i < gridLines; i += 1) {
+    const y = pad.top + plotH / (gridLines - 1) * i;
     ctx.strokeStyle = "rgba(19,46,57,.08)";
-    ctx.setLineDash([3, 5]);
+    ctx.setLineDash(options.standard && i === gridLines - 1 ? [] : [3, 5]);
     ctx.beginPath();
     ctx.moveTo(pad.left, y);
     ctx.lineTo(width - pad.right, y);
     ctx.stroke();
     ctx.setLineDash([]);
+    if (options.standard) {
+      const axisValue = max - max / (gridLines - 1) * i;
+      ctx.fillStyle = "#8b999f";
+      ctx.textAlign = "right";
+      ctx.fillText(axisValue === 0 ? "0" : formatAxis(axisValue), pad.left - 8, y + 3);
+    }
+  }
+  if (options.standard && options.unit) {
+    ctx.fillStyle = "#8b999f";
+    ctx.textAlign = "left";
+    ctx.fillText(options.unit, 3, 12);
   }
   data.forEach((value, i) => {
     const h = value / max * plotH;
     const x = pad.left + gap * i + (gap - barW) / 2;
     const y = pad.top + plotH - h;
     ctx.fillStyle = colors[i] || "#078eaa";
-    roundedRect(ctx, x, y, barW, h, 5);
-    ctx.fill();
+    if (options.standard) ctx.fillRect(x, y, barW, h);
+    else {
+      roundedRect(ctx, x, y, barW, h, 5);
+      ctx.fill();
+    }
     if (options.showValues) {
       ctx.fillStyle = "#53666e";
       ctx.font = "9px DM Mono, monospace";
       ctx.textAlign = "center";
-      ctx.fillText(formatAxis(value), x + barW / 2, Math.max(10, y - 5));
+      ctx.fillText(formatAxis(value), x + barW / 2, Math.max(22, y - 6));
     }
     if (i % labelStep === 0 || i === data.length - 1) {
       ctx.fillStyle = "#8b999f";

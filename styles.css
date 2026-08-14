@@ -1146,6 +1146,10 @@ select:focus-visible {
   height: 340px;
 }
 
+.production-bar-chart {
+  height: 320px;
+}
+
 .chart-canvas {
   width: 100%;
   height: 100%;
@@ -4249,6 +4253,10 @@ select:focus-visible {
 
   .chart-container {
     height: 230px;
+  }
+
+  .production-bar-chart {
+    height: 260px;
   }
 
   .history-filter-main {

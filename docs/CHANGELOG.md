@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.15 — 14 Agustus 2026
+
+**Status:** Standard production bar chart selesai
+
+### Diubah
+
+- Grafik Production Output menjadi bar chart standar full-width.
+- Batang dibuat solid, lebih lebar, dan dimulai dari baseline nol.
+- Ditambahkan skala sumbu Y, unit meter, serta gridline horizontal yang jelas.
+- Tinggi grafik ditambah untuk meningkatkan keterbacaan.
+
+### Batasan
+
+- Nilai output masih simulated dan belum memiliki tooltip atau drill-down.
+
+---
+
 ## Frontend Dashboard V1.14 — 14 Agustus 2026
 
 **Status:** Batch-scoped sensor investigation selesai
