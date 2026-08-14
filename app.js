@@ -22,6 +22,15 @@ const state = {
     viewStart: 0.72,
     viewFraction: 0.28,
   },
+  management: {
+    metric: {
+      jetflow: "water",
+      calator: "water",
+      dryer: "energy",
+      kalender: "steam",
+      chemical: "chemical",
+    },
+  },
 };
 
 const pageMeta = {
@@ -300,10 +309,174 @@ function statusCount(items, machineState) {
   return items.filter((item) => item.state === machineState).length;
 }
 
+const managementConfig = {
+  jetflow: {
+    currentUtility: { label: "Water Flow Now", value: 184, unit: "m³/h" },
+    output: { label: "Completed Batches", unit: "batch", rate: 0.12 },
+    metrics: {
+      water: { label: "Water Consumption", short: "Water", unit: "m³", rate: 2.45 },
+      energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 34 },
+      steam: { label: "Steam Consumption", short: "Steam", unit: "ton", rate: 0.24 },
+    },
+  },
+  calator: {
+    currentUtility: { label: "Water Flow Now", value: 42.6, unit: "m³/h" },
+    output: { label: "Fabric Output", unit: "m", rate: 310 },
+    metrics: {
+      water: { label: "Water Consumption", short: "Water", unit: "m³", rate: 1.18 },
+      chemical: { label: "Chemical Consumption", short: "Chemical", unit: "kg", rate: 10.8 },
+      energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 18 },
+    },
+  },
+  dryer: {
+    currentUtility: { label: "Thermal Load Now", value: 4.82, unit: "MWth" },
+    output: { label: "Fabric Output", unit: "m", rate: 340 },
+    metrics: {
+      energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 66 },
+      thermal: { label: "Thermal Oil Energy", short: "Thermal", unit: "GJ", rate: 5.8 },
+    },
+  },
+  kalender: {
+    currentUtility: { label: "Steam Demand Now", value: 3.18, unit: "ton/h" },
+    output: { label: "Fabric Output", unit: "m", rate: 290 },
+    metrics: {
+      steam: { label: "Steam Consumption", short: "Steam", unit: "ton", rate: 0.16 },
+      energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 21 },
+    },
+  },
+  chemical: {
+    currentUtility: { label: "Transfer Flow Now", value: 286, unit: "kg/h" },
+    output: { label: "Completed Transfers", unit: "transfer", rate: 1.7 },
+    metrics: {
+      chemical: { label: "Chemical Delivered", short: "Chemical", unit: "kg", rate: 18 },
+      energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 7.5 },
+    },
+  },
+};
+
+const managementColors = ["#078eaa", "#4d8fd0", "#119b70", "#8267c7", "#d68b05", "#db6d48"];
+
+function selectedRangeHours() {
+  return Math.max(1 / 60, (state.history.end - state.history.start) / 3600000);
+}
+
+function historicalStateFactor(machine) {
+  return { running: 0.91, warning: 0.84, idle: 0.63, fault: 0.48, offline: 0.12 }[machine.state] || 0.7;
+}
+
+function machineMetricValue(type, machine, metricKey) {
+  const fleet = fleetFor(type);
+  const index = Math.max(0, fleet.findIndex((item) => item.id === machine.id));
+  const metric = managementConfig[type].metrics[metricKey];
+  const variation = 0.82 + ((index * 17 + machine.area.charCodeAt(0)) % 31) / 100;
+  return metric.rate * selectedRangeHours() * historicalStateFactor(machine) * variation;
+}
+
+function machineRuntime(type, machine) {
+  const index = Math.max(0, fleetFor(type).findIndex((item) => item.id === machine.id));
+  return selectedRangeHours() * historicalStateFactor(machine) * (0.96 + (index % 5) * 0.01);
+}
+
+function machineDowntime(type, machine) {
+  const index = Math.max(0, fleetFor(type).findIndex((item) => item.id === machine.id));
+  const base = machine.state === "fault" ? 0.12 : machine.state === "warning" ? 0.055 : 0.026;
+  return selectedRangeHours() * (base + (index % 4) * 0.006);
+}
+
+function formatManagementValue(value, unit) {
+  const decimals = unit === "ton" || unit === "GJ" ? 1 : value < 100 ? 1 : 0;
+  return Number(value).toLocaleString("id-ID", { maximumFractionDigits: decimals, minimumFractionDigits: decimals });
+}
+
+function managementKpi(scope, label, value, unit, foot, tone = "") {
+  return `<article class="card management-kpi ${tone}">
+    <div class="management-kpi-top"><span class="kpi-scope ${scope === "live" ? "live" : "historical"}">${scope === "live" ? "LIVE NOW" : "SELECTED RANGE"}</span><span class="quality-pill good">Simulated</span></div>
+    <span class="management-kpi-label">${label}</span>
+    <div class="management-kpi-value">${value}<small>${unit}</small></div>
+    <div class="management-kpi-foot">${foot}</div>
+  </article>`;
+}
+
+function managementTimeFilter() {
+  return `<section class="card management-range-card">
+    <div class="management-range-main">
+      <div><span class="eyebrow">Historical scope</span><h2>Management Time Range</h2><p>Semua KPI bertanda Selected Range, donut, dan ranking mengikuti periode ini.</p></div>
+      <div class="management-range-controls">${historyRangeButtons()}<span class="range-summary">${formatDateTime(state.history.start, true)} — ${formatDateTime(state.history.end, true)}</span></div>
+    </div>
+    <div class="custom-range-row ${state.history.preset === "CUSTOM" ? "" : "hidden"}" id="custom-range-row">
+      <label class="date-field"><span>Start date</span><input type="datetime-local" id="history-start" value="${toDateTimeLocal(state.history.start)}" /></label>
+      <span class="range-arrow">→</span>
+      <label class="date-field"><span>End date</span><input type="datetime-local" id="history-end" value="${toDateTimeLocal(state.history.end)}" /></label>
+      <button class="button primary" id="apply-history-range">Apply range</button>
+    </div>
+  </section>`;
+}
+
+function metricTotal(type, metricKey, items = fleetFor(type)) {
+  return items.reduce((total, machine) => total + machineMetricValue(type, machine, metricKey), 0);
+}
+
+function resourceBreakdown(type) {
+  const config = managementConfig[type];
+  const metricKey = state.management.metric[type];
+  const metric = config.metrics[metricKey];
+  const areas = processAreas[type].map((area, index) => {
+    const items = fleetFor(type).filter((machine) => machine.area === area.code);
+    return { ...area, index, value: metricTotal(type, metricKey, items) };
+  });
+  const total = areas.reduce((sum, area) => sum + area.value, 0);
+  const circumference = 402.12;
+  let used = 0;
+  const segments = areas.map((area) => {
+    const length = total ? area.value / total * circumference : 0;
+    const segment = `<circle cx="80" cy="80" r="64" fill="none" stroke="${managementColors[area.index]}" stroke-width="32" stroke-dasharray="${length.toFixed(2)} ${(circumference - length).toFixed(2)}" stroke-dashoffset="${(-used).toFixed(2)}" transform="rotate(-90 80 80)" data-resource-area="${type}|${area.code}|${metricKey}" tabindex="0"><title>${area.label}: ${formatManagementValue(area.value, metric.unit)} ${metric.unit}</title></circle>`;
+    used += length;
+    return segment;
+  }).join("");
+  const tabs = Object.entries(config.metrics).map(([key, item]) => `<button class="segment ${metricKey === key ? "active" : ""}" data-management-metric="${type}|${key}">${item.short}</button>`).join("");
+  const legend = areas.map((area) => {
+    const percent = total ? area.value / total * 100 : 0;
+    return `<button class="resource-legend-row" data-resource-area="${type}|${area.code}|${metricKey}"><i style="background:${managementColors[area.index]}"></i><span>${type === "jetflow" ? area.label : `Area ${area.label}`}</span><strong>${percent.toFixed(1)}%</strong><small>${formatManagementValue(area.value, metric.unit)} ${metric.unit}</small></button>`;
+  }).join("");
+  return panel(`${metric.label} by ${type === "jetflow" ? "Lane" : "Area"}`, "Klik segmen atau area untuk membuka ranking mesin.", `
+    <div class="metric-tabs segmented">${tabs}</div>
+    <div class="resource-donut-wrap">
+      <div class="resource-donut" aria-label="Distribusi ${metric.label}"><svg viewBox="0 0 160 160" role="img">${segments}</svg><div><strong>${formatManagementValue(total, metric.unit)}</strong><small>${metric.unit}</small></div></div>
+      <div class="resource-legend">${legend}</div>
+    </div>
+    <div class="management-coverage"><span>Meter coverage</span><strong>${type === "jetflow" ? "91%" : type === "chemical" ? "100%" : "94%"}</strong><small>Nilai demo; coverage aktual wajib ditampilkan saat commissioning.</small></div>
+  `);
+}
+
+function consumptionRanking(type) {
+  const metricKey = state.management.metric[type];
+  const metric = managementConfig[type].metrics[metricKey];
+  const ranked = fleetFor(type).map((machine) => ({ machine, value: machineMetricValue(type, machine, metricKey) })).sort((a, b) => b.value - a.value).slice(0, 5);
+  const max = ranked[0]?.value || 1;
+  return panel(`Top ${metric.short} Consumers`, `${formatDateTime(state.history.start, true)} — ${formatDateTime(state.history.end, true)}`, `<div class="ranking-list">${ranked.map((item, index) => `<button class="ranking-row" data-machine-target="${type}|${item.machine.id}"><span class="ranking-number">${index + 1}</span><span class="ranking-copy"><strong>${item.machine.id}</strong><small>${item.machine.areaLabel} · ${item.machine.state}</small><i><b style="width:${item.value / max * 100}%"></b></i></span><span class="ranking-value">${formatManagementValue(item.value, metric.unit)}<small>${metric.unit}</small></span></button>`).join("")}</div>`, `<span class="data-pill neutral">Selected range</span>`);
+}
+
+function downtimePareto(type) {
+  const reasons = {
+    jetflow: [["Tangle / winch", 38], ["Heating delay", 27], ["Dosing wait", 19], ["Pump / circulation", 16]],
+    calator: [["Speed imbalance", 36], ["Dancing roller", 29], ["Chemical wait", 21], ["Fabric handling", 14]],
+    dryer: [["Under-temperature", 41], ["Thermal oil wait", 25], ["Fabric handling", 20], ["Drive fault", 14]],
+    kalender: [["Load imbalance", 34], ["Steam wait", 28], ["Bowing / width", 23], ["Fabric handling", 15]],
+    chemical: [["Route unavailable", 37], ["Chemical low", 29], ["Transfer timeout", 21], ["Pump fault", 13]],
+  }[type];
+  return panel("Unplanned Downtime Pareto", "Penyebab downtime demo untuk periode terpilih; planned idle tidak dihitung.", `<div class="downtime-bars">${reasons.map(([label, value], index) => `<div><span>${label}</span><i><b style="width:${value}%;background:${managementColors[index]}"></b></i><strong>${value}%</strong></div>`).join("")}</div>`);
+}
+
 function processFleetPage(type) {
   const config = processConfig[type];
   const fleet = fleetFor(type);
   const exceptions = statusCount(fleet, "warning") + statusCount(fleet, "fault");
+  const running = statusCount(fleet, "running") + statusCount(fleet, "warning");
+  const stopped = statusCount(fleet, "idle") + statusCount(fleet, "fault");
+  const runtime = fleet.reduce((total, machine) => total + machineRuntime(type, machine), 0);
+  const downtime = fleet.reduce((total, machine) => total + machineDowntime(type, machine), 0);
+  const output = runtime * managementConfig[type].output.rate;
+  const selectedMetric = managementConfig[type].metrics[state.management.metric[type]];
   const areaCards = processAreas[type].map((area) => {
     const items = fleet.filter((machine) => machine.area === area.code);
     const running = statusCount(items, "running");
@@ -315,7 +488,7 @@ function processFleetPage(type) {
       <div class="area-card-head"><div><span class="area-code">${area.code}</span><h2>${type === "jetflow" ? area.label : `Area ${area.label}`}</h2></div>${statusPill(tone)}</div>
       <div class="area-total"><strong>${items.length}</strong><span>${config.singular} registered</span></div>
       <div class="area-state-grid"><span><strong>${running}</strong>Run</span><span><strong>${idle}</strong>Idle</span><span><strong>${warning}</strong>Warn</span><span><strong>${fault}</strong>Fault</span></div>
-      <div class="area-card-foot"><span>${items.filter((item) => item.batch !== "—").length} active batches</span><strong>Open ${type === "jetflow" ? "lane" : "area"} →</strong></div>
+      <div class="area-card-foot"><span>${formatManagementValue(metricTotal(type, state.management.metric[type], items), selectedMetric.unit)} ${selectedMetric.unit} ${selectedMetric.short.toLowerCase()}</span><strong>Open ranking →</strong></div>
     </article>`;
   }).join("");
   return `
@@ -324,12 +497,24 @@ function processFleetPage(type) {
       <div><span class="eyebrow">${config.process}</span><h2>${config.plural} Fleet Overview</h2><p>Pilih ${type === "jetflow" ? "lane" : "area"} untuk melihat daftar mesin, kemudian masuk ke detail mesin.</p></div>
       <div class="fleet-total"><strong>${fleet.length}</strong><span>Total assets</span></div>
     </section>
-    <section class="kpi-grid">
-      ${kpi("Registered Assets", fleet.length, "machines", config.code, `<strong>${processAreas[type].length}</strong>${type === "jetflow" ? "lanes" : "areas"}`, "success")}
-      ${kpi("Running Demo", statusCount(fleet, "running"), "machines", "RN", `<strong>${Math.round(statusCount(fleet, "running") / fleet.length * 100)}%</strong>of mapped fleet`)}
-      ${kpi("Idle Demo", statusCount(fleet, "idle"), "machines", "ID", "<strong>Ready / standby</strong>")}
-      ${kpi("Exceptions", exceptions, "machines", "EX", `<strong class='danger'>${statusCount(fleet, "fault")} fault</strong>· ${statusCount(fleet, "warning")} warning`, exceptions ? "warning" : "success")}
+    ${managementTimeFilter()}
+    <div class="management-section-label"><span class="kpi-scope live">LIVE NOW</span><p>Snapshot aktual; tidak berubah saat time range historis diganti.</p></div>
+    <section class="management-kpi-grid live-grid">
+      ${managementKpi("live", "Machines Running Now", running, `/ ${fleet.length}`, `${Math.round(running / fleet.length * 100)}% of mapped fleet`, "success")}
+      ${managementKpi("live", "Machines Stopped Now", stopped, "machines", `${statusCount(fleet, "fault")} fault · ${statusCount(fleet, "idle")} idle`, stopped ? "warning" : "success")}
+      ${managementKpi("live", "Active Exceptions", exceptions, "machines", `${statusCount(fleet, "warning")} warning · ${statusCount(fleet, "fault")} fault`, exceptions ? "danger" : "success")}
+      ${managementKpi("live", managementConfig[type].currentUtility.label, liveValue(managementConfig[type].currentUtility.value, "", managementConfig[type].currentUtility.value * .008, managementConfig[type].currentUtility.value < 10 ? 2 : 1), managementConfig[type].currentUtility.unit, "Current process demand", "")}
     </section>
+    <div class="management-section-label"><span class="kpi-scope historical">SELECTED RANGE</span><p>${formatDateTime(state.history.start, true)} — ${formatDateTime(state.history.end, true)}</p></div>
+    <section class="management-kpi-grid historical-grid">
+      ${managementKpi("historical", "Total Machine Runtime", formatManagementValue(runtime, "h"), "h", "Accumulated across all assets")}
+      ${managementKpi("historical", "Unplanned Downtime", formatManagementValue(downtime, "h"), "h", "Planned idle excluded", downtime > runtime * .08 ? "warning" : "")}
+      ${managementKpi("historical", managementConfig[type].output.label, formatManagementValue(output, managementConfig[type].output.unit), managementConfig[type].output.unit, "Historian aggregate · demo")}
+      ${Object.entries(managementConfig[type].metrics).map(([key, metric]) => managementKpi("historical", metric.label, formatManagementValue(metricTotal(type, key), metric.unit), metric.unit, "Meter aggregate · demo")).join("")}
+    </section>
+    <section class="management-analysis-grid">${resourceBreakdown(type)}${consumptionRanking(type)}</section>
+    <section class="management-analysis-grid single-support">${downtimePareto(type)}<article class="card management-note"><span class="eyebrow">Management reading guide</span><h2>Mulai dari exception, lalu biaya proses.</h2><p>Gunakan Live Now untuk respon operasi. Gunakan Selected Range untuk membandingkan runtime, downtime, output, dan konsumsi. Klik area pada donut untuk ranking mesin, lalu buka detail mesin untuk investigasi sensor dan motor.</p><div><span>01 · Detect</span><span>02 · Compare</span><span>03 · Drill down</span></div></article></section>
+    <div class="management-section-label area-label"><span class="kpi-scope neutral">AREA STATUS</span><p>Status saat ini dan konsumsi periode terpilih.</p></div>
     <section class="area-grid">${areaCards}</section>
   `;
 }
@@ -345,17 +530,19 @@ function machineSnapshot(type, machine, index) {
 function processAreaPage(type) {
   const config = processConfig[type];
   const area = processAreas[type].find((item) => item.code === state.drill[type].area) || processAreas[type][0];
-  const machines = fleetFor(type).filter((machine) => machine.area === area.code);
+  const metricKey = state.management.metric[type];
+  const metric = managementConfig[type].metrics[metricKey];
+  const machines = fleetFor(type).filter((machine) => machine.area === area.code).sort((a, b) => machineMetricValue(type, b, metricKey) - machineMetricValue(type, a, metricKey));
   const cards = machines.map((machine, index) => `<article class="card fleet-machine-card" data-machine-target="${type}|${machine.id}" data-machine-state="${machine.state}" data-machine-search="${machine.id.toLowerCase()} ${machine.name.toLowerCase()} ${machine.batch.toLowerCase()}" role="button" tabindex="0">
-    <div class="fleet-machine-top"><span class="machine-code ${machine.state === "fault" ? "fault" : machine.state === "warning" ? "warning" : ""}">${config.code}</span><div><strong>${machine.id}</strong><span>${machine.name}</span></div>${statusPill(machine.state)}</div>
+    <div class="fleet-machine-top"><span class="machine-code ranking-badge ${machine.state === "fault" ? "fault" : machine.state === "warning" ? "warning" : ""}">#${index + 1}</span><div><strong>${machine.id}</strong><span>${machine.name}</span></div>${statusPill(machine.state)}</div>
     <div class="fleet-machine-reading">${machineSnapshot(type, machine, index)}</div>
-    <div class="fleet-machine-meta"><span>Batch<strong>${machine.batch}</strong></span><span>Progress<strong>${machine.progress}%</strong></span><span>Data<strong>18 ms</strong></span></div>
+    <div class="fleet-machine-meta"><span>${metric.short}<strong>${formatManagementValue(machineMetricValue(type, machine, metricKey), metric.unit)} ${metric.unit}</strong></span><span>Runtime<strong>${formatManagementValue(machineRuntime(type, machine), "h")} h</strong></span><span>State<strong>${machine.state}</strong></span></div>
     <div class="fleet-machine-foot"><span>${machine.connected ? "● Connected" : "○ Offline"}</span><strong>Machine detail →</strong></div>
   </article>`).join("");
   return `
     ${processBreadcrumb(type)}
     ${pageHead(type, `<button class="button" data-process-level="overview" data-process-type="${type}">← All ${type === "jetflow" ? "lanes" : "areas"}</button><button class="button" data-page-target="trends">⌗ Area trends</button>`)}
-    <section class="fleet-area-head card"><div><span class="area-code">${area.code}</span><div><h2>${config.plural} ${area.label}</h2><p>${machines.length} mesin terdaftar · pilih mesin untuk membuka sensor, motor, alarm, dan historical.</p></div></div><div class="area-health"><strong>${statusCount(machines, "running")}</strong><span>Running demo</span></div></section>
+    <section class="fleet-area-head card"><div><span class="area-code">${area.code}</span><div><h2>${config.plural} ${area.label}</h2><p>Ranking ${machines.length} mesin berdasarkan ${metric.label.toLowerCase()} · ${formatDateTime(state.history.start, true)} — ${formatDateTime(state.history.end, true)}.</p></div></div><div class="area-health"><strong>${formatManagementValue(metricTotal(type, metricKey, machines), metric.unit)}</strong><span>${metric.unit} ${metric.short}</span></div></section>
     <section class="card fleet-filter"><input class="search-control" id="fleet-search" placeholder="Cari machine ID atau batch..." /><select class="select-control" id="fleet-state-filter"><option value="all">All states</option><option value="running">Running</option><option value="idle">Idle</option><option value="warning">Warning</option><option value="fault">Fault</option></select></section>
     <section class="fleet-machine-grid" id="fleet-machine-grid">${cards}</section>
     <div class="empty-state card hidden" id="fleet-empty"><strong>Mesin tidak ditemukan</strong><span>Ubah pencarian atau filter state.</span></div>
@@ -878,13 +1065,33 @@ function bindPageEvents() {
   document.querySelectorAll("[data-machine-target]").forEach((card) => {
     const openMachine = () => {
       const [type, machine] = card.dataset.machineTarget.split("|");
+      const target = fleetFor(type).find((item) => item.id === machine);
       state.selected[type] = machine;
-      state.drill[type].machine = machine;
+      state.drill[type] = { area: target?.area || state.drill[type].area, machine };
       renderPage();
     };
     card.addEventListener("click", openMachine);
     card.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openMachine(); }
+    });
+  });
+  document.querySelectorAll("[data-management-metric]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const [type, metric] = button.dataset.managementMetric.split("|");
+      state.management.metric[type] = metric;
+      renderPage();
+    });
+  });
+  document.querySelectorAll("[data-resource-area]").forEach((button) => {
+    const openResourceArea = () => {
+      const [type, area, metric] = button.dataset.resourceArea.split("|");
+      state.management.metric[type] = metric;
+      state.drill[type] = { area, machine: null };
+      renderPage();
+    };
+    button.addEventListener("click", openResourceArea);
+    button.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openResourceArea(); }
     });
   });
   document.querySelectorAll("[data-process-level]").forEach((button) => {

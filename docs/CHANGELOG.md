@@ -4,6 +4,33 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.4 — 14 Agustus 2026
+
+**Status:** Management cockpit dan consumption drill-down selesai
+
+### Ditambahkan
+
+- Pemisahan KPI `Live Now` dan `Selected Range` pada overview Jetflow, Calator, Dryer, Kalender, dan Dispensing.
+- KPI runtime, unplanned downtime, output, dan konsumsi resource yang mengikuti time range.
+- Donut konsumsi per lane/area dengan segmen dan legenda interaktif.
+- Pemilihan resource spesifik proses: water, energy, steam, thermal, atau chemical.
+- Top five machine consumers dan ranking mesin dalam area.
+- Unplanned downtime Pareto serta meter coverage indicator.
+- Direct drill-down dari ranking overview menuju detail mesin.
+
+### Diubah
+
+- Area machine list sekarang diurutkan berdasarkan konsumsi resource terpilih.
+- Area card menampilkan agregat konsumsi untuk time range terpilih.
+- Direct machine navigation otomatis mempertahankan konteks area.
+
+### Batasan
+
+- Seluruh nilai management cockpit masih simulated.
+- Belum terhubung ke historian, meter aktual, production order, atau cost model.
+
+---
+
 ## Frontend Dashboard V1.3 — 14 Agustus 2026
 
 **Status:** Remote display placeholder selesai
