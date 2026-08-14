@@ -4,6 +4,27 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.10 — 14 Agustus 2026
+
+**Status:** Production abnormality log selesai
+
+### Ditambahkan
+
+- Tabel abnormal proses pada detail Jetflow, Calator, Dryer, dan Kalender.
+- Waktu mulai/selesai, batch, parameter, SV, worst PV, deviation, duration, impact, dan recovery status.
+- Summary event dan filter periode 1H, 8H, 24H, serta 7D.
+
+### Diubah
+
+- Chart proses lama diganti menjadi Production Abnormality Log.
+- Panel SV/PV per sensor tetap dipertahankan sebagai alat investigasi visual.
+
+### Batasan
+
+- Seluruh abnormal event masih simulated dan export belum aktif.
+
+---
+
 ## Frontend Dashboard V1.9 — 14 Agustus 2026
 
 **Status:** Machine sensor SV/PV comparison selesai

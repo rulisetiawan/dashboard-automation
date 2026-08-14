@@ -1904,6 +1904,84 @@ select:focus-visible {
   font-size: 0.51rem;
 }
 
+.abnormal-log-layout {
+  grid-template-columns: 1fr;
+}
+
+.abnormal-log-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.abnormal-log-summary > div {
+  display: grid;
+  gap: 6px;
+  padding: 10px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface-2);
+}
+
+.abnormal-log-summary span {
+  color: var(--ink-3);
+  font-size: 0.44rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.abnormal-log-summary strong {
+  font-family: var(--font-data);
+  font-size: 0.66rem;
+  font-weight: 500;
+}
+
+.abnormal-log-summary strong.danger,
+.abnormal-deviation {
+  color: var(--danger);
+}
+
+.abnormal-log-wrap {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.abnormal-log-table {
+  min-width: 1240px;
+}
+
+.abnormal-log-table th {
+  white-space: nowrap;
+}
+
+.abnormal-log-table td {
+  max-width: 240px;
+  line-height: 1.45;
+  vertical-align: middle;
+}
+
+.abnormal-log-table td strong {
+  font-size: 0.54rem;
+  white-space: nowrap;
+}
+
+.abnormal-time {
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.abnormal-log-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  color: var(--ink-3);
+  font-size: 0.46rem;
+}
+
 .machine-identity {
   display: flex;
   min-width: 0;
@@ -3881,6 +3959,15 @@ select:focus-visible {
 
   .sensor-trend-canvas {
     height: 116px;
+  }
+
+  .abnormal-log-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .abnormal-log-foot {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .fleet-summary,

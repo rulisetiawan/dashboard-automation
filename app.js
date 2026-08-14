@@ -685,8 +685,8 @@ function jetflowDetailPage() {
       ${kpi("Flow Meter", liveValue(124.8, "", .7, 1), "m³/h", "FL", "<strong>↑ 1.2%</strong>stable flow")}
       ${kpi("Steam Header", liveValue(7.8, "", .07, 1), "bar", "ST", "<strong class='danger'>Low baseline</strong>· 8.1 bar", "warning")}
     </section>
-    <section class="grid-2">
-      ${panel("Main Process Trend", "Temperature, setpoint, dan water level · last 60 minutes", `<div class="chart-container"><canvas id="jetflow-chart" class="chart-canvas"></canvas></div>`, rangeButtons())}
+    <section class="grid-2 abnormal-log-layout">
+      ${abnormalProcessLog("jetflow", machine)}
       ${panel("Tank & Dosing", "Live tank condition and data quality", `
         <div class="metric-grid">
           ${metricTile("Main tank", liveValue(92.6, "°C", .15, 1), "Temperature · SP 93.0")}
@@ -720,6 +720,66 @@ function equipmentGrid(items) {
 
 function eventTable(rows) {
   return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Type</th><th>Event</th><th>Status</th></tr></thead><tbody>${rows.map((r) => `<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td><span class="data-pill ${r[3] === "Good" ? "good" : "warning"}">${r[3]}</span></td></tr>`).join("")}</tbody></table></div>`;
+}
+
+const abnormalLogTemplates = {
+  jetflow: [
+    ["14 Aug · 10:38:42", "10:43:31", "Main Tank Temperature", "93.0 °C", "89.8 °C", "-3.2 °C", 4.8, "Heating delay · holding time extended", "Open"],
+    ["14 Aug · 10:14:08", "10:16:26", "Main Flow Meter", "125.0 m³/h", "112.4 m³/h", "-12.6 m³/h", 2.3, "Dye liquor circulation below recipe", "Recovered"],
+    ["14 Aug · 09:42:17", "09:45:05", "Water Level", "72.0 %", "78.6 %", "+6.6 %", 2.8, "Liquor ratio outside tolerance", "Acknowledged"],
+    ["14 Aug · 08:56:44", "09:01:12", "Dosing Tank 1 Temperature", "58.0 °C", "53.1 °C", "-4.9 °C", 4.5, "Dosing step delayed", "Recovered"],
+    ["14 Aug · 07:48:31", "07:51:09", "Winch 3 Speed", "42.0 Hz", "34.8 Hz", "-7.2 Hz", 2.6, "Fabric circulation instability", "Recovered"],
+    ["13 Aug · 22:16:04", "22:23:40", "Steam Header", "8.1 bar", "7.3 bar", "-0.8 bar", 7.6, "Heating rate below recipe baseline", "Acknowledged"],
+  ],
+  calator: [
+    ["14 Aug · 10:31:09", "10:34:18", "Overfeed Out Speed", "29.2 m/min", "27.8 m/min", "-1.4 m/min", 3.2, "Chemical absorption and fabric tension risk", "Open"],
+    ["14 Aug · 10:07:22", "10:09:06", "Dancing Roller", "50.0 %", "58.4 %", "+8.4 %", 1.7, "Fabric tension outside center window", "Recovered"],
+    ["14 Aug · 09:38:51", "09:41:20", "Squeezing 2 Speed", "27.9 m/min", "26.5 m/min", "-1.4 m/min", 2.5, "Moisture carry-over increased", "Acknowledged"],
+    ["14 Aug · 08:54:17", "08:58:46", "Chemical Transfer Weight", "184.0 kg", "178.2 kg", "-5.8 kg", 4.5, "Softener dosage below recipe", "Recovered"],
+    ["14 Aug · 07:26:40", "07:29:22", "Folder Speed", "27.6 m/min", "25.9 m/min", "-1.7 m/min", 2.7, "Output folding instability", "Recovered"],
+    ["13 Aug · 21:48:13", "21:54:01", "Feeding Speed", "28.4 m/min", "26.1 m/min", "-2.3 m/min", 5.8, "Line speed reduction", "Acknowledged"],
+  ],
+  dryer: [
+    ["14 Aug · 10:36:18", "10:42:54", "Chamber 5 Temperature", "148.0 °C", "134.2 °C", "-13.8 °C", 6.6, "Under-drying risk · 168 m fabric affected", "Open"],
+    ["14 Aug · 10:10:41", "10:11:23", "Line Speed", "32.5 m/min", "29.0 m/min", "-3.5 m/min", 0.7, "Output rate temporarily reduced", "Recovered"],
+    ["14 Aug · 09:44:08", "09:49:36", "Thermal Oil Supply", "218.0 °C", "207.6 °C", "-10.4 °C", 5.5, "Chamber heating capacity reduced", "Acknowledged"],
+    ["14 Aug · 08:37:52", "08:41:11", "Chamber 3 Temperature", "150.0 °C", "143.4 °C", "-6.6 °C", 3.3, "Drying profile outside tolerance", "Recovered"],
+    ["14 Aug · 07:59:16", "08:02:24", "Chamber 7 Temperature", "145.0 °C", "138.1 °C", "-6.9 °C", 3.1, "Outlet moisture risk", "Recovered"],
+    ["13 Aug · 23:14:28", "23:21:40", "Exhaust Fan Speed", "38.0 Hz", "31.2 Hz", "-6.8 Hz", 7.2, "Humidity evacuation below baseline", "Acknowledged"],
+  ],
+  kalender: [
+    ["14 Aug · 10:24:32", "10:29:14", "Upper Roll Temperature", "127.0 °C", "122.8 °C", "-4.2 °C", 4.7, "Gramasi and shrinkage consistency risk", "Open"],
+    ["14 Aug · 10:03:18", "10:05:47", "Loadcell Upper", "4.80 kN", "5.34 kN", "+0.54 kN", 2.5, "Upper/lower pressure imbalance", "Recovered"],
+    ["14 Aug · 09:36:51", "09:40:05", "Fabric Width", "181.0 cm", "178.9 cm", "-2.1 cm", 3.2, "Width below finishing specification", "Acknowledged"],
+    ["14 Aug · 08:48:09", "08:51:44", "Overfeed", "8.5 %", "6.9 %", "-1.6 %", 3.6, "Shrinkage correction below target", "Recovered"],
+    ["14 Aug · 07:54:26", "07:59:18", "Lower Roll Temperature", "127.0 °C", "121.7 °C", "-5.3 °C", 4.9, "Bowing correction instability", "Recovered"],
+    ["13 Aug · 22:32:15", "22:38:08", "Dancing Roller", "50.0 %", "57.6 %", "+7.6 %", 5.9, "Fabric tension outside center window", "Acknowledged"],
+  ],
+};
+
+function historicalBatchFor(machine, index) {
+  if (index === 0 && machine.batch && machine.batch !== "—") return machine.batch;
+  const seed = [...machine.id].reduce((total, character) => total + character.charCodeAt(0), 0);
+  return `DB-260814-${String((seed + index * 17) % 190 + 1).padStart(3, "0")}`;
+}
+
+function abnormalProcessLog(type, machine) {
+  const limits = { "1H": 2, "8H": 4, "24H": 5, "7D": 6 };
+  const rows = abnormalLogTemplates[type].slice(0, limits[state.range] || 5).map((row, index) => ({
+    start: row[0], end: row[1], parameter: row[2], sv: row[3], pv: row[4], deviation: row[5], minutes: row[6], impact: row[7], status: row[8], batch: historicalBatchFor(machine, index),
+  }));
+  const totalMinutes = rows.reduce((sum, row) => sum + row.minutes, 0);
+  const open = rows.filter((row) => row.status === "Open").length;
+  const batches = new Set(rows.map((row) => row.batch)).size;
+  const tableRows = rows.map((row) => {
+    const tone = row.status === "Open" ? "danger" : row.status === "Recovered" ? "good" : "neutral";
+    return `<tr><td class="mono abnormal-time">${row.start}</td><td class="mono">${row.end}</td><td class="mono">${row.batch}</td><td><strong>${row.parameter}</strong></td><td class="mono">${row.sv}</td><td class="mono">${row.pv}</td><td class="mono abnormal-deviation">${row.deviation}</td><td class="mono">${row.minutes.toFixed(1)} min</td><td>${row.impact}</td><td><span class="data-pill ${tone}">${row.status}</span></td></tr>`;
+  }).join("");
+  return panel("Production Abnormality Log", `Setpoint miss dan process deviation · ${machine.id}`, `
+    <div class="abnormal-log-summary"><div><span>Events in range</span><strong>${rows.length}</strong></div><div><span>Open abnormality</span><strong class="${open ? "danger" : ""}">${open}</strong></div><div><span>Affected batches</span><strong>${batches}</strong></div><div><span>Total deviation</span><strong>${totalMinutes.toFixed(1)} min</strong></div></div>
+    <div class="table-wrap abnormal-log-wrap"><table class="data-table abnormal-log-table"><thead><tr><th>Start Time</th><th>End Time</th><th>Batch No.</th><th>Parameter</th><th>SV</th><th>Worst PV</th><th>Deviation</th><th>Duration</th><th>Process Impact</th><th>Status</th></tr></thead><tbody>${tableRows}</tbody></table></div>
+    <div class="abnormal-log-foot"><span>Demo log · event dibuat saat PV berada di luar tolerance SV selama configured delay.</span><button class="button ghost small">Export abnormal log</button></div>
+  `, rangeButtons(), "abnormal-log-panel");
 }
 
 function rangeButtons() {
@@ -780,8 +840,8 @@ function calatorDetailPage() {
         </div>
       `)}
     </section>
-    <section class="grid-2">
-      ${panel("Overfeed Out & Dancing Roller", "Historical relationship · current process run", `<div class="chart-container"><canvas id="calator-chart" class="chart-canvas"></canvas></div>`, rangeButtons())}
+    <section class="grid-2 abnormal-log-layout">
+      ${abnormalProcessLog("calator", machine)}
       ${panel("Speed Synchronization", "Difference dan ratio antarstage", `
         ${balanceRows([
           ["Feeding → SQ-1", 52, "+0.7%"], ["SQ-1 → SQ-2", 48, "+1.1%"], ["OF In → OF Out", 56, "+3.8%"],
@@ -825,8 +885,8 @@ function dryerDetailPage() {
     ${panel(`Chamber Temperature Heatmap · ${machine.chambers} zones`, "Actual, setpoint, dan deviation setiap chamber", `
       <div class="heatmap-grid">${temps.map((t, i) => `<div class="heatmap-cell ${Math.abs(t.actual - t.sp) > 5 ? "warning" : ""}"><strong>CH-${String(i + 1).padStart(2, "0")}</strong><span>${t.actual.toFixed(1)}°</span><small>SP ${t.sp.toFixed(1)} · Δ ${(t.actual - t.sp).toFixed(1)}</small></div>`).join("")}</div>
     `)}
-    <section class="grid-2">
-      ${panel("Speed & Temperature Profile", "Actual versus setpoint · current run", `<div class="chart-container"><canvas id="dryer-chart" class="chart-canvas"></canvas></div>`, rangeButtons())}
+    <section class="grid-2 abnormal-log-layout">
+      ${abnormalProcessLog("dryer", machine)}
       ${panel("Drying Context", "Input, output, utility, dan quality risk", `
         <div class="metric-grid">
           ${metricTile("Moisture inlet", "42.8<small>%</small>", "Manual sample")}
@@ -878,8 +938,8 @@ function kalenderDetailPage() {
         </div>
       `)}
     </section>
-    <section class="grid-2">
-      ${panel("Finishing Process Trend", "Loadcell, temperature, overfeed, dan fabric width", `<div class="chart-container"><canvas id="kalender-chart" class="chart-canvas"></canvas></div>`, rangeButtons())}
+    <section class="grid-2 abnormal-log-layout">
+      ${abnormalProcessLog("kalender", machine)}
       ${panel("Quality Context", "Target dan latest inspection result", `
         <div class="ring-wrap">
           <div class="ring" style="--value:94;--ring-color:#119b70"><div class="ring-copy"><strong>94.2%</strong><small>Quality score</small></div></div>
