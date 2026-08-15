@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Database Design V1.0 — 15 Agustus 2026
+
+**Status:** Baseline konsep database selesai
+
+### Ditambahkan
+
+- Desain PostgreSQL + TimescaleDB untuk telemetry, historian, snapshot live, aggregate, master asset/tag, batch MES, utility, chemical, maintenance, dan audit.
+- ERD konseptual serta struktur logical schema untuk hubungan asset–tag–historian–batch–event.
+- Aturan retention, data quality, key/time convention, query dashboard, performance, dan tahapan migration produksi.
+
+### Keputusan
+
+- Database menjadi pusat integrasi backend setelah ingestion API; PLC dan frontend tidak mengakses database satu sama lain secara langsung.
+
+---
+
 ## Backend Architecture V1.0 / Tag & Display Mapping Register V1.0 / Backend Data Flow Graph V1.0 — 15 Agustus 2026
 
 **Status:** Baseline backend SCADA / MES selesai
