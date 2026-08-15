@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.34 / Chemical Dispensing Calator Concept V1.3 / Dashboard Concept V1.13 — 15 Agustus 2026
+
+**Status:** Mapping dispensing unit dan usage per Calator selesai
+
+### Ditambahkan
+
+- Pembagian Calator support untuk lima dispensing unit.
+- Matriks penggunaan tujuh chemical per Calator.
+- Ranking tiga chemical terbanyak per Calator.
+- Klik Calator untuk filter request log unit terkait.
+
+### Batasan
+
+- Mapping route dan volume masih simulated.
+
+---
+
 ## Frontend Dashboard V1.33 / Kalender Concept V1.6 / Dashboard Concept V1.12 — 15 Agustus 2026
 
 **Status:** Analisa Motor & Drive Equipment Kalender selesai

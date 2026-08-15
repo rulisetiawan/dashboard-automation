@@ -63,6 +63,7 @@ const state = {
     variant: "all",
     mode: "all",
     status: "all",
+    calator: "all",
   },
   motorDrive: {
     selected: null,
@@ -1646,17 +1647,62 @@ function energyTable() {
   return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Machine</th><th>Process Run</th><th>Energy</th><th>Intensity</th><th>vs Baseline</th><th>Data</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r[0]}</td><td class="mono">${r[1]}</td><td class="mono">${r[2]}</td><td class="mono">${r[3]}</td><td class="mono">${r[4]}</td><td><span class="data-pill ${r[5] === "Good" ? "good" : "warning"}">${r[5]}</span></td></tr>`).join("")}</tbody></table></div>`;
 }
 
-function chemicalDispensingLogPanel() {
+function dispensingSupportedCalators(machine) {
+  const areaCalators = calators.filter((calator) => calator.area === machine.area);
+  const unitNumber = Number(machine.id.slice(-2));
+  if (machine.area === "DPN") return areaCalators;
+  const splitAt = machine.area === "BLK" ? 5 : 4;
+  return areaCalators.filter((_, index) => unitNumber === 1 ? index < splitAt : index >= splitAt);
+}
+
+function dispenserForCalator(calatorId) {
+  const area = calatorId.split("-")[1];
+  const number = Number(calatorId.slice(-2));
+  if (area === "DPN") return "DSP-DPN-01";
+  if (area === "BLK") return number <= 5 ? "DSP-BLK-01" : "DSP-BLK-02";
+  return number <= 4 ? "DSP-TMR-01" : "DSP-TMR-02";
+}
+
+function calatorChemicalUsage(calator) {
+  const seed = [...calator.id].reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  return chemicals.map((chemical, index) => ({
+    code: chemical[0], name: chemical[1], color: chemical[4], kg: 24 + ((seed * (index + 5) + index * 31) % 142),
+  }));
+}
+
+function chemicalUsageByCalatorPanel(machine) {
+  const supported = dispensingSupportedCalators(machine);
+  const activeCalator = state.chemicalLog.calator;
+  return panel("Chemical Usage by Supported Calator", "Klik Calator untuk memfilter log transaksi dan melihat penggunaan chemical unit ini", `<div class="table-wrap"><table class="data-table calator-chemical-matrix"><thead><tr><th>Calator Destination</th>${chemicals.map((chemical) => `<th>${chemical[0]}</th>`).join("")}<th>Total</th></tr></thead><tbody>${supported.map((calator) => {
+    const usage = calatorChemicalUsage(calator);
+    const total = usage.reduce((sum, item) => sum + item.kg, 0);
+    return `<tr class="${activeCalator === calator.id ? "selected" : ""}"><td><button class="calator-usage-button" data-dispensing-calator-filter="${calator.id}"><strong>${calator.id}</strong><small>${calator.name}</small></button></td>${usage.map((item) => `<td class="mono">${item.kg.toLocaleString()} kg</td>`).join("")}<td class="mono"><strong>${total.toLocaleString()} kg</strong></td></tr>`;
+  }).join("")}</tbody></table></div><div class="calator-matrix-foot"><span>${supported.length} Calator didukung oleh <strong>${machine.id}</strong></span>${activeCalator !== "all" ? `<button class="button ghost small" data-dispensing-calator-reset>All supported Calators</button>` : ""}</div>`, `<span class="data-pill neutral">${machine.areaLabel.toUpperCase()} SUPPORT</span>`, "calator-usage-panel");
+}
+
+function calatorChemicalRankingPanel(machine) {
+  const supported = dispensingSupportedCalators(machine);
+  return panel("Top Chemical per Calator", "Ranking penggunaan terbanyak pada setiap Calator yang didukung", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Calator</th><th>Top 1 Chemical</th><th>Usage</th><th>Top 2 Chemical</th><th>Usage</th><th>Top 3 Chemical</th><th>Usage</th></tr></thead><tbody>${supported.map((calator) => {
+    const top = calatorChemicalUsage(calator).sort((a, b) => b.kg - a.kg).slice(0, 3);
+    return `<tr><td><strong>${calator.id}</strong><small class="table-subline">${calator.name}</small></td>${top.flatMap((item) => [`<td><span class="chemical-rank-dot" style="background:${item.color}"></span>${item.code} · ${item.name}</td>`, `<td class="mono">${item.kg.toLocaleString()} kg</td>`]).join("")}</tr>`;
+  }).join("")}</tbody></table></div>`, "", "calator-ranking-panel");
+}
+
+function chemicalDispensingLogPanel(machine) {
   const rangeHours = { "8H": 8, "24H": 24, "7D": 168 };
-  const visible = chemicalDispensingLogs.filter((item) => item.hoursAgo <= rangeHours[state.chemicalLog.range]
+  const supported = dispensingSupportedCalators(machine).map((calator) => calator.id);
+  const visible = chemicalDispensingLogs.filter((item) => dispenserForCalator(item.calator) === machine.id
+    && item.hoursAgo <= rangeHours[state.chemicalLog.range]
     && (state.chemicalLog.variant === "all" || item.code === state.chemicalLog.variant)
     && (state.chemicalLog.mode === "all" || item.mode === state.chemicalLog.mode)
-    && (state.chemicalLog.status === "all" || item.status === state.chemicalLog.status));
+    && (state.chemicalLog.status === "all" || item.status === state.chemicalLog.status)
+    && (state.chemicalLog.calator === "all" || item.calator === state.chemicalLog.calator));
   const option = (value, label, selected) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
   return panel("Dispensing Request Log", "Track request code, proses penimbangan, dan transfer chemical ke Calator", `
     <div class="dispensing-filter-row">
       <label>Time range<select class="select-control" data-chemical-log-filter="range">${option("8H", "Last 8 hours", state.chemicalLog.range)}${option("24H", "Last 24 hours", state.chemicalLog.range)}${option("7D", "Last 7 days", state.chemicalLog.range)}</select></label>
       <label>Chemical variant<select class="select-control" data-chemical-log-filter="variant">${option("all", "All variants", state.chemicalLog.variant)}${chemicals.map((chemical) => option(chemical[0], `${chemical[0]} · ${chemical[1]}`, state.chemicalLog.variant)).join("")}</select></label>
+      <label>Calator destination<select class="select-control" data-chemical-log-filter="calator">${option("all", "All supported Calators", state.chemicalLog.calator)}${supported.map((calator) => option(calator, calator, state.chemicalLog.calator)).join("")}</select></label>
       <label>Dispensing type<select class="select-control" data-chemical-log-filter="mode">${option("all", "Manual + Automatic", state.chemicalLog.mode)}${option("Manual", "Manual", state.chemicalLog.mode)}${option("Automatic", "Automatic", state.chemicalLog.mode)}</select></label>
       <label>Status<select class="select-control" data-chemical-log-filter="status">${option("all", "All status", state.chemicalLog.status)}${option("Completed", "Completed", state.chemicalLog.status)}${option("Weighing", "Weighing", state.chemicalLog.status)}${option("Hold", "Hold", state.chemicalLog.status)}</select></label>
     </div>
@@ -1677,19 +1723,24 @@ function chemicalVariantSummaryTable() {
 
 function chemicalDetailPage() {
   const machine = dispensers.find((item) => item.id === state.selected.chemical) || dispensers[0];
+  const supported = dispensingSupportedCalators(machine);
+  const usage = supported.flatMap((calator) => calatorChemicalUsage(calator));
+  const totalUsage = usage.reduce((sum, item) => sum + item.kg, 0);
+  const topChemical = chemicals.map((chemical) => ({ code: chemical[0], name: chemical[1], kg: usage.filter((item) => item.code === chemical[0]).reduce((sum, item) => sum + item.kg, 0) })).sort((a, b) => b.kg - a.kg)[0];
   return `
     ${processBreadcrumb("chemical", machine)}
     ${pageHead("chemical", selector(dispensers.filter((item) => item.area === machine.area), "chemical"))}
     ${machineHero(machine, "DSP", `${machine.areaLabel} · Chemical Dispensing Calator · 7 variants`)}
     ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
+      ${kpi("Supported Calators", supported.length, "machines", "CL", `<strong>${machine.areaLabel}</strong>· area coverage`)}
       ${kpi("Active Requests", "2", "requests", "RQ", "<strong>1 weighing · 1 hold</strong>")}
-      ${kpi("Completed Today", "8", "requests", "CP", "<strong>Last completion 10:42</strong>", "success")}
-      ${kpi("Total Dispensed", "1,023", "kg", "CH", "<strong>24-hour scope</strong>· all variants")}
-      ${kpi("Automatic Requests", "67", "%", "AU", "<strong>8 automatic</strong>· 4 manual")}
+      ${kpi("Total Dispensed", totalUsage.toLocaleString(), "kg", "CH", "<strong>Selected unit</strong>· supported Calators")}
+      ${kpi("Top Chemical", topChemical?.code || "—", "", "TC", `<strong>${topChemical?.name || "No data"}</strong>· ${topChemical?.kg.toLocaleString() || 0} kg`, "success")}
     </section>
-    ${chemicalDispensingLogPanel()}
-    ${chemicalVariantSummaryTable()}
+    ${chemicalUsageByCalatorPanel(machine)}
+    ${calatorChemicalRankingPanel(machine)}
+    ${chemicalDispensingLogPanel(machine)}
   `;
 }
 
@@ -1871,6 +1922,7 @@ function bindPageEvents() {
     select.addEventListener("change", () => {
       state.selected[select.dataset.machineSelect] = select.value;
       if (state.drill[select.dataset.machineSelect]) state.drill[select.dataset.machineSelect].machine = select.value;
+      if (select.dataset.machineSelect === "chemical") state.chemicalLog.calator = "all";
       renderPage();
     });
   });
@@ -2047,6 +2099,18 @@ function bindPageEvents() {
   document.querySelectorAll("[data-chemical-log-filter]").forEach((select) => {
     select.addEventListener("change", () => {
       state.chemicalLog[select.dataset.chemicalLogFilter] = select.value;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-dispensing-calator-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.chemicalLog.calator = button.dataset.dispensingCalatorFilter;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-dispensing-calator-reset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.chemicalLog.calator = "all";
       renderPage({ preserveScroll: true });
     });
   });

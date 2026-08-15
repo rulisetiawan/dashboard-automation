@@ -1984,6 +1984,62 @@ select:focus-visible {
   border-radius: inherit;
 }
 
+.calator-chemical-matrix tr.selected td {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.calator-usage-button {
+  display: grid;
+  gap: 3px;
+  min-width: 140px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.calator-usage-button:hover strong,
+.calator-usage-button:focus-visible strong {
+  color: var(--accent-dark);
+  text-decoration: underline;
+}
+
+.calator-usage-button small,
+.table-subline {
+  color: var(--ink-3);
+  font-size: .43rem;
+}
+
+.table-subline {
+  display: block;
+  margin-top: 3px;
+}
+
+.calator-matrix-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 9px;
+  color: var(--ink-3);
+  font-size: .46rem;
+}
+
+.calator-matrix-foot strong {
+  color: var(--accent-dark);
+  font-family: var(--font-data);
+}
+
+.chemical-rank-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+}
+
 .data-table .mono,
 .mono {
   color: var(--ink);
