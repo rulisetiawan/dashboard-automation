@@ -3047,6 +3047,163 @@ select:focus-visible {
   background: var(--surface-2);
 }
 
+.motor-card.drillable {
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.motor-card.drillable:hover,
+.motor-card.drillable:focus-visible,
+.motor-card.drillable.selected {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line-soft));
+  box-shadow: inset 2px 0 0 var(--accent), 0 5px 15px rgba(23, 54, 64, 0.06);
+}
+
+.motor-card.drillable:hover {
+  transform: translateY(-1px);
+}
+
+.motor-drive-analysis {
+  display: grid;
+  gap: 13px;
+}
+
+.motor-analysis-head,
+.motor-analysis-actions,
+.motor-analysis-scope,
+.motor-trend-head,
+.motor-trend-window {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.motor-analysis-head > div:first-child {
+  min-width: 0;
+}
+
+.motor-analysis-head h2 {
+  margin: 5px 0 4px;
+  font-size: .9rem;
+}
+
+.motor-analysis-head p,
+.motor-trend-head small,
+.motor-trend-window {
+  color: var(--ink-3);
+  font-size: .48rem;
+}
+
+.motor-analysis-actions {
+  flex: 0 0 auto;
+}
+
+.motor-analysis-scope {
+  justify-content: flex-start;
+  padding-top: 2px;
+  color: var(--ink-3);
+  font-size: .48rem;
+}
+
+.motor-analysis-scope.historical {
+  justify-content: space-between;
+  padding-top: 13px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.motor-analysis-scope .segmented {
+  margin-left: auto;
+}
+
+.motor-live-grid,
+.motor-history-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.motor-live-grid .metric-tile,
+.motor-history-grid .metric-tile {
+  min-height: 108px;
+  background: var(--surface-2);
+}
+
+.motor-trend-head {
+  align-items: flex-end;
+  padding-top: 2px;
+}
+
+.motor-trend-head > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.motor-trend-head strong {
+  color: var(--ink-2);
+  font-size: .62rem;
+}
+
+.motor-trend-window {
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
+.motor-drive-trend-canvas {
+  display: block;
+  width: 100%;
+  height: 245px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.motor-drive-trend-canvas.dragging {
+  cursor: grabbing;
+}
+
+.motor-trend-navigator {
+  margin-top: 0;
+}
+
+.motor-maintenance-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(240px, .75fr);
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.motor-maintenance-panel,
+.motor-recommendation-panel {
+  min-width: 0;
+}
+
+.motor-maintenance-table td {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.maintenance-recommendation {
+  display: grid;
+  gap: 10px;
+  min-height: 124px;
+  padding: 13px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 7px 7px 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent);
+}
+
+.maintenance-recommendation strong {
+  color: var(--ink-2);
+  font-size: .58rem;
+}
+
+.maintenance-recommendation span {
+  color: var(--ink-3);
+  font-size: .49rem;
+  line-height: 1.6;
+}
+
 .winch-card-head,
 .chamber-card-head,
 .speed-card-head,
@@ -5101,6 +5258,15 @@ select:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .motor-live-grid,
+  .motor-history-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .motor-maintenance-grid {
+    grid-template-columns: 1fr;
+  }
+
   .topbar {
     padding: 0 16px;
   }
@@ -5538,6 +5704,30 @@ select:focus-visible {
 
   .dispensing-filter-row {
     grid-template-columns: 1fr;
+  }
+
+  .motor-analysis-head,
+  .motor-analysis-actions,
+  .motor-analysis-scope.historical,
+  .motor-trend-head,
+  .motor-trend-window {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .motor-analysis-scope .segmented {
+    margin-left: 0;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  .motor-live-grid,
+  .motor-history-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .motor-drive-trend-canvas {
+    height: 210px;
   }
 }
 

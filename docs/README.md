@@ -10,12 +10,12 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Jetflow_v1.6.md` | 1.6 | Aktif | Checklist process global untuk context seluruh trend sensor batch Jetflow |
 | `machines/Machine_Concept_Calator_v1.1.md` | 1.1 | Aktif | Konsep Calator dengan multi-speed, template Bianco, Overfeed Out, dancing roller, chemical, output, dan quality |
 | `machines/Machine_Concept_Dryer_v1.0.md` | 1.0 | Baseline | Konsep pengeringan, speed, multi-chamber temperature, output, quality, dan implementasi Dryer |
-| `machines/Machine_Concept_Kalender_v1.5.md` | 1.5 | Aktif | Layout ringkas dan terstruktur untuk Live Sensor Measurements Kalender |
+| `machines/Machine_Concept_Kalender_v1.6.md` | 1.6 | Aktif | Analisa motor/drive dengan live, historical, trend, dan maintenance plan |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
 | `chemicals/Chemical_Dispensing_Calator_Concept_v1.2.md` | 1.2 | Aktif | Chemical Dispensing Calator berbasis request code, weighing, dan transaction log |
-| `dashboard/Dashboard_V1_Concept_v1.11.md` | 1.11 | Aktif | Workspace transaksi Chemical Dispensing Calator tanpa trend batch |
+| `dashboard/Dashboard_V1_Concept_v1.12.md` | 1.12 | Aktif | Click-to-analyze untuk motor drive dengan konteks maintenance |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
-| `releases/Frontend_V1.32.md` | 1.32 | Selesai | Chemical Dispensing Calator transaction log |
+| `releases/Frontend_V1.33.md` | 1.33 | Selesai | Motor & Drive Equipment Analysis Kalender |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
 ## Aturan pembaruan

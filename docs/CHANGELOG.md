@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.33 / Kalender Concept V1.6 / Dashboard Concept V1.12 — 15 Agustus 2026
+
+**Status:** Analisa Motor & Drive Equipment Kalender selesai
+
+### Ditambahkan
+
+- Klik motor untuk analisa equipment individual.
+- Pemisahan Live Now, Selected Range, historical trend, dan maintenance target plan.
+- Trend dengan pan/drag navigator serta pilihan RMS Amp, Voltage, dan kW.
+- Maintenance recommendation read-only.
+
+### Batasan
+
+- Data drive, runtime, dan maintenance masih simulated.
+
+---
+
 ## Frontend Dashboard V1.32 / Chemical Dispensing Calator Concept V1.2 / Dashboard Concept V1.11 — 15 Agustus 2026
 
 **Status:** Chemical Dispensing Calator transaction workspace selesai

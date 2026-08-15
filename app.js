@@ -64,6 +64,13 @@ const state = {
     mode: "all",
     status: "all",
   },
+  motorDrive: {
+    selected: null,
+    range: "8H",
+    metric: "amp",
+    viewStart: .72,
+    viewFraction: .28,
+  },
   batchInvestigation: {
     jetflow: { machineId: null, batch: null },
     calator: { machineId: null, batch: null },
@@ -1244,6 +1251,74 @@ function parameterConfigurationRows(rows) {
   return `<div class="parameter-config-wrap" tabindex="0" aria-label="Kalender parameter configuration"><table class="parameter-config-table"><thead><tr><th>Parameter</th><th>Configuration</th><th>Unit</th></tr></thead><tbody>${rows.map((row) => `<tr><td><strong>${row[0]}</strong></td><td class="mono">${row[1]}</td><td>${row[2]}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
+function kalenderMotorAssets() {
+  return [
+    ["KL-MTR-INLET", "Inlet", 28.6, 14.8, 36.0], ["KL-MTR-EXP-L", "Expander L", 24.8, 12.9, 34.0],
+    ["KL-MTR-EXP-R", "Expander R", 25.2, 13.1, 34.0], ["KL-MTR-UP-FELT", "Upper Felt", 31.4, 16.2, 42.0],
+    ["KL-MTR-LOW-FELT", "Lower Felt", 30.9, 15.9, 42.0], ["KL-MTR-COOL", "Cooling Belt", 18.6, 9.4, 28.0],
+    ["KL-MTR-CONVEYOR", "Conveyor Belt", 16.2, 8.1, 25.0], ["KL-MTR-PLAIT", "Plaiter", 27.8, 14.3, 36.0],
+    ["KL-MTR-TABLE", "Conveyor Table", 21.6, 11.1, 30.0], ["KL-MTR-UPDOWN", "Up Down Table", 14.8, 7.6, 22.0],
+  ].map(([id, name, amps, kw, hz], index) => ({ id, name, amps, kw, hz, voltage: 397 + index % 4 * 2, runtime: 842 + index * 17, pmRuntime: 1000, status: index === 8 ? "warning" : "running" }));
+}
+
+function motorDriveData(motor) {
+  const rangeHours = { "1H": 1, "8H": 8, "24H": 24, "7D": 168 }[state.motorDrive.range] || 8;
+  const count = 96;
+  const end = Date.now();
+  const start = end - rangeHours * 60 * 60 * 1000;
+  const phase = motor.name.length * .17;
+  const timestamps = Array.from({ length: count }, (_, index) => start + (end - start) * index / (count - 1));
+  const values = {
+    amp: timestamps.map((_, index) => motor.amps + Math.sin(index * .36 + phase) * motor.amps * .075 + Math.cos(index * .12) * .42),
+    voltage: timestamps.map((_, index) => motor.voltage + Math.sin(index * .22 + phase) * 3.6 + Math.cos(index * .13) * 1.4),
+    kw: timestamps.map((_, index) => motor.kw + Math.sin(index * .33 + phase) * motor.kw * .09 + Math.cos(index * .18) * .24),
+  };
+  const config = {
+    amp: { label: "RMS Current", unit: "A", color: "#078eaa" },
+    voltage: { label: "Voltage", unit: "V", color: "#8267c7" },
+    kw: { label: "Active Power", unit: "kW", color: "#d68b05" },
+  }[state.motorDrive.metric];
+  return { timestamps, values: values[state.motorDrive.metric], ...config };
+}
+
+function motorDriveDetailPanel(motor) {
+  const rangeLabel = { "1H": "Last 1 hour", "8H": "Last 8 hours", "24H": "Last 24 hours", "7D": "Last 7 days" }[state.motorDrive.range];
+  const runtime = ({ "1H": .9, "8H": 7.4, "24H": 20.8, "7D": 143.6 })[state.motorDrive.range];
+  const ranges = ["1H", "8H", "24H", "7D"].map((range) => `<button class="segment ${state.motorDrive.range === range ? "active" : ""}" data-motor-drive-range="${range}">${range}</button>`).join("");
+  const metrics = [["amp", "RMS Amp"], ["voltage", "Voltage"], ["kw", "kW"]].map(([key, label]) => `<button class="segment ${state.motorDrive.metric === key ? "active" : ""}" data-motor-drive-metric="${key}">${label}</button>`).join("");
+  const due = Math.max(0, motor.pmRuntime - motor.runtime);
+  return `<section class="card motor-drive-analysis" id="motor-drive-analysis">
+    <div class="motor-analysis-head"><div><span class="eyebrow">Motor & drive diagnostic</span><h2>${motor.name} · ${motor.id}</h2><p>Read-only analysis untuk kondisi drive, historical operation, dan target maintenance.</p></div><div class="motor-analysis-actions"><span class="data-pill ${motor.status === "warning" ? "warning" : "good"}">${motor.status === "warning" ? "CHECK CURRENT" : "RUNNING"}</span><button class="button ghost small" data-motor-drive-close>Close detail</button></div></div>
+    <div class="motor-analysis-scope"><span class="kpi-scope live">LIVE NOW</span><span>Nilai aktual drive saat ini</span></div>
+    <div class="motor-live-grid">
+      ${metricTile("RMS Current", liveValue(motor.amps, "A", .28, 1), `Limit ${motor.hz === 42 ? "34.0" : "32.0"} A`)}
+      ${metricTile("Voltage", liveValue(motor.voltage, "V", 1.2, 0), "Window 380–415 V")}
+      ${metricTile("Active Power", liveValue(motor.kw, "kW", .16, 1), `Drive ${motor.hz.toFixed(1)} Hz`)}
+      ${metricTile("Drive Frequency", liveValue(motor.hz, "Hz", .08, 1), "Command tracking good")}
+    </div>
+    <div class="motor-analysis-scope historical"><span class="kpi-scope historical">SELECTED RANGE</span><span>${rangeLabel}</span><div class="segmented">${ranges}</div></div>
+    <div class="motor-history-grid">
+      ${metricTile("Runtime", `${runtime.toFixed(1)}<small>h</small>`, "Running time")}
+      ${metricTile("Max RMS Amp", `${(motor.amps * 1.09).toFixed(1)}<small>A</small>`, "Peak within range")}
+      ${metricTile("Energy", `${(motor.kw * runtime * .88).toFixed(1)}<small>kWh</small>`, "Selected range")}
+      ${metricTile("Unplanned Stop", motor.status === "warning" ? "4.2<small>min</small>" : "0.0<small>min</small>", motor.status === "warning" ? "Review drive load" : "No event")}
+    </div>
+    <div class="motor-trend-head"><div><strong>Drive Historical Trend</strong><small>Drag chart atau navigator untuk menggeser waktu.</small></div><div class="segmented">${metrics}</div></div>
+    <div class="motor-trend-window"><span id="motor-trend-visible-label">Visible window</span><span>${rangeLabel}</span></div>
+    <canvas class="chart-canvas motor-drive-trend-canvas" id="motor-drive-trend" tabindex="0" aria-label="Motor drive historical trend ${motor.name}"></canvas>
+    <div class="trend-navigator motor-trend-navigator" id="motor-trend-navigator" role="slider" tabindex="0" aria-label="Posisi waktu motor historical"><div class="navigator-track"><div class="navigator-selection" id="motor-navigator-selection"><span></span><span></span></div></div></div>
+    <div class="motor-maintenance-grid">
+      ${panel("Maintenance Target Plan", "Target berbasis runtime, inspeksi, dan condition threshold", `<div class="table-wrap"><table class="data-table motor-maintenance-table"><thead><tr><th>Plan</th><th>Target</th><th>Current</th><th>Next Action</th><th>Status</th></tr></thead><tbody>
+        <tr><td>Preventive drive inspection</td><td class="mono">${motor.pmRuntime.toLocaleString()} runtime h</td><td class="mono">${motor.runtime.toLocaleString()} h</td><td>Due in ${due.toLocaleString()} runtime h</td><td><span class="data-pill ${due < 150 ? "warning" : "good"}">${due < 150 ? "Plan soon" : "On plan"}</span></td></tr>
+        <tr><td>RMS current verification</td><td class="mono">≤ ${motor.hz === 42 ? "34.0" : "32.0"} A</td><td class="mono">${motor.amps.toFixed(1)} A</td><td>Check each shift</td><td><span class="data-pill good">Normal</span></td></tr>
+        <tr><td>Drive cooling & terminal</td><td>Weekly inspection</td><td>Last check 3 days ago</td><td>Inspect fan, filter, terminal</td><td><span class="data-pill good">On plan</span></td></tr>
+        <tr><td>Bearing lubrication</td><td class="mono">Every 500 h</td><td class="mono">482 h since last</td><td>Plan within 18 h</td><td><span class="data-pill warning">Plan soon</span></td></tr>
+      </tbody></table></div>`, "", "motor-maintenance-panel")}
+      ${panel("Maintenance Recommendation", "Condition-based suggestion dari data drive", `<div class="maintenance-recommendation"><strong>${motor.status === "warning" ? "Review load profile before next production run" : "Maintain current preventive schedule"}</strong><span>${motor.status === "warning" ? "Current motor ini berada di atas baseline. Verifikasi mechanical load, alignment, belt/felt tension, dan terminal drive sebelum kondisi meningkat." : "Current, voltage, dan power masih berada pada window normal. Lanjutkan inspeksi cooling, terminal, dan lubrication sesuai target plan."}</span></div>`, "", "motor-recommendation-panel")}
+    </div>
+  </section>`;
+}
+
 function dryerDetailPage() {
   const machine = dryers.find((m) => m.id === state.selected.dryer) || dryers[0];
   const temps = Array.from({ length: machine.chambers }, (_, i) => ({ actual: 142 + i * 1.2 + (i === 4 ? -9 : 0), sp: 144 + i * 1.0 }));
@@ -1287,7 +1362,8 @@ function dryerDetailPage() {
 
 function kalenderDetailPage() {
   const machine = kalenders.find((m) => m.id === state.selected.kalender) || kalenders[0];
-  const motors = ["Inlet", "Expander L", "Expander R", "Upper Felt", "Lower Felt", "Cooling Belt", "Conveyor Belt", "Plaiter", "Conveyor Table", "Up Down Table"];
+  const motors = kalenderMotorAssets();
+  const selectedMotor = motors.find((motor) => motor.id === state.motorDrive.selected);
   return `
     ${processBreadcrumb("kalender", machine)}
     ${pageHead("kalender", selector(kalenders.filter((item) => item.area === machine.area), "kalender"))}
@@ -1332,7 +1408,8 @@ function kalenderDetailPage() {
         <div class="production-progress-foot"><span>Actual output <strong>3,264 m</strong></span><span>Remaining <strong>1,536 m</strong></span><span>Est. completion <strong>17:12</strong></span></div>
       </div>
     `)}
-    ${panel("Motor & Driven Equipment", "Status dari inlet sampai output table", `<div class="motor-grid">${motors.map((m, i) => `<div class="motor-card"><div class="motor-card-head"><strong>${m}</strong><i class="equipment-state ${i === 8 ? "warning" : ""}"></i></div><div class="card-reading">${(24 + i * 1.2).toFixed(1)}<small>Hz</small></div><div class="card-caption">${i === 8 ? "Current above baseline" : "Running · Good"}</div></div>`).join("")}</div>`)}
+    ${panel("Motor & Driven Equipment", "Klik equipment untuk membuka analisa drive, historical trend, dan maintenance plan", `<div class="motor-grid">${motors.map((motor) => `<div class="motor-card drillable ${state.motorDrive.selected === motor.id ? "selected" : ""}" data-motor-drive-target="${motor.id}" role="button" tabindex="0"><div class="motor-card-head"><strong>${motor.name}</strong><i class="equipment-state ${motor.status === "warning" ? "warning" : ""}"></i></div><div class="card-reading">${motor.hz.toFixed(1)}<small>Hz</small></div><div class="card-caption">${motor.amps.toFixed(1)} A · ${motor.kw.toFixed(1)} kW · ${motor.status === "warning" ? "Check current" : "Running"}</div></div>`).join("")}</div>`)}
+    ${selectedMotor ? motorDriveDetailPanel(selectedMotor) : ""}
     ${batchInvestigationPanel("kalender", machine)}
     ${batchTrendWorkspace("kalender", machine)}
     ${batchAbnormalLog("kalender", machine)}
@@ -1973,6 +2050,36 @@ function bindPageEvents() {
       renderPage({ preserveScroll: true });
     });
   });
+  document.querySelectorAll("[data-motor-drive-target]").forEach((card) => {
+    const openMotorDrive = () => {
+      state.motorDrive.selected = card.dataset.motorDriveTarget;
+      renderPage({ preserveScroll: true });
+    };
+    card.addEventListener("click", openMotorDrive);
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openMotorDrive(); }
+    });
+  });
+  document.querySelectorAll("[data-motor-drive-range]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.motorDrive.range = button.dataset.motorDriveRange;
+      state.motorDrive.viewFraction = .28;
+      state.motorDrive.viewStart = .72;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-motor-drive-metric]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.motorDrive.metric = button.dataset.motorDriveMetric;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-motor-drive-close]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.motorDrive.selected = null;
+      renderPage({ preserveScroll: true });
+    });
+  });
   document.querySelectorAll("[data-history-range]").forEach((button) => {
     button.addEventListener("click", () => selectHistoryRange(button.dataset.historyRange));
   });
@@ -2177,6 +2284,10 @@ function initPageCharts() {
   };
   charts[state.page]?.();
   if (state.drill[state.page]?.machine && sensorTrendConfig[state.page]) drawSensorComparisonTrends(state.page);
+  if (state.page === "kalender" && state.motorDrive.selected) {
+    drawMotorDriveTrend();
+    bindMotorDrivePan();
+  }
 }
 
 function drawSensorComparisonTrends(type) {
@@ -2211,6 +2322,114 @@ function drawSensorComparisonTrends(type) {
         ? { day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }
         : { hour: "2-digit", minute: "2-digit", hour12: false }),
     });
+  });
+}
+
+function drawMotorDriveTrend() {
+  const motor = kalenderMotorAssets().find((item) => item.id === state.motorDrive.selected);
+  if (!motor) return;
+  const trend = motorDriveData(motor);
+  const fraction = state.motorDrive.viewFraction;
+  const start = Math.round(state.motorDrive.viewStart * (trend.values.length - 1));
+  const end = Math.min(trend.values.length, start + Math.max(12, Math.round(trend.values.length * fraction)));
+  const values = trend.values.slice(start, end);
+  const timestamps = trend.timestamps.slice(start, end);
+  drawLineChart("motor-drive-trend", [{ data: values, color: trend.color, fill: true }], timestamps, {
+    labelFormatter: (timestamp) => new Date(timestamp).toLocaleTimeString("id-ID", state.motorDrive.range === "7D"
+      ? { day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }
+      : { hour: "2-digit", minute: "2-digit", hour12: false }),
+  });
+  const visibleStart = timestamps[0];
+  const visibleEnd = timestamps.at(-1);
+  const label = document.getElementById("motor-trend-visible-label");
+  if (label && visibleStart && visibleEnd) label.textContent = `${trend.label} · ${new Date(visibleStart).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })} — ${new Date(visibleEnd).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })} · ${trend.unit}`;
+  const selection = document.getElementById("motor-navigator-selection");
+  if (selection) {
+    selection.style.left = `${state.motorDrive.viewStart * 100}%`;
+    selection.style.width = `${state.motorDrive.viewFraction * 100}%`;
+  }
+  const navigator = document.getElementById("motor-trend-navigator");
+  if (navigator) {
+    navigator.setAttribute("aria-valuenow", String(Math.round(state.motorDrive.viewStart * 100)));
+    navigator.setAttribute("aria-valuetext", `${trend.label} visible range`);
+  }
+}
+
+function shiftMotorDriveTrend(delta) {
+  state.motorDrive.viewStart = clamp(state.motorDrive.viewStart + delta, 0, 1 - state.motorDrive.viewFraction);
+  drawMotorDriveTrend();
+}
+
+function bindMotorDrivePan() {
+  const canvas = document.getElementById("motor-drive-trend");
+  const navigator = document.getElementById("motor-trend-navigator");
+  const selection = document.getElementById("motor-navigator-selection");
+  if (!canvas || !navigator || !selection) return;
+  let canvasPointer = null;
+  let canvasOriginX = 0;
+  let canvasOriginStart = 0;
+  canvas.addEventListener("pointerdown", (event) => {
+    canvasPointer = event.pointerId;
+    canvasOriginX = event.clientX;
+    canvasOriginStart = state.motorDrive.viewStart;
+    canvas.setPointerCapture(event.pointerId);
+    canvas.classList.add("dragging");
+  });
+  canvas.addEventListener("pointermove", (event) => {
+    if (canvasPointer !== event.pointerId) return;
+    const width = Math.max(1, canvas.getBoundingClientRect().width);
+    const delta = (event.clientX - canvasOriginX) / width * state.motorDrive.viewFraction;
+    state.motorDrive.viewStart = clamp(canvasOriginStart - delta, 0, 1 - state.motorDrive.viewFraction);
+    drawMotorDriveTrend();
+  });
+  const stopCanvasDrag = (event) => {
+    if (canvasPointer !== event.pointerId) return;
+    canvasPointer = null;
+    canvas.classList.remove("dragging");
+  };
+  canvas.addEventListener("pointerup", stopCanvasDrag);
+  canvas.addEventListener("pointercancel", stopCanvasDrag);
+  canvas.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    shiftMotorDriveTrend(Math.sign(event.deltaX || event.deltaY) * state.motorDrive.viewFraction * .08);
+  }, { passive: false });
+  canvas.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    shiftMotorDriveTrend((event.key === "ArrowLeft" ? -1 : 1) * state.motorDrive.viewFraction * .12);
+  });
+  let navigatorPointer = null;
+  let navigatorOriginX = 0;
+  let navigatorOriginStart = 0;
+  navigator.addEventListener("pointerdown", (event) => {
+    const rect = navigator.getBoundingClientRect();
+    if (!event.target.closest(".navigator-selection")) {
+      state.motorDrive.viewStart = clamp((event.clientX - rect.left) / Math.max(1, rect.width) - state.motorDrive.viewFraction / 2, 0, 1 - state.motorDrive.viewFraction);
+      drawMotorDriveTrend();
+    }
+    navigatorPointer = event.pointerId;
+    navigatorOriginX = event.clientX;
+    navigatorOriginStart = state.motorDrive.viewStart;
+    navigator.setPointerCapture(event.pointerId);
+    navigator.classList.add("dragging");
+  });
+  navigator.addEventListener("pointermove", (event) => {
+    if (navigatorPointer !== event.pointerId) return;
+    const width = Math.max(1, navigator.getBoundingClientRect().width);
+    state.motorDrive.viewStart = clamp(navigatorOriginStart + (event.clientX - navigatorOriginX) / width, 0, 1 - state.motorDrive.viewFraction);
+    drawMotorDriveTrend();
+  });
+  const stopNavigatorDrag = (event) => {
+    if (navigatorPointer !== event.pointerId) return;
+    navigatorPointer = null;
+    navigator.classList.remove("dragging");
+  };
+  navigator.addEventListener("pointerup", stopNavigatorDrag);
+  navigator.addEventListener("pointercancel", stopNavigatorDrag);
+  navigator.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    shiftMotorDriveTrend((event.key === "ArrowLeft" ? -1 : 1) * state.motorDrive.viewFraction * .12);
   });
 }
 
