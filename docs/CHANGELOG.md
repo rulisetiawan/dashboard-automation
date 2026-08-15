@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.31 / Kalender Concept V1.5 / Dashboard Concept V1.10 — 15 Agustus 2026
+
+**Status:** Layout Live Sensor Measurements Kalender dirapikan
+
+### Diubah
+
+- Grid dua kolom untuk enam kartu sensor Kalender.
+- Panel mengikuti kontennya sendiri tanpa area kosong berlebih.
+- Label, status, nilai, dan target dipisahkan lebih jelas.
+
+---
+
 ## Frontend Dashboard V1.30 / Kalender Concept V1.4 / Dashboard Concept V1.9 — 15 Agustus 2026
 
 **Status:** Kalender production dan delivery context selesai

@@ -1294,7 +1294,7 @@ function kalenderDetailPage() {
           ${metricTile("Dancing roller", liveValue(53.8, "%", .22, 1), "Center 50.0%")}
           ${metricTile("Fabric width", liveValue(181.2, "cm", .12, 1), "Target 181.0 cm")}
         </div>
-      `)}
+      `, "", "live-sensor-panel")}
     </section>
     ${panel("Production & Delivery Detail", "Order, target finishing, dan progress proses mesin berjalan", `
       <div class="process-detail-grid">

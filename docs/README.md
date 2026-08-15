@@ -10,12 +10,12 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Jetflow_v1.6.md` | 1.6 | Aktif | Checklist process global untuk context seluruh trend sensor batch Jetflow |
 | `machines/Machine_Concept_Calator_v1.1.md` | 1.1 | Aktif | Konsep Calator dengan multi-speed, template Bianco, Overfeed Out, dancing roller, chemical, output, dan quality |
 | `machines/Machine_Concept_Dryer_v1.0.md` | 1.0 | Baseline | Konsep pengeringan, speed, multi-chamber temperature, output, quality, dan implementasi Dryer |
-| `machines/Machine_Concept_Kalender_v1.4.md` | 1.4 | Aktif | Production, delivery, live sensor, dan progress output pada detail Kalender |
+| `machines/Machine_Concept_Kalender_v1.5.md` | 1.5 | Aktif | Layout ringkas dan terstruktur untuk Live Sensor Measurements Kalender |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
 | `chemicals/Chemical_Dispensing_Transfer_Concept_v1.1.md` | 1.1 | Aktif | Konsep tujuh varian chemical dan lima dispensing pada area Depan, Belakang, serta Timur |
-| `dashboard/Dashboard_V1_Concept_v1.9.md` | 1.9 | Aktif | Konteks production order dan delivery tanpa duplikasi data pada detail Kalender |
+| `dashboard/Dashboard_V1_Concept_v1.10.md` | 1.10 | Aktif | Hierarki kartu sensor ringkas tanpa peregangan panel yang tidak perlu |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
-| `releases/Frontend_V1.30.md` | 1.30 | Selesai | Kalender production, delivery, dan layout sensor tanpa duplikasi |
+| `releases/Frontend_V1.31.md` | 1.31 | Selesai | Perapihan Live Sensor Measurements Kalender |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
 ## Aturan pembaruan
