@@ -58,6 +58,12 @@ const state = {
   jetflowProgram: {
     enabled: [],
   },
+  chemicalLog: {
+    range: "24H",
+    variant: "all",
+    mode: "all",
+    status: "all",
+  },
   batchInvestigation: {
     jetflow: { machineId: null, batch: null },
     calator: { machineId: null, batch: null },
@@ -250,6 +256,21 @@ const chemicals = [
   ["CH-05", "Fixing Agent", 740, 900, "#d68b05"],
   ["CH-06", "Neutralizer", 510, 700, "#db6d48"],
   ["CH-07", "Special Finish", 325, 600, "#c55f92"],
+];
+
+const chemicalDispensingLogs = [
+  { hoursAgo: .3, time: "15 Aug · 10:42", request: "REQ-CL-260815-041", calator: "CL-DPN-01", code: "CH-02", variant: "Softener B", target: "126.0 kg", actual: "126.2 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 2 / 2" },
+  { hoursAgo: .8, time: "15 Aug · 10:11", request: "REQ-CL-260815-040", calator: "CL-BLK-04", code: "CH-01", variant: "Softener A", target: "184.0 kg", actual: "183.7 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 1 / 1" },
+  { hoursAgo: 1.2, time: "15 Aug · 09:47", request: "REQ-CL-260815-039", calator: "CL-TMR-03", code: "CH-05", variant: "Fixing Agent", target: "74.0 kg", actual: "74.0 kg", mode: "Manual", status: "Completed", operator: "A. Raka", stage: "Manual verified" },
+  { hoursAgo: 1.8, time: "15 Aug · 09:12", request: "REQ-CL-260815-038", calator: "CL-BLK-02", code: "CH-03", variant: "Washing Agent", target: "112.0 kg", actual: "109.6 kg", mode: "Automatic", status: "Hold", operator: "Auto PLC", stage: "Weighing 2 / 3" },
+  { hoursAgo: 2.4, time: "15 Aug · 08:36", request: "REQ-CL-260815-037", calator: "CL-DPN-02", code: "CH-04", variant: "Anti-static", target: "48.0 kg", actual: "48.1 kg", mode: "Manual", status: "Completed", operator: "S. Deni", stage: "Manual verified" },
+  { hoursAgo: 3.1, time: "15 Aug · 07:54", request: "REQ-CL-260815-036", calator: "CL-TMR-06", code: "CH-06", variant: "Neutralizer", target: "62.0 kg", actual: "—", mode: "Automatic", status: "Weighing", operator: "Auto PLC", stage: "Weighing 1 / 2" },
+  { hoursAgo: 4.3, time: "15 Aug · 06:42", request: "REQ-CL-260815-035", calator: "CL-BLK-07", code: "CH-07", variant: "Special Finish", target: "38.0 kg", actual: "38.2 kg", mode: "Manual", status: "Completed", operator: "N. Ilham", stage: "Manual verified" },
+  { hoursAgo: 6.8, time: "15 Aug · 04:14", request: "REQ-CL-260815-034", calator: "CL-TMR-01", code: "CH-02", variant: "Softener B", target: "118.0 kg", actual: "117.6 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 2 / 2" },
+  { hoursAgo: 9.2, time: "15 Aug · 01:48", request: "REQ-CL-260815-033", calator: "CL-BLK-09", code: "CH-01", variant: "Softener A", target: "168.0 kg", actual: "167.9 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 1 / 1" },
+  { hoursAgo: 13.4, time: "14 Aug · 21:36", request: "REQ-CL-260814-106", calator: "CL-DPN-01", code: "CH-03", variant: "Washing Agent", target: "104.0 kg", actual: "100.4 kg", mode: "Manual", status: "Hold", operator: "A. Raka", stage: "Manual re-weigh" },
+  { hoursAgo: 18.6, time: "14 Aug · 16:24", request: "REQ-CL-260814-105", calator: "CL-TMR-04", code: "CH-05", variant: "Fixing Agent", target: "71.0 kg", actual: "71.3 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 1 / 1" },
+  { hoursAgo: 28.2, time: "14 Aug · 06:47", request: "REQ-CL-260814-097", calator: "CL-BLK-03", code: "CH-06", variant: "Neutralizer", target: "58.0 kg", actual: "57.7 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 2 / 2" },
 ];
 
 function statusPill(value) {
@@ -1548,42 +1569,50 @@ function energyTable() {
   return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Machine</th><th>Process Run</th><th>Energy</th><th>Intensity</th><th>vs Baseline</th><th>Data</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r[0]}</td><td class="mono">${r[1]}</td><td class="mono">${r[2]}</td><td class="mono">${r[3]}</td><td class="mono">${r[4]}</td><td><span class="data-pill ${r[5] === "Good" ? "good" : "warning"}">${r[5]}</span></td></tr>`).join("")}</tbody></table></div>`;
 }
 
+function chemicalDispensingLogPanel() {
+  const rangeHours = { "8H": 8, "24H": 24, "7D": 168 };
+  const visible = chemicalDispensingLogs.filter((item) => item.hoursAgo <= rangeHours[state.chemicalLog.range]
+    && (state.chemicalLog.variant === "all" || item.code === state.chemicalLog.variant)
+    && (state.chemicalLog.mode === "all" || item.mode === state.chemicalLog.mode)
+    && (state.chemicalLog.status === "all" || item.status === state.chemicalLog.status));
+  const option = (value, label, selected) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
+  return panel("Dispensing Request Log", "Track request code, proses penimbangan, dan transfer chemical ke Calator", `
+    <div class="dispensing-filter-row">
+      <label>Time range<select class="select-control" data-chemical-log-filter="range">${option("8H", "Last 8 hours", state.chemicalLog.range)}${option("24H", "Last 24 hours", state.chemicalLog.range)}${option("7D", "Last 7 days", state.chemicalLog.range)}</select></label>
+      <label>Chemical variant<select class="select-control" data-chemical-log-filter="variant">${option("all", "All variants", state.chemicalLog.variant)}${chemicals.map((chemical) => option(chemical[0], `${chemical[0]} · ${chemical[1]}`, state.chemicalLog.variant)).join("")}</select></label>
+      <label>Dispensing type<select class="select-control" data-chemical-log-filter="mode">${option("all", "Manual + Automatic", state.chemicalLog.mode)}${option("Manual", "Manual", state.chemicalLog.mode)}${option("Automatic", "Automatic", state.chemicalLog.mode)}</select></label>
+      <label>Status<select class="select-control" data-chemical-log-filter="status">${option("all", "All status", state.chemicalLog.status)}${option("Completed", "Completed", state.chemicalLog.status)}${option("Weighing", "Weighing", state.chemicalLog.status)}${option("Hold", "Hold", state.chemicalLog.status)}</select></label>
+    </div>
+    <div class="dispensing-log-table-wrap" tabindex="0" aria-label="Chemical dispensing request log"><table class="data-table dispensing-log-table"><thead><tr><th>Time</th><th>Request Code</th><th>Calator</th><th>Chemical Variant</th><th>Target</th><th>Actual</th><th>Type</th><th>Weighing Process</th><th>Status</th><th>Operator / Source</th></tr></thead><tbody>${visible.map((item) => {
+      const tone = item.status === "Completed" ? "good" : item.status === "Hold" ? "warning" : "neutral";
+      return `<tr><td class="mono">${item.time}</td><td class="mono"><strong>${item.request}</strong></td><td>${item.calator}</td><td><strong>${item.code}</strong> · ${item.variant}</td><td class="mono">${item.target}</td><td class="mono">${item.actual}</td><td><span class="data-pill ${item.mode === "Automatic" ? "good" : "neutral"}">${item.mode}</span></td><td>${item.stage}</td><td><span class="data-pill ${tone}">${item.status}</span></td><td>${item.operator}</td></tr>`;
+    }).join("") || `<tr><td colspan="10" class="dispensing-empty-row">Tidak ada transaksi sesuai filter.</td></tr>`}</tbody></table></div>
+    <div class="dispensing-log-foot"><strong>${visible.length}</strong> transaksi ditemukan · data penimbangan dapat ditelusuri per request code.</div>
+  `, `<span class="data-pill neutral">CALATOR DISPENSING</span>`, "dispensing-log-panel");
+}
+
+function chemicalVariantSummaryTable() {
+  return panel("Chemical Variant Summary", "Akumulasi hari ini per varian untuk Chemical Dispensing Calator", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Code</th><th>Chemical Variant</th><th>Dispensed Today</th><th>Daily Forecast</th><th>Forecast Usage</th><th>Availability</th></tr></thead><tbody>${chemicals.map((chemical) => {
+    const pct = Math.round(chemical[2] / chemical[3] * 100);
+    return `<tr><td class="mono"><strong>${chemical[0]}</strong></td><td>${chemical[1]}</td><td class="mono">${chemical[2].toLocaleString()} kg</td><td class="mono">${chemical[3].toLocaleString()} kg</td><td><div class="inline-progress"><i style="width:${pct}%;background:${chemical[4]}"></i></div><span class="mono">${pct}%</span></td><td><span class="data-pill good">Available</span></td></tr>`;
+  }).join("")}</tbody></table></div>`, "", "chemical-summary-panel");
+}
+
 function chemicalDetailPage() {
   const machine = dispensers.find((item) => item.id === state.selected.chemical) || dispensers[0];
-  const transactions = [
-    ["TR-28419", "CH-02", "CL-B01", "184.0 kg", "182.4 kg", "P-04", "Completed"],
-    ["TR-28420", "CH-01", "CL-02", "128.0 kg", "82.6 kg", "P-02", "Transfer"],
-    ["TR-28421", "CH-05", "CL-01", "94.0 kg", "—", "P-05", "Queued"],
-    ["TR-28418", "CH-03", "CL-B02", "110.0 kg", "108.1 kg", "P-03", "Partial"],
-  ];
   return `
     ${processBreadcrumb("chemical", machine)}
     ${pageHead("chemical", selector(dispensers.filter((item) => item.area === machine.area), "chemical"))}
-    ${machineHero(machine, "DSP", `${machine.areaLabel} · 7 chemical variants · Calator destination group`)}
+    ${machineHero(machine, "DSP", `${machine.areaLabel} · Chemical Dispensing Calator · 7 variants`)}
     ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
-      ${kpi("Usage Today", "6,115", "kg", "CH", "<strong>81.5%</strong>of daily forecast")}
-      ${kpi("Active Transfers", "1", "route", "TR", "<strong>CH-01 → CL-02</strong>· 64.5%")}
-      ${kpi("Request Queue", "2", "requests", "RQ", "<strong>Avg wait 02:14</strong>")}
-      ${kpi("Usage Variance", "1.8", "%", "VR", "<strong>Within ±3%</strong>tolerance", "success")}
+      ${kpi("Active Requests", "2", "requests", "RQ", "<strong>1 weighing · 1 hold</strong>")}
+      ${kpi("Completed Today", "8", "requests", "CP", "<strong>Last completion 10:42</strong>", "success")}
+      ${kpi("Total Dispensed", "1,023", "kg", "CH", "<strong>24-hour scope</strong>· all variants")}
+      ${kpi("Automatic Requests", "67", "%", "AU", "<strong>8 automatic</strong>· 4 manual")}
     </section>
-    ${panel("Seven Chemical Variants", "Daily usage, forecast, dan availability", `<div class="chemical-grid">${chemicals.map((c) => {
-      const pct = Math.round(c[2] / c[3] * 100);
-      return `<div class="chemical-card"><div class="chemical-card-head"><strong>${c[0]} · ${c[1]}</strong><i class="equipment-state"></i></div><div class="card-reading">${c[2].toLocaleString()}<small>kg</small></div><div class="card-caption">${pct}% of ${c[3].toLocaleString()} kg forecast</div><div class="mini-bar"><span style="width:${pct}%;background:${c[4]}"></span></div></div>`;
-    }).join("")}</div>`)}
-    ${panel("Transfer Route", "Current source-to-Calator path", `
-      <div class="utility-tree">
-        <div class="utility-node"><div class="utility-name"><span>TK</span><strong>CH-01 Source Tank</strong></div><span class="utility-reading">68.4%</span>${statusPill("running")}</div>
-        <div class="utility-node depth-1"><div class="utility-name"><span>DS</span><strong>Dispensing Unit 01</strong></div><span class="utility-reading">82.6 / 128 kg</span>${statusPill("running")}</div>
-        <div class="utility-node depth-2"><div class="utility-name"><span>PP</span><strong>Pipe Route P-02</strong></div><span class="utility-reading">42.8 kg/min</span>${statusPill("running")}</div>
-        <div class="utility-node depth-3"><div class="utility-name"><span>CL</span><strong>Calator 02</strong></div><span class="utility-reading">Destination</span>${statusPill("running")}</div>
-      </div>
-    `)}
-    ${panel("Daily Usage by Variant", "Accumulated chemical usage · kg", `<div class="chart-container production-bar-chart"><canvas id="chemical-chart" class="chart-canvas"></canvas></div>`)}
-    ${panel("Dispensing Transactions", "Request, target, actual, route, dan transfer status", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Request</th><th>Chemical</th><th>Destination</th><th>Target</th><th>Actual</th><th>Route</th><th>Status</th></tr></thead><tbody>${transactions.map((r) => `<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="mono">${r[3]}</td><td class="mono">${r[4]}</td><td class="mono">${r[5]}</td><td><span class="data-pill ${r[6] === "Completed" ? "good" : r[6] === "Partial" ? "warning" : "neutral"}">${r[6]}</span></td></tr>`).join("")}</tbody></table></div>`)}
-    ${batchInvestigationPanel("chemical", machine)}
-    ${batchTrendWorkspace("chemical", machine)}
-    ${batchAbnormalLog("chemical", machine)}
+    ${chemicalDispensingLogPanel()}
+    ${chemicalVariantSummaryTable()}
   `;
 }
 
@@ -1935,6 +1964,12 @@ function bindPageEvents() {
   document.querySelectorAll("[data-sensor-range]").forEach((button) => {
     button.addEventListener("click", () => {
       state.sensorTrend.range = button.dataset.sensorRange;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-chemical-log-filter]").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.chemicalLog[select.dataset.chemicalLogFilter] = select.value;
       renderPage({ preserveScroll: true });
     });
   });

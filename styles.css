@@ -1899,6 +1899,91 @@ select:focus-visible {
   background: rgba(7, 142, 170, 0.025);
 }
 
+.dispensing-filter-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface-2);
+}
+
+.dispensing-filter-row label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--ink-3);
+  font-size: .42rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.dispensing-filter-row .select-control {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: .53rem;
+  text-transform: none;
+}
+
+.dispensing-log-table-wrap {
+  max-height: 390px;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  scrollbar-gutter: stable;
+}
+
+.dispensing-log-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+}
+
+.dispensing-log-table td {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.dispensing-empty-row {
+  padding: 28px !important;
+  color: var(--ink-3) !important;
+  text-align: center;
+}
+
+.dispensing-log-foot {
+  margin-top: 9px;
+  color: var(--ink-3);
+  font-size: .46rem;
+}
+
+.dispensing-log-foot strong {
+  color: var(--accent-dark);
+  font-family: var(--font-data);
+}
+
+.inline-progress {
+  display: inline-block;
+  width: 76px;
+  height: 5px;
+  margin-right: 6px;
+  overflow: hidden;
+  border-radius: 5px;
+  vertical-align: middle;
+  background: var(--surface-3);
+}
+
+.inline-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
 .data-table .mono,
 .mono {
   color: var(--ink);
@@ -5012,6 +5097,10 @@ select:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .dispensing-filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .topbar {
     padding: 0 16px;
   }
@@ -5445,6 +5534,10 @@ select:focus-visible {
 
   .production-progress-foot {
     gap: 5px;
+  }
+
+  .dispensing-filter-row {
+    grid-template-columns: 1fr;
   }
 }
 

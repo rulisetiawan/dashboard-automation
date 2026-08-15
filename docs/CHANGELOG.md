@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.32 / Chemical Dispensing Calator Concept V1.2 / Dashboard Concept V1.11 — 15 Agustus 2026
+
+**Status:** Chemical Dispensing Calator transaction workspace selesai
+
+### Ditambahkan
+
+- Log transaksi request–weighing–transfer dalam bentuk tabel.
+- Filter waktu, varian, mode Manual/Automatic, dan status.
+- Chemical Variant Summary dalam format tabel.
+
+### Dihapus
+
+- Batch trend dan batch abnormality workspace dari detail Chemical Dispensing Calator.
+
+### Batasan
+
+- Data transaction masih simulated; Dye Kitchen Jetflow belum termasuk scope halaman ini.
+
+---
+
 ## Frontend Dashboard V1.31 / Kalender Concept V1.5 / Dashboard Concept V1.10 — 15 Agustus 2026
 
 **Status:** Layout Live Sensor Measurements Kalender dirapikan

@@ -12,10 +12,10 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Dryer_v1.0.md` | 1.0 | Baseline | Konsep pengeringan, speed, multi-chamber temperature, output, quality, dan implementasi Dryer |
 | `machines/Machine_Concept_Kalender_v1.5.md` | 1.5 | Aktif | Layout ringkas dan terstruktur untuk Live Sensor Measurements Kalender |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
-| `chemicals/Chemical_Dispensing_Transfer_Concept_v1.1.md` | 1.1 | Aktif | Konsep tujuh varian chemical dan lima dispensing pada area Depan, Belakang, serta Timur |
-| `dashboard/Dashboard_V1_Concept_v1.10.md` | 1.10 | Aktif | Hierarki kartu sensor ringkas tanpa peregangan panel yang tidak perlu |
+| `chemicals/Chemical_Dispensing_Calator_Concept_v1.2.md` | 1.2 | Aktif | Chemical Dispensing Calator berbasis request code, weighing, dan transaction log |
+| `dashboard/Dashboard_V1_Concept_v1.11.md` | 1.11 | Aktif | Workspace transaksi Chemical Dispensing Calator tanpa trend batch |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
-| `releases/Frontend_V1.31.md` | 1.31 | Selesai | Perapihan Live Sensor Measurements Kalender |
+| `releases/Frontend_V1.32.md` | 1.32 | Selesai | Chemical Dispensing Calator transaction log |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
 ## Aturan pembaruan
