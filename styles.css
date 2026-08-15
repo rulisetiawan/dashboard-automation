@@ -3534,9 +3534,15 @@ select:focus-visible {
 }
 
 .compact-stat {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 145px;
+}
+
+.compact-stat > span {
+  display: grid;
+  gap: 2px;
 }
 
 .compact-stat small {
@@ -3544,6 +3550,14 @@ select:focus-visible {
   font-family: inherit;
   font-size: .8em;
   font-weight: 700;
+}
+
+.compact-stat b,
+.compact-stat strong {
+  color: var(--ink-2);
+  font-size: 1em;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .phase-name {
@@ -3667,15 +3681,15 @@ select:focus-visible {
 
 .motor-log-table th,
 .motor-log-table td {
-  padding-top: 8px;
-  padding-bottom: 8px;
-  font-size: .44rem;
-  white-space: nowrap;
+  padding: 8px 9px;
+  font-size: .46rem;
+  vertical-align: middle;
+  white-space: normal;
 }
 
 .motor-log-table th:first-child,
 .motor-log-table td:first-child {
-  width: 14%;
+  width: 16%;
 }
 
 .motor-log-table th:nth-child(2),
@@ -3684,18 +3698,44 @@ select:focus-visible {
 .motor-log-table td:nth-child(2),
 .motor-log-table td:nth-child(3),
 .motor-log-table td:nth-child(4) {
-  width: 10%;
+  width: 13%;
 }
 
 .phase-cell {
   display: grid;
-  gap: 2px;
+  gap: 5px;
+  min-width: 0;
+}
+
+.phase-cell > span:not(.data-pill) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
 }
 
 .phase-cell small {
   color: var(--ink-3);
+  font-size: .86em;
+}
+
+.phase-cell strong,
+.phase-cell b {
+  color: var(--ink-2);
   font-family: var(--font-data);
-  font-size: .92em;
+  font-size: 1em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.phase-cell b {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.quality-cell {
+  align-content: center;
+  justify-items: start;
 }
 
 .motor-log-foot {
@@ -6409,6 +6449,19 @@ select:focus-visible {
 
   .motor-log-table td:first-child {
     grid-column: 1 / -1;
+  }
+
+  .motor-log-table .phase-cell {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .motor-log-table .phase-cell::before {
+    grid-column: 1 / -1;
+  }
+
+  .motor-log-table .phase-cell > span:not(.data-pill) {
+    display: grid;
+    gap: 2px;
   }
 
   .motor-analysis-scope .segmented {

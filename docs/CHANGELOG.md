@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.40 / Kalender Concept V1.11 / Dashboard Concept V1.19 — 15 Agustus 2026
+
+**Status:** Tabel Motor & Drive grouped dirapikan
+
+### Ditambahkan
+
+- Tujuh kelompok kolom: timestamp, R, S, T, load, drive, dan quality.
+- Current serta voltage dalam satu sel fase.
+- Pemisahan visual untuk membantu scan troubleshooting.
+
+---
+
 ## Frontend Dashboard V1.39 / Kalender Concept V1.10 / Dashboard Concept V1.18 — 15 Agustus 2026
 
 **Status:** Layout tabel Motor & Drive dirapikan
