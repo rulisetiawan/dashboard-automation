@@ -4,6 +4,28 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.23 / Plant Utility Concept V1.1 — 15 Agustus 2026
+
+**Status:** Machine power meter area-to-machine drill-down selesai
+
+### Ditambahkan
+
+- Panel Machine Electrical Consumption pada Utilities.
+- Pie energi per area/lane untuk kelompok Jetflow, Calator, Dryer, Kalender, dan Dispensing.
+- Ranking power meter mesin yang mengikuti area terpilih.
+- Detail energy, actual demand, load, power factor, voltage, dan meter data status.
+- Navigasi dari meter terpilih menuju detail mesin.
+
+### Dipertahankan
+
+- Mapping pie Electrical Cubical, MDP, dan SDP tetap menjadi layer distribusi upstream.
+
+### Batasan
+
+- Nilai meter dan design coverage masih simulated; mapping commissioning aktual belum tersedia.
+
+---
+
 ## Frontend Dashboard V1.22 / Dashboard Concept V1.2 — 15 Agustus 2026
 
 **Status:** Full-width Recent Batches table selesai

@@ -2802,7 +2802,8 @@ select:focus-visible {
   justify-self: center;
 }
 
-#electrical-pie-chart {
+#electrical-pie-chart,
+#machine-power-area-chart {
   display: block;
   width: 100%;
   height: 100%;
@@ -3096,6 +3097,195 @@ select:focus-visible {
 .electrical-history-button {
   width: 100%;
   margin-top: 14px;
+}
+
+.machine-power-controls {
+  display: grid;
+  min-width: min(560px, 52%);
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.machine-power-controls label {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.machine-power-controls label > span {
+  color: var(--ink-3);
+  font-size: 0.48rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.machine-power-controls .select-control {
+  width: 100%;
+}
+
+.machine-power-ranking-panel {
+  padding: 14px;
+}
+
+.machine-power-ranking-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.machine-power-ranking-head > div {
+  min-width: 0;
+}
+
+.machine-power-ranking-head span:first-child {
+  color: var(--primary);
+  font-size: 0.45rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.machine-power-ranking-head h3 {
+  margin: 4px 0 2px;
+  font-size: 0.72rem;
+}
+
+.machine-power-ranking-head p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.46rem;
+}
+
+.machine-power-rank-list {
+  display: grid;
+  max-height: 225px;
+  gap: 4px;
+  margin-top: 9px;
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-gutter: stable;
+}
+
+.machine-power-rank-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 72px 64px;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.machine-power-rank-row:hover,
+.machine-power-rank-row:focus-visible,
+.machine-power-rank-row.active {
+  border-color: rgba(7, 142, 170, 0.28);
+  background: var(--primary-soft);
+  outline: none;
+}
+
+.machine-power-rank-row.active {
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.machine-power-rank-row > span:first-child {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--surface-3);
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: 0.45rem;
+}
+
+.machine-power-rank-row > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.machine-power-rank-row strong,
+.machine-power-rank-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.machine-power-rank-row strong {
+  font-family: var(--font-data);
+  font-size: 0.5rem;
+}
+
+.machine-power-rank-row small {
+  color: var(--ink-3);
+  font-size: 0.42rem;
+  text-transform: capitalize;
+}
+
+.machine-power-rank-row b,
+.machine-power-rank-row em {
+  font-family: var(--font-data);
+  font-size: 0.47rem;
+  font-style: normal;
+  font-weight: 500;
+  text-align: right;
+}
+
+.machine-power-rank-row b small {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.38rem;
+}
+
+.machine-power-rank-row em {
+  color: var(--ink-3);
+}
+
+.machine-meter-detail {
+  margin-top: 11px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.machine-meter-grid {
+  margin-top: 10px;
+}
+
+.machine-power-coverage {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--ink-3);
+  font-size: 0.45rem;
+}
+
+.machine-power-coverage strong {
+  color: var(--success);
+  font-family: var(--font-data);
+  font-size: 0.49rem;
+}
+
+.machine-power-coverage small {
+  color: var(--ink-3);
+  font-size: 0.43rem;
 }
 
 .ring-wrap {
@@ -4103,6 +4293,11 @@ select:focus-visible {
     min-width: 0;
   }
 
+  .machine-power-controls {
+    width: 100%;
+    min-width: 0;
+  }
+
   .electrical-distribution-layout {
     grid-template-columns: 1fr;
   }
@@ -4354,6 +4549,10 @@ select:focus-visible {
     flex-direction: column;
   }
 
+  .machine-power-controls {
+    grid-template-columns: 1fr;
+  }
+
   .electrical-chart-panel {
     grid-template-columns: 1fr;
     padding: 12px;
@@ -4379,6 +4578,11 @@ select:focus-visible {
 
   .electrical-path i {
     transform: rotate(90deg);
+  }
+
+  .machine-power-coverage {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .sensor-comparison-panel {

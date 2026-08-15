@@ -41,6 +41,9 @@ const state = {
   utility: {
     electricalLevel: "cubical",
     selectedElectrical: "CUB-A",
+    machinePowerType: "jetflow",
+    selectedPowerArea: "LA",
+    selectedPowerMachine: "JF-LA-01",
   },
   sensorTrend: {
     range: "1H",
@@ -1227,6 +1230,104 @@ function electricalDistributionPanel() {
   </section>`;
 }
 
+const machinePowerConfig = {
+  jetflow: { label: "Jetflow", baseDemand: 11.8 },
+  calator: { label: "Calator", baseDemand: 16.2 },
+  dryer: { label: "Dryer", baseDemand: 52.4 },
+  kalender: { label: "Kalender", baseDemand: 12.8 },
+  chemical: { label: "Dispensing", baseDemand: 7.4 },
+};
+
+function machinePowerRangeHours() {
+  return { "1H": 1, "8H": 8, "24H": 24, "7D": 168 }[state.range] || 8;
+}
+
+function machinePowerMeters(type) {
+  const config = machinePowerConfig[type];
+  return fleetFor(type).map((machine, index) => {
+    const seed = [...machine.id].reduce((total, character) => total + character.charCodeAt(0), 0);
+    const stateFactor = { running: 1, warning: 0.91, idle: 0.16, fault: 0.22, offline: 0 }[machine.state] ?? 0.7;
+    const demand = config.baseDemand * (0.82 + seed % 37 / 100) * stateFactor;
+    const energy = demand * machinePowerRangeHours() * (0.88 + index % 9 / 100);
+    return {
+      ...machine,
+      demand,
+      energy,
+      load: Math.min(100, Math.round(demand / (config.baseDemand * 1.28) * 100)),
+      powerFactor: Math.min(0.99, 0.91 + seed % 7 / 100),
+      voltage: 396 + seed % 9,
+      meterStatus: machine.connected ? machine.state === "warning" || machine.state === "fault" ? "warning" : "good" : "offline",
+    };
+  });
+}
+
+function machinePowerAreaSummary(type = state.utility.machinePowerType) {
+  const meters = machinePowerMeters(type);
+  return processAreas[type].map((area) => {
+    const areaMeters = meters.filter((meter) => meter.area === area.code);
+    return {
+      ...area,
+      meters: areaMeters,
+      energy: areaMeters.reduce((total, meter) => total + meter.energy, 0),
+      demand: areaMeters.reduce((total, meter) => total + meter.demand, 0),
+    };
+  });
+}
+
+function powerEnergyDisplay(value) {
+  return value >= 1000
+    ? { value: (value / 1000).toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), unit: "MWh" }
+    : { value: value.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 }), unit: "kWh" };
+}
+
+function machinePowerMeterPanel() {
+  const type = state.utility.machinePowerType;
+  const config = machinePowerConfig[type];
+  const areas = machinePowerAreaSummary(type);
+  if (!areas.some((area) => area.code === state.utility.selectedPowerArea)) state.utility.selectedPowerArea = areas[0].code;
+  const selectedArea = areas.find((area) => area.code === state.utility.selectedPowerArea) || areas[0];
+  const rankedMeters = [...selectedArea.meters].sort((a, b) => b.energy - a.energy);
+  if (!rankedMeters.some((meter) => meter.id === state.utility.selectedPowerMachine)) state.utility.selectedPowerMachine = rankedMeters[0]?.id || null;
+  const selectedMeter = rankedMeters.find((meter) => meter.id === state.utility.selectedPowerMachine) || rankedMeters[0];
+  const totalEnergy = areas.reduce((total, area) => total + area.energy, 0);
+  const totalDisplay = powerEnergyDisplay(totalEnergy);
+  const areaLegend = areas.map((area, index) => {
+    const display = powerEnergyDisplay(area.energy);
+    const share = totalEnergy ? area.energy / totalEnergy * 100 : 0;
+    return `<button class="electrical-legend-row ${area.code === selectedArea.code ? "active" : ""}" data-machine-power-area="${area.code}"><i style="background:${electricalColors[index]}"></i><span><strong>${area.label}</strong><small>${area.count} machine power meters</small></span><b>${display.value} ${display.unit}</b><em>${share.toFixed(1)}%</em></button>`;
+  }).join("");
+  const ranking = rankedMeters.map((meter, index) => {
+    const display = powerEnergyDisplay(meter.energy);
+    return `<button class="machine-power-rank-row ${meter.id === selectedMeter.id ? "active" : ""}" data-machine-power-meter="${meter.id}"><span>${index + 1}</span><span><strong>${meter.id}</strong><small>${meter.state} · meter ${meter.meterStatus}</small></span><b>${display.value}<small>${display.unit}</small></b><em>${meter.demand.toFixed(1)} kW</em></button>`;
+  }).join("");
+  const selectedEnergy = powerEnergyDisplay(selectedMeter.energy);
+  return `<section class="card electrical-distribution-card machine-power-card">
+    <div class="electrical-distribution-head machine-power-head">
+      <div><span class="eyebrow">Machine power meter mapping</span><h2>Machine Electrical Consumption</h2><p>Pilih kelompok mesin, klik area pada pie, lalu pilih mesin untuk melihat detail meter listriknya.</p></div>
+      <div class="machine-power-controls">
+        <label><span>Machine group</span><select class="select-control" id="machine-power-type-select">${Object.entries(machinePowerConfig).map(([key, item]) => `<option value="${key}" ${key === type ? "selected" : ""}>${item.label} · ${fleetFor(key).length} machines</option>`).join("")}</select></label>
+        <label><span>Historical range</span>${rangeButtons()}</label>
+      </div>
+    </div>
+    <div class="electrical-distribution-layout machine-power-layout">
+      <div class="electrical-chart-panel">
+        <div class="electrical-pie-wrap"><canvas id="machine-power-area-chart" aria-label="Perbandingan konsumsi listrik ${config.label} per area"></canvas><div class="electrical-pie-total"><strong>${totalDisplay.value}</strong><span>${totalDisplay.unit} total</span><small>${state.range} · ${config.label}</small></div></div>
+        <div class="electrical-legend">${areaLegend}</div>
+      </div>
+      <aside class="electrical-detail-panel machine-power-ranking-panel">
+        <div class="machine-power-ranking-head"><div><span>Selected area</span><h3>${selectedArea.label}</h3><p>${selectedArea.count} meter · ranking berdasarkan ${state.range}</p></div><span class="kpi-scope historical">SELECTED RANGE</span></div>
+        <div class="machine-power-rank-list">${ranking}</div>
+        <div class="machine-meter-detail">
+          <div class="electrical-detail-head"><div><span>${selectedMeter.id}</span><h3>${selectedMeter.name}</h3><p>Individual machine power meter</p></div>${statusPill(selectedMeter.state)}</div>
+          <div class="electrical-detail-grid machine-meter-grid"><div><span>Energy · ${state.range}</span><strong>${selectedEnergy.value} ${selectedEnergy.unit}</strong></div><div><span>Actual demand</span><strong>${selectedMeter.demand.toFixed(1)} kW</strong></div><div><span>Load</span><strong>${selectedMeter.load}%</strong></div><div><span>Power factor</span><strong>${selectedMeter.powerFactor.toFixed(2)}</strong></div><div><span>Voltage</span><strong>${selectedMeter.voltage} V</strong></div><div><span>Meter data</span><strong>${selectedMeter.meterStatus === "good" ? "Good · 24 ms" : selectedMeter.meterStatus === "warning" ? "Check quality" : "No data"}</strong></div></div>
+          <button class="button ghost electrical-history-button" data-open-power-machine="${type}|${selectedMeter.id}">Open machine detail</button>
+        </div>
+      </aside>
+    </div>
+    <div class="machine-power-coverage"><span>Design coverage</span><strong>${fleetFor(type).length} / ${fleetFor(type).length} power meters</strong><small>Target desain 100%; coverage commissioning aktual wajib menggantikan nilai demo.</small></div>
+  </section>`;
+}
+
 function utilitiesPage() {
   return `
     ${pageHead("utilities", `<select class="select-control"><option>All utilities</option><option>Electrical</option><option>Water</option><option>Steam</option><option>Thermal Oil</option></select><button class="button" data-page-target="trends">⌗ Historical</button>`)}
@@ -1251,6 +1352,7 @@ function utilitiesPage() {
       `)}
     </section>
     ${electricalDistributionPanel()}
+    ${machinePowerMeterPanel()}
     ${panel("Boiler & Water", "Supply status and affected consumers", `
         <div class="metric-grid">
           ${metricTile("Steam boiler", "RUN", "Load 78.4%")}
@@ -1579,6 +1681,41 @@ function bindPageEvents() {
       renderPage({ preserveScroll: true });
     });
   });
+  document.getElementById("machine-power-type-select")?.addEventListener("change", (event) => {
+    const type = event.target.value;
+    const firstArea = processAreas[type][0];
+    const firstMachine = fleetFor(type).find((machine) => machine.area === firstArea.code);
+    state.utility.machinePowerType = type;
+    state.utility.selectedPowerArea = firstArea.code;
+    state.utility.selectedPowerMachine = firstMachine?.id || null;
+    renderPage({ preserveScroll: true });
+  });
+  document.querySelectorAll("[data-machine-power-area]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const area = button.dataset.machinePowerArea;
+      const firstMachine = fleetFor(state.utility.machinePowerType).find((machine) => machine.area === area);
+      state.utility.selectedPowerArea = area;
+      state.utility.selectedPowerMachine = firstMachine?.id || null;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-machine-power-meter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.utility.selectedPowerMachine = button.dataset.machinePowerMeter;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-open-power-machine]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const [type, machineId] = button.dataset.openPowerMachine.split("|");
+      const machine = fleetFor(type).find((item) => item.id === machineId);
+      if (!machine) return;
+      state.page = type;
+      state.selected[type] = machineId;
+      state.drill[type] = { area: machine.area, machine: machineId };
+      renderPage();
+    });
+  });
   document.querySelectorAll("[data-process-level]").forEach((button) => {
     button.addEventListener("click", () => {
       const type = button.dataset.processType;
@@ -1801,6 +1938,7 @@ function initPageCharts() {
         { data: wave(32, 1.75, .02, .009, 0), color: "#d68b05", dash: true },
       ], labels);
       drawElectricalDistributionChart();
+      drawMachinePowerAreaChart();
     },
     chemical: () => drawBarChart(
       "chemical-chart",
@@ -2038,6 +2176,64 @@ function drawElectricalDistributionChart() {
     const asset = canvas._electricalAssetAtPointer(event);
     if (!asset) return;
     state.utility.selectedElectrical = asset.id;
+    renderPage({ preserveScroll: true });
+  });
+}
+
+function drawMachinePowerAreaChart() {
+  const canvas = document.getElementById("machine-power-area-chart");
+  if (!canvas) return;
+  const areas = machinePowerAreaSummary();
+  const total = areas.reduce((sum, area) => sum + area.energy, 0);
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, rect.width * ratio);
+  canvas.height = Math.max(1, rect.height * ratio);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(ratio, ratio);
+  const centerX = rect.width / 2;
+  const centerY = rect.height / 2;
+  const radius = Math.max(10, Math.min(rect.width, rect.height) / 2 - 12);
+  let start = -Math.PI / 2;
+  const slices = [];
+  ctx.clearRect(0, 0, rect.width, rect.height);
+  areas.forEach((area, index) => {
+    const end = start + (total ? area.energy / total : 0) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, radius, start, end);
+    ctx.closePath();
+    ctx.fillStyle = electricalColors[index];
+    ctx.fill();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = area.code === state.utility.selectedPowerArea ? 4 : 2;
+    ctx.stroke();
+    slices.push({ start, end, area });
+    start = end;
+  });
+  const areaAtPointer = (event) => {
+    const bounds = canvas.getBoundingClientRect();
+    const x = event.clientX - bounds.left - bounds.width / 2;
+    const y = event.clientY - bounds.top - bounds.height / 2;
+    if (Math.hypot(x, y) > Math.min(bounds.width, bounds.height) / 2 - 8) return null;
+    let angle = Math.atan2(y, x);
+    if (angle < -Math.PI / 2) angle += Math.PI * 2;
+    return slices.find((slice) => angle >= slice.start && angle < slice.end)?.area || null;
+  };
+  canvas._machinePowerAreaAtPointer = areaAtPointer;
+  if (canvas.dataset.machinePowerBound) return;
+  canvas.dataset.machinePowerBound = "true";
+  canvas.addEventListener("pointermove", (event) => {
+    const area = canvas._machinePowerAreaAtPointer(event);
+    const display = area ? powerEnergyDisplay(area.energy) : null;
+    canvas.style.cursor = area ? "pointer" : "default";
+    canvas.title = area ? `${area.label}: ${display.value} ${display.unit}` : "";
+  });
+  canvas.addEventListener("click", (event) => {
+    const area = canvas._machinePowerAreaAtPointer(event);
+    if (!area) return;
+    state.utility.selectedPowerArea = area.code;
+    state.utility.selectedPowerMachine = area.meters[0]?.id || null;
     renderPage({ preserveScroll: true });
   });
 }
