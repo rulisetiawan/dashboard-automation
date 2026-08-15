@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.42 / Jetflow Concept V1.7 / Calator Concept V1.2 / Dryer Concept V1.1 / Dashboard Concept V1.21 — 15 Agustus 2026
+
+**Status:** Motor diagnostic lintas proses selesai
+
+### Ditambahkan
+
+- Modal Motor & Drive pada seluruh equipment Jetflow, Calator, dan Dryer.
+- Asset context per machine untuk memastikan modal, trend, log, dan export membawa sumber proses yang benar.
+- Winch/pump/mixer Jetflow, motor line Calator, serta drive/fan Dryer.
+
+### Batasan
+
+- Asset list serta data masih simulated hingga mapping motor/drive aktual tersedia.
+
+---
+
 ## Frontend Dashboard V1.41 / Kalender Concept V1.12 / Dashboard Concept V1.20 — 15 Agustus 2026
 
 **Status:** Alignment Motor & Drive log diperbaiki

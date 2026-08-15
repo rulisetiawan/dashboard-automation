@@ -67,6 +67,7 @@ const state = {
   },
   motorDrive: {
     selected: null,
+    source: null,
     range: "8H",
     metric: "amp",
     viewStart: .72,
@@ -1048,6 +1049,8 @@ function chemicalPage() { return processPage("chemical", chemicalDetailPage); }
 
 function jetflowDetailPage() {
   const machine = jetflows.find((m) => m.id === state.selected.jetflow) || jetflows[0];
+  const motors = processMotorAssets("jetflow", machine);
+  const selectedMotor = state.motorDrive.source === "jetflow" ? motors.find((motor) => motor.id === state.motorDrive.selected) : null;
   const waterSeed = [...machine.id].reduce((total, character) => total + character.charCodeAt(0), 0);
   const totalWaterConsumption = (118 + waterSeed % 890 / 10).toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const processPosition = jetflowProcessSteps.indexOf(machine.step) + 1;
@@ -1062,10 +1065,7 @@ function jetflowDetailPage() {
     sequenceCursor += jetflowProcessDurations[index] * 60 * 1000;
     return { start, end: formatProcessTime(sequenceCursor) };
   });
-  const winches = Array.from({ length: machine.winches }, (_, i) => {
-    const warn = machine.id === "JF-03" && i === 2;
-    return `<div class="winch-card"><div class="winch-card-head"><strong>Winch ${i + 1}</strong><i class="equipment-state ${warn ? "warning" : ""}"></i></div><div class="card-reading">${liveValue(42 + i * .7, "Hz", .25, 1)}</div><div class="card-caption">Motor · ${warn ? "Tangle detected" : "Limit clear"}</div><div class="mini-bar"><span style="width:${65 + i * 3}%"></span></div></div>`;
-  }).join("");
+  const winches = motors.filter((motor) => motor.category === "winch");
   return `
     ${processBreadcrumb("jetflow", machine)}
     ${pageHead("jetflow", selector(jetflows.filter((item) => item.area === machine.area), "jetflow"))}
@@ -1094,12 +1094,9 @@ function jetflowDetailPage() {
         </div>
       `)}
     </section>
-    ${panel(`Dynamic Winch Group · ${machine.winches} units`, "Jumlah winch mengikuti konfigurasi mesin; setiap winch memiliki motor dan tangle limit.", `<div class="winch-grid">${winches}</div>`)}
+    ${panel(`Dynamic Winch Group · ${machine.winches} units`, "Jumlah winch mengikuti konfigurasi mesin; klik winch untuk analisa motor 3-phase dan tangle context.", `<div class="motor-grid">${winches.map((motor) => motorDrillableCard(motor, "jetflow")).join("")}</div>`)}
     <section class="grid-equal">
-      ${panel("Driven Equipment", "Motor, pump, circulation, dan mixer status", equipmentGrid([
-        ["Main Pump", "46.2 A", "Running"], ["Circulation", "38.7 Hz", "Running"], ["Dosing Pump 1", "18.4 Hz", "Running"],
-        ["Dosing Pump 2", "0.0 Hz", "Ready"], ["Mixer 1", "22.1 Hz", "Running"], ["Mixer 2", "0.0 Hz", "Ready"]
-      ]))}
+      ${motorEquipmentPanel("jetflow", machine, motors.filter((motor) => motor.category !== "winch"), "Driven Equipment")}
       ${panel("Batch Events", "State, dosing, steam, dan alarm timeline", eventTable([
         ["10:38:42", "Alarm", "Winch 3 tangle limit activated", "Warning"],
         ["10:24:11", "Process", "Holding temperature reached", "Good"],
@@ -1107,6 +1104,7 @@ function jetflowDetailPage() {
         ["09:46:08", "Recipe", "Dosing step 04 completed", "Good"],
       ]))}
     </section>
+    ${selectedMotor ? motorDriveDetailPanel(selectedMotor) : ""}
     ${batchInvestigationPanel("jetflow", machine)}
     ${batchTrendWorkspace("jetflow", machine)}
     ${batchAbnormalLog("jetflow", machine)}
@@ -1211,6 +1209,8 @@ function formatDateTime(timestamp, compact = false) {
 
 function calatorDetailPage() {
   const machine = calators.find((m) => m.id === state.selected.calator) || calators[0];
+  const motors = processMotorAssets("calator", machine);
+  const selectedMotor = state.motorDrive.source === "calator" ? motors.find((motor) => motor.id === state.motorDrive.selected) : null;
   const isBianco = machine.subtype === "Bianco";
   const standard = [
     ["Feeding", 28.4], ["Squeezing 1", 28.1], ["Squeezing 2", 27.9], ["Overfeed Atas", 29.3],
@@ -1253,6 +1253,8 @@ function calatorDetailPage() {
         ])}
       `)}
     </section>
+    ${motorEquipmentPanel("calator", machine, motors)}
+    ${selectedMotor ? motorDriveDetailPanel(selectedMotor) : ""}
     ${panel("Process Run History", "Chemical, speed, slowdown, output, dan quality context", eventTable([
       ["10:31:09", "Warning", "Overfeed Out spread reached 0.62 m/min", "Warning"],
       ["10:18:24", "Chemical", "CH-02 transfer completed · 182.4 kg", "Good"],
@@ -1286,6 +1288,46 @@ function kalenderMotorAssets() {
     ["KL-MTR-CONVEYOR", "Conveyor Belt", 16.2, 8.1, 25.0], ["KL-MTR-PLAIT", "Plaiter", 27.8, 14.3, 36.0],
     ["KL-MTR-TABLE", "Conveyor Table", 21.6, 11.1, 30.0], ["KL-MTR-UPDOWN", "Up Down Table", 14.8, 7.6, 22.0],
   ].map(([id, name, amps, kw, hz], index) => ({ id, name, amps, kw, hz, voltage: 397 + index % 4 * 2, runtime: 842 + index * 17, pmRuntime: 1000, status: index === 8 ? "warning" : "running" }));
+}
+
+function processMotorAssets(type, machine) {
+  if (type === "kalender") return kalenderMotorAssets().map((motor) => ({ ...motor, source: type, parentMachine: machine.id, processLabel: "Kalender finishing" }));
+  const specs = type === "jetflow"
+    ? [
+      ...Array.from({ length: machine.winches }, (_, index) => [`WINCH-${String(index + 1).padStart(2, "0")}`, `Winch ${index + 1}`, 21.8 + index * .85, 10.4 + index * .48, 38 + index * .7, "winch"]),
+      ["MAIN-PUMP", "Main Pump", 46.2, 24.6, 42.0, "pump"], ["CIRCULATION", "Circulation Pump", 38.7, 19.8, 38.0, "pump"],
+      ["DOSING-01", "Dosing Pump 1", 18.4, 7.6, 28.0, "pump"], ["DOSING-02", "Dosing Pump 2", 16.8, 6.9, 27.0, "pump"],
+      ["MIXER-01", "Mixer 1", 14.6, 5.3, 22.1, "mixer"], ["MIXER-02", "Mixer 2", 14.2, 5.1, 21.8, "mixer"],
+    ]
+    : type === "calator"
+      ? [["FEED", "Feeding", 28.4, 13.8, 28.4, "line"], ["SQ-01", "Squeezing 1", 24.8, 11.7, 28.1, "line"], ["SQ-02", "Squeezing 2", 25.1, 11.9, 27.9, "line"], ["OF-UP", "Overfeed Upper", 21.7, 9.8, 29.3, "line"], ["OF-LOW", "Overfeed Lower", 21.4, 9.6, 29.0, "line"], ["FOLDER", "Folder", 18.6, 8.2, 27.6, "line"], ["PLAIT", "Plaiter", 27.8, 14.3, 27.4, "line"]]
+      : [["MAIN-DRIVE", "Main Drive", 32.4, 17.6, 32.4, "drive"], ...Array.from({ length: machine.chambers }, (_, index) => [`FAN-${String(index + 1).padStart(2, "0")}`, `Chamber Fan ${index + 1}`, 11.4 + index * .55, 4.6 + index * .26, 36 + index * .35, "fan"]), ["EXHAUST", "Exhaust Fan", 19.8, 9.1, 38.0, "fan"], ["COOLING", "Cooling Fan", 13.6, 5.8, 31.0, "fan"]];
+  const seed = [...machine.id].reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  return specs.map(([code, name, amps, kw, hz, category], index) => ({
+    id: `${machine.id}-MTR-${code}`, name, amps, kw, hz, category,
+    voltage: 396 + (seed + index * 3) % 7,
+    runtime: 760 + (seed % 80) + index * 23,
+    pmRuntime: 1000,
+    status: type === "jetflow" && name === "Winch 3" && machine.id === "JF-LA-01" ? "warning" : "running",
+    source: type,
+    parentMachine: machine.id,
+    processLabel: type === "jetflow" ? "Jetflow dyeing" : type === "calator" ? "Calator washing" : "Dryer process",
+  }));
+}
+
+function selectedMotorDriveAsset() {
+  const type = state.motorDrive.source;
+  if (!type || !state.motorDrive.selected) return null;
+  const machine = fleetFor(type).find((item) => item.id === state.selected[type]);
+  return machine ? processMotorAssets(type, machine).find((item) => item.id === state.motorDrive.selected) : null;
+}
+
+function motorDrillableCard(motor, type) {
+  return `<div class="motor-card drillable ${state.motorDrive.selected === motor.id && state.motorDrive.source === type ? "selected" : ""}" data-motor-drive-target="${motor.id}" data-motor-drive-source="${type}" role="button" tabindex="0"><div class="motor-card-head"><strong>${motor.name}</strong><i class="equipment-state ${motor.status === "warning" ? "warning" : ""}"></i></div><div class="card-reading">${motor.hz.toFixed(1)}<small>Hz</small></div><div class="card-caption">${motor.amps.toFixed(1)} A · ${motor.kw.toFixed(1)} kW · ${motor.status === "warning" ? "Check current" : "Running"}</div></div>`;
+}
+
+function motorEquipmentPanel(type, machine, motors, title = "Motor & Driven Equipment") {
+  return panel(title, "Klik equipment untuk membuka analisa drive 3-phase, historical trend, troubleshooting, dan export log.", `<div class="motor-grid">${motors.map((motor) => motorDrillableCard(motor, type)).join("")}</div>`, `<span class="data-pill neutral">${motors.length} MOTOR</span>`);
 }
 
 function motorDriveData(motor) {
@@ -1394,8 +1436,7 @@ function motorHistoricalLogPanel(motor, phaseHistory, rangeLabel) {
 }
 
 function exportMotorHistoricalLog() {
-  const motors = kalenderMotorAssets();
-  const motor = motors.find((item) => item.id === state.motorDrive.selected);
+  const motor = selectedMotorDriveAsset();
   if (!motor) return;
   const phaseHistory = motorThreePhaseHistoricalData(motor);
   const rows = motorHistoricalLogData(motor, phaseHistory);
@@ -1445,7 +1486,7 @@ function motorDriveDetailPanel(motor) {
   const phaseHistory = motorThreePhaseHistoricalData(motor);
   return `<div class="motor-modal-backdrop" data-motor-drive-backdrop>
   <section class="card motor-drive-analysis" id="motor-drive-analysis" role="dialog" aria-modal="true" aria-labelledby="motor-drive-title">
-    <div class="motor-analysis-head"><div><span class="eyebrow">Motor & drive diagnostic</span><h2 id="motor-drive-title">${motor.name} · ${motor.id}</h2><p>Read-only analysis untuk kondisi drive, historical operation, dan target maintenance.</p></div><div class="motor-analysis-actions"><span class="data-pill ${motor.status === "warning" ? "warning" : "good"}">${motor.status === "warning" ? "CHECK CURRENT" : "RUNNING"}</span><button class="button ghost small" data-motor-drive-close>Close detail</button></div></div>
+    <div class="motor-analysis-head"><div><span class="eyebrow">Motor & drive diagnostic</span><h2 id="motor-drive-title">${motor.name} · ${motor.id}</h2><p>${motor.parentMachine || "Kalender"} · ${motor.processLabel || "Kalender finishing"} · read-only analysis untuk kondisi drive, historical operation, dan target maintenance.</p></div><div class="motor-analysis-actions"><span class="data-pill ${motor.status === "warning" ? "warning" : "good"}">${motor.status === "warning" ? "CHECK CURRENT" : "RUNNING"}</span><button class="button ghost small" data-motor-drive-close>Close detail</button></div></div>
     <div class="motor-analysis-scope"><span class="kpi-scope live">LIVE NOW</span><span>Nilai aktual drive saat ini</span></div>
     <div class="motor-live-grid">
       ${metricTile("RMS Current Avg.", liveValue(motor.amps, "A", .28, 1), `R/S/T · Limit ${motor.hz === 42 ? "34.0" : "32.0"} A`)}
@@ -1484,6 +1525,8 @@ function motorDriveDetailPanel(motor) {
 
 function dryerDetailPage() {
   const machine = dryers.find((m) => m.id === state.selected.dryer) || dryers[0];
+  const motors = processMotorAssets("dryer", machine);
+  const selectedMotor = state.motorDrive.source === "dryer" ? motors.find((motor) => motor.id === state.motorDrive.selected) : null;
   const temps = Array.from({ length: machine.chambers }, (_, i) => ({ actual: 142 + i * 1.2 + (i === 4 ? -9 : 0), sp: 144 + i * 1.0 }));
   return `
     ${processBreadcrumb("dryer", machine)}
@@ -1498,6 +1541,8 @@ function dryerDetailPage() {
     ${panel(`Chamber Temperature Heatmap · ${machine.chambers} zones`, "Actual, setpoint, dan deviation setiap chamber", `
       <div class="heatmap-grid">${temps.map((t, i) => `<div class="heatmap-cell ${Math.abs(t.actual - t.sp) > 5 ? "warning" : ""}"><strong>CH-${String(i + 1).padStart(2, "0")}</strong><span>${t.actual.toFixed(1)}°</span><small>SP ${t.sp.toFixed(1)} · Δ ${(t.actual - t.sp).toFixed(1)}</small></div>`).join("")}</div>
     `)}
+    ${motorEquipmentPanel("dryer", machine, motors)}
+    ${selectedMotor ? motorDriveDetailPanel(selectedMotor) : ""}
     <section class="grid-2 abnormal-log-layout">
       ${panel("Drying Context", "Input, output, utility, dan quality risk", `
         <div class="metric-grid">
@@ -1524,8 +1569,8 @@ function dryerDetailPage() {
 
 function kalenderDetailPage() {
   const machine = kalenders.find((m) => m.id === state.selected.kalender) || kalenders[0];
-  const motors = kalenderMotorAssets();
-  const selectedMotor = motors.find((motor) => motor.id === state.motorDrive.selected);
+  const motors = processMotorAssets("kalender", machine);
+  const selectedMotor = state.motorDrive.source === "kalender" ? motors.find((motor) => motor.id === state.motorDrive.selected) : null;
   return `
     ${processBreadcrumb("kalender", machine)}
     ${pageHead("kalender", selector(kalenders.filter((item) => item.area === machine.area), "kalender"))}
@@ -1569,7 +1614,7 @@ function kalenderDetailPage() {
         <div class="production-progress-foot"><span>Actual output <strong>3,264 m</strong></span><span>Remaining <strong>1,536 m</strong></span><span>Est. completion <strong>17:12</strong></span></div>
       </div>
     `)}
-    ${panel("Motor & Driven Equipment", "Klik equipment untuk membuka analisa drive, historical trend, dan maintenance plan", `<div class="motor-grid">${motors.map((motor) => `<div class="motor-card drillable ${state.motorDrive.selected === motor.id ? "selected" : ""}" data-motor-drive-target="${motor.id}" role="button" tabindex="0"><div class="motor-card-head"><strong>${motor.name}</strong><i class="equipment-state ${motor.status === "warning" ? "warning" : ""}"></i></div><div class="card-reading">${motor.hz.toFixed(1)}<small>Hz</small></div><div class="card-caption">${motor.amps.toFixed(1)} A · ${motor.kw.toFixed(1)} kW · ${motor.status === "warning" ? "Check current" : "Running"}</div></div>`).join("")}</div>`)}
+    ${motorEquipmentPanel("kalender", machine, motors)}
     ${selectedMotor ? motorDriveDetailPanel(selectedMotor) : ""}
     ${batchInvestigationPanel("kalender", machine)}
     ${batchTrendWorkspace("kalender", machine)}
@@ -2277,6 +2322,7 @@ function bindPageEvents() {
   document.querySelectorAll("[data-motor-drive-target]").forEach((card) => {
     const openMotorDrive = () => {
       state.motorDrive.selected = card.dataset.motorDriveTarget;
+      state.motorDrive.source = card.dataset.motorDriveSource || "kalender";
       renderPage({ preserveScroll: true });
     };
     card.addEventListener("click", openMotorDrive);
@@ -2301,6 +2347,7 @@ function bindPageEvents() {
   document.querySelectorAll("[data-motor-drive-close]").forEach((button) => {
     button.addEventListener("click", () => {
       state.motorDrive.selected = null;
+      state.motorDrive.source = null;
       renderPage({ preserveScroll: true });
     });
   });
@@ -2308,6 +2355,7 @@ function bindPageEvents() {
     backdrop.addEventListener("click", (event) => {
       if (event.target !== backdrop) return;
       state.motorDrive.selected = null;
+      state.motorDrive.source = null;
       renderPage({ preserveScroll: true });
     });
   });
@@ -2518,7 +2566,7 @@ function initPageCharts() {
   };
   charts[state.page]?.();
   if (state.drill[state.page]?.machine && sensorTrendConfig[state.page]) drawSensorComparisonTrends(state.page);
-  if (state.page === "kalender" && state.motorDrive.selected) {
+  if (state.motorDrive.selected && state.motorDrive.source === state.page) {
     drawMotorDriveTrend();
     bindMotorDrivePan();
   }
@@ -2560,7 +2608,7 @@ function drawSensorComparisonTrends(type) {
 }
 
 function drawMotorDriveTrend() {
-  const motor = kalenderMotorAssets().find((item) => item.id === state.motorDrive.selected);
+  const motor = selectedMotorDriveAsset();
   if (!motor) return;
   const trend = motorDriveData(motor);
   const fraction = state.motorDrive.viewFraction;
