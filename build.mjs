@@ -1,9 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
-const [html, css, js] = await Promise.all([
+const [html, css, js, backendWorker] = await Promise.all([
   readFile(new URL("./index.html", import.meta.url), "utf8"),
   readFile(new URL("./styles.css", import.meta.url), "utf8"),
   readFile(new URL("./app.js", import.meta.url), "utf8"),
+  readFile(new URL("./backend-worker.js", import.meta.url), "utf8"),
 ]);
 
 const files = {
@@ -14,23 +15,7 @@ const files = {
 };
 
 const worker = `const files = ${JSON.stringify(files)};
-
-export default {
-  async fetch(request) {
-    const url = new URL(request.url);
-    const file = files[url.pathname] || files["/"];
-    return new Response(file.body, {
-      headers: {
-        "content-type": file.type,
-        "cache-control": url.pathname === "/" || url.pathname === "/index.html"
-          ? "no-cache"
-          : "public, max-age=3600",
-        "x-content-type-options": "nosniff",
-      },
-    });
-  },
-};
-`;
+\n${backendWorker}`;
 
 await mkdir(new URL("./dist/server/", import.meta.url), { recursive: true });
 await mkdir(new URL("./dist/.openai/", import.meta.url), { recursive: true });

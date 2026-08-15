@@ -19,8 +19,10 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `backend/Tag_Display_Mapping_Register_v1.0.md` | 1.0 | Aktif | Baseline canonical tag ke tampilan proses, utility, chemical, dan motor diagnostic |
 | `backend/Backend_Data_Flow_Graph_v1.0.md` | 1.0 | Aktif | Graph transmisi telemetry, traceability batch, dan batas OT–IT |
 | `backend/Database_Design_Concept_v1.0.md` | 1.0 | Aktif | Desain database PostgreSQL + TimescaleDB untuk master, historian, MES, utility, chemical, maintenance, dan audit |
+| `backend/Non_Jetflow_Backend_Integration_v1.0.md` | 1.0 | Aktif | Implementasi awal D1/API read-only untuk Calator, Dryer, Kalender, Dispensing, dan Utilities |
 | `releases/Backend_Architecture_V1.0.md` | 1.0 | Selesai | Baseline arsitektur dan mapping backend |
 | `releases/Database_Design_V1.0.md` | 1.0 | Selesai | Baseline konsep database dan ERD |
+| `releases/Backend_Non_Jetflow_V1.0.md` | 1.0 | Selesai | Fondasi backend non-Jetflow dan API dashboard |
 | `releases/Frontend_V1.43.md` | 1.43 | Selesai | Chemical Dispensing log custom range |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 

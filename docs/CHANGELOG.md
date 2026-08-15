@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Backend Non-Jetflow V1.0 — 15 Agustus 2026
+
+**Status:** Fondasi integrasi backend selesai
+
+### Ditambahkan
+
+- Persistent D1 dan migration untuk Calator, Dryer, Kalender, Chemical Dispensing, dan snapshot Utilities.
+- API read-only asset, snapshot, chemical log, utility snapshot, status integration, serta contract telemetry gateway.
+- Dashboard menghidrasi fleet non-Jetflow dan chemical transaction dari backend lalu mempertahankan fallback demo bila service belum tersedia.
+
+### Batasan
+
+- Semua record awal berstatus `SIMULATED_SEED`; mapping PLC/gateway dan data operasi aktual belum diaktifkan.
+- Jetflow sengaja tidak termasuk scope backend versi ini.
+
+---
+
 ## Database Design V1.0 — 15 Agustus 2026
 
 **Status:** Baseline konsep database selesai

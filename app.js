@@ -84,6 +84,15 @@ const state = {
   },
 };
 
+const backendConnection = {
+  status: "connecting",
+  dataMode: "LOCAL_DEMO",
+  storage: null,
+  lastSync: null,
+};
+
+let backendUtilities = [];
+
 const pageMeta = {
   overview: ["Plant Overview", "Live Operations", "Seluruh proses, mesin, utilitas, dan exception dalam satu tampilan."],
   jetflow: ["Jetflow", "Dyeing Process", "Monitoring batch, tank, dosing, winch, pump, steam, dan alarm."],
@@ -284,6 +293,76 @@ const chemicalDispensingLogs = [
   { hoursAgo: 28.2, time: "14 Aug · 06:47", request: "REQ-CL-260814-097", calator: "CL-BLK-03", code: "CH-06", variant: "Neutralizer", target: "58.0 kg", actual: "57.7 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 2 / 2" },
 ];
 
+function backendTimeLabel(value) {
+  return new Date(value).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }).replace(",", " ·");
+}
+
+function updateBackendIndicator() {
+  const indicator = document.querySelector(".system-health");
+  if (!indicator) return;
+  const title = indicator.querySelector("strong");
+  const detail = indicator.querySelector("small");
+  if (!title || !detail) return;
+  if (backendConnection.status === "connected") {
+    title.textContent = "Backend non-Jetflow online";
+    detail.textContent = `${backendConnection.storage || "D1"} · ${backendConnection.dataMode === "SIMULATED_SEED" ? "DEMO SEED / TAG MAPPING PENDING" : "TELEMETRY CONNECTED"}`;
+  } else if (backendConnection.status === "fallback") {
+    title.textContent = "Demo fallback active";
+    detail.textContent = "Backend tidak tersedia · data simulasi lokal";
+  }
+}
+
+function utilityValue(code, fallback) {
+  return backendUtilities.find((item) => item.utility_code === code)?.value ?? fallback;
+}
+
+function hydrateChemicalTransactions(rows) {
+  const now = Date.now();
+  chemicalDispensingLogs.splice(0, chemicalDispensingLogs.length, ...rows.map((item) => ({
+    hoursAgo: Math.max(0, (now - new Date(item.occurred_at).getTime()) / 3600000),
+    time: backendTimeLabel(item.occurred_at),
+    request: item.request_code,
+    calator: item.calator_id,
+    code: item.chemical_code,
+    variant: item.chemical_name,
+    target: `${Number(item.target_kg).toFixed(1)} kg`,
+    actual: item.actual_kg == null ? "—" : `${Number(item.actual_kg).toFixed(1)} kg`,
+    mode: item.mode,
+    status: item.status,
+    operator: item.operator_name || "—",
+    stage: item.stage || "—",
+  })));
+}
+
+async function connectNonJetflowBackend() {
+  try {
+    const statusResponse = await fetch("/api/v1/integration/status", { cache: "no-store" });
+    if (!statusResponse.ok) throw new Error("Backend not ready");
+    const status = await statusResponse.json();
+    const processes = ["calator", "dryer", "kalender", "chemical"];
+    const responses = await Promise.all(processes.map(async (process) => {
+      const response = await fetch(`/api/v1/assets?process=${process}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`Asset API ${process} unavailable`);
+      return [process, await response.json()];
+    }));
+    const chemicalResponse = await fetch("/api/v1/dispensing/transactions", { cache: "no-store" });
+    const utilityResponse = await fetch("/api/v1/utilities/snapshot", { cache: "no-store" });
+    if (!chemicalResponse.ok || !utilityResponse.ok) throw new Error("Operational API unavailable");
+    const targetFleet = { calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers };
+    responses.forEach(([process, payload]) => targetFleet[process].splice(0, targetFleet[process].length, ...payload.assets));
+    hydrateChemicalTransactions((await chemicalResponse.json()).transactions);
+    backendUtilities = (await utilityResponse.json()).utilities;
+    backendConnection.status = "connected";
+    backendConnection.storage = status.storage;
+    backendConnection.dataMode = status.data_mode;
+    backendConnection.lastSync = status.server_time;
+  } catch {
+    backendConnection.status = "fallback";
+  }
+  updateBackendIndicator();
+  renderPage({ preserveScroll: true });
+}
+
 function statusPill(value) {
   const labels = { running: "Running", warning: "Warning", fault: "Fault", idle: "Idle", offline: "Offline" };
   return `<span class="status-pill ${value}">${labels[value] || value}</span>`;
@@ -342,7 +421,7 @@ function machineHero(machine, code, meta) {
       <div class="machine-hero-meta">
         <div class="hero-meta-item"><span>Batch</span><strong>${machine.batch}</strong></div>
         <div class="hero-meta-item"><span>Progress</span><strong>${machine.progress}%</strong></div>
-        <div class="hero-meta-item"><span>Last update</span><strong>NOW · 18ms</strong></div>
+        <div class="hero-meta-item"><span>Last update</span><strong>${machine.sourceTs ? backendTimeLabel(machine.sourceTs) : "NOW · 18ms"}</strong></div>
       </div>
     </section>
   `;
@@ -1809,10 +1888,10 @@ function utilitiesPage() {
   return `
     ${pageHead("utilities", `<select class="select-control"><option>All utilities</option><option>Electrical</option><option>Water</option><option>Steam</option><option>Thermal Oil</option></select><button class="button" data-page-target="trends">⌗ Historical</button>`)}
     <section class="kpi-grid">
-      ${kpi("Electrical Demand", liveValue(1.84, "", .02, 2), "MW", "EL", "<strong>Peak 1.96 MW</strong>· 10:12")}
+      ${kpi("Electrical Demand", liveValue(utilityValue("ELECTRICAL_DEMAND", 1.84), "", .02, 2), "MW", "EL", "<strong>Peak 1.96 MW</strong>· 10:12")}
       ${kpi("Water Consumption", "1,284", "m³", "WA", "<strong>82.4%</strong>daily baseline")}
-      ${kpi("Steam Production", liveValue(12.8, "", .09, 1), "t/h", "ST", "<strong class='danger'>Pressure 7.8 bar</strong>", "warning")}
-      ${kpi("Thermal Oil Supply", liveValue(218.4, "", .2, 1), "°C", "TO", "<strong>3 Dryers</strong>active demand", "success")}
+      ${kpi("Steam Production", liveValue(utilityValue("STEAM_FLOW", 12.8), "", .09, 1), "t/h", "ST", "<strong class='danger'>Pressure 7.8 bar</strong>", "warning")}
+      ${kpi("Thermal Oil Supply", liveValue(utilityValue("THERMAL_OIL_SUPPLY", 218.4), "", .2, 1), "°C", "TO", "<strong>3 Dryers</strong>active demand", "success")}
     </section>
     <section class="grid-2">
       ${panel("Plant Electrical Demand", "Power, target baseline, dan peak demand", `<div class="chart-container"><canvas id="utility-chart" class="chart-canvas"></canvas></div>`, rangeButtons())}
@@ -3250,5 +3329,6 @@ window.addEventListener("resize", () => requestAnimationFrame(initPageCharts));
 updateAlarmCounts();
 updateClock();
 renderPage();
+connectNonJetflowBackend();
 window.setInterval(updateClock, 1000);
 window.setInterval(updateLiveNumbers, 1800);
