@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.20 / Jetflow Concept V1.4 — 15 Agustus 2026
+
+**Status:** Process start dan end time selesai
+
+### Ditambahkan
+
+- Kolom Start Time dan End Time pada tabel sequence Jetflow.
+- Timestamp `HH:mm:ss` untuk proses yang telah mulai atau selesai.
+- End Time `In progress` untuk current process dan tanda `—` untuk proses pending.
+
+### Batasan
+
+- Waktu frontend masih simulated dan belum terhubung dengan event sequence PLC.
+
+---
+
 ## Frontend Dashboard V1.19 / Jetflow Concept V1.3 — 15 Agustus 2026
 
 **Status:** Compact process sequence table selesai

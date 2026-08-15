@@ -825,6 +825,18 @@ function jetflowDetailPage() {
   const waterSeed = [...machine.id].reduce((total, character) => total + character.charCodeAt(0), 0);
   const totalWaterConsumption = (118 + waterSeed % 890 / 10).toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const processPosition = jetflowProcessSteps.indexOf(machine.step) + 1;
+  const processDurations = [12, 8, 16, 7, 24, 9, 9, 14, 14, 18, 12, 11];
+  const currentElapsedMinutes = 5 + waterSeed % 8;
+  const completedDuration = processDurations.slice(0, processPosition - 1).reduce((total, duration) => total + duration, 0);
+  let sequenceCursor = Date.now() - (completedDuration + currentElapsedMinutes) * 60 * 1000;
+  const formatProcessTime = (timestamp) => new Date(timestamp).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  const processTimeline = jetflowProcessSteps.map((process, index) => {
+    if (index > processPosition - 1) return { start: "—", end: "—" };
+    const start = formatProcessTime(sequenceCursor);
+    if (index === processPosition - 1) return { start, end: "In progress" };
+    sequenceCursor += processDurations[index] * 60 * 1000;
+    return { start, end: formatProcessTime(sequenceCursor) };
+  });
   const winches = Array.from({ length: machine.winches }, (_, i) => {
     const warn = machine.id === "JF-03" && i === 2;
     return `<div class="winch-card"><div class="winch-card-head"><strong>Winch ${i + 1}</strong><i class="equipment-state ${warn ? "warning" : ""}"></i></div><div class="card-reading">${liveValue(42 + i * .7, "Hz", .25, 1)}</div><div class="card-caption">Motor · ${warn ? "Tangle detected" : "Limit clear"}</div><div class="mini-bar"><span style="width:${65 + i * 3}%"></span></div></div>`;
@@ -840,10 +852,11 @@ function jetflowDetailPage() {
       ${kpi("Total Water Consumption", totalWaterConsumption, "m³", "WA", "<strong>Current batch</strong>· accumulated total")}
       ${kpi("Steam Header", liveValue(7.8, "", .07, 1), "bar", "ST", "<strong class='danger'>Low baseline</strong>· 8.1 bar", "warning")}
     </section>
-    ${panel("Jetflow Process Sequence", `Current process · ${machine.step} · step ${processPosition} of ${jetflowProcessSteps.length}`, `<div class="jetflow-sequence-table-wrap" tabindex="0" aria-label="Jetflow process sequence ${machine.id}"><table class="jetflow-sequence-table"><thead><tr><th scope="col">Step</th><th scope="col">Process</th><th scope="col">Status</th></tr></thead><tbody>${jetflowProcessSteps.map((process, index) => {
+    ${panel("Jetflow Process Sequence", `Current process · ${machine.step} · step ${processPosition} of ${jetflowProcessSteps.length}`, `<div class="jetflow-sequence-table-wrap" tabindex="0" aria-label="Jetflow process sequence ${machine.id}"><table class="jetflow-sequence-table"><thead><tr><th scope="col">Step</th><th scope="col">Process</th><th scope="col">Start Time</th><th scope="col">End Time</th><th scope="col">Status</th></tr></thead><tbody>${jetflowProcessSteps.map((process, index) => {
       const processState = index === processPosition - 1 ? "active" : index < processPosition - 1 ? "completed" : "upcoming";
       const processLabel = processState === "active" ? "Current" : processState === "completed" ? "Complete" : "Pending";
-      return `<tr class="${processState}"><td class="sequence-step-number">${String(index + 1).padStart(2, "0")}</td><td><strong>${process}</strong></td><td><span class="sequence-state ${processState}">${processLabel}</span></td></tr>`;
+      const timeline = processTimeline[index];
+      return `<tr class="${processState}"><td class="sequence-step-number">${String(index + 1).padStart(2, "0")}</td><td><strong>${process}</strong></td><td class="sequence-time">${timeline.start}</td><td class="sequence-time ${processState === "active" ? "in-progress" : ""}">${timeline.end}</td><td><span class="sequence-state ${processState}">${processLabel}</span></td></tr>`;
     }).join("")}</tbody></table></div>`, `<span class="data-pill neutral">${jetflowProcessSteps.length} STEPS</span>`)}
     <section class="grid-2 abnormal-log-layout">
       ${panel("Tank & Dosing", "Live tank condition and data quality", `

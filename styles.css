@@ -959,7 +959,7 @@ select:focus-visible {
 
 .jetflow-sequence-table {
   width: 100%;
-  min-width: 440px;
+  min-width: 680px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -989,6 +989,13 @@ select:focus-visible {
   width: 118px;
 }
 
+.jetflow-sequence-table th:nth-child(3),
+.jetflow-sequence-table td:nth-child(3),
+.jetflow-sequence-table th:nth-child(4),
+.jetflow-sequence-table td:nth-child(4) {
+  width: 112px;
+}
+
 .jetflow-sequence-table td {
   height: 40px;
   padding: 7px 12px;
@@ -1013,6 +1020,19 @@ select:focus-visible {
 .sequence-step-number {
   color: var(--ink-3) !important;
   font-family: var(--font-data);
+}
+
+.sequence-time {
+  color: var(--ink-3) !important;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sequence-time.in-progress {
+  color: var(--primary) !important;
+  font-family: var(--font-ui);
+  font-weight: 700;
 }
 
 .sequence-state {
