@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.39 / Kalender Concept V1.10 / Dashboard Concept V1.18 — 15 Agustus 2026
+
+**Status:** Layout tabel Motor & Drive dirapikan
+
+### Ditambahkan
+
+- Kolom padat untuk current/voltage R/S/T dan statistik min/avg/max.
+- Tabel lebar penuh tanpa scroll horizontal pada modal desktop.
+- Mode kartu untuk record di layar kecil.
+
+---
+
 ## Frontend Dashboard V1.38 / Kalender Concept V1.9 / Dashboard Concept V1.17 — 15 Agustus 2026
 
 **Status:** Motor complete historical log dan export selesai

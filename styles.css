@@ -3513,21 +3513,37 @@ select:focus-visible {
 }
 
 .motor-phase-table-wrap {
-  overflow-x: auto;
+  overflow: hidden;
   border: 1px solid #e1eaec;
   border-radius: 8px;
   background: var(--surface);
 }
 
 .motor-phase-table {
-  min-width: 960px;
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
 }
 
 .motor-phase-table th,
 .motor-phase-table td {
   padding-top: 9px;
   padding-bottom: 9px;
+  font-size: .46rem;
   white-space: nowrap;
+}
+
+.compact-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.compact-stat small {
+  color: var(--ink-3);
+  font-family: inherit;
+  font-size: .8em;
+  font-weight: 700;
 }
 
 .phase-name {
@@ -3629,14 +3645,17 @@ select:focus-visible {
 
 .motor-log-table-wrap {
   max-height: 300px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid #e1eaec;
   border-radius: 8px;
   background: var(--surface);
 }
 
 .motor-log-table {
-  min-width: 1350px;
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
 }
 
 .motor-log-table th {
@@ -3650,7 +3669,33 @@ select:focus-visible {
 .motor-log-table td {
   padding-top: 8px;
   padding-bottom: 8px;
+  font-size: .44rem;
   white-space: nowrap;
+}
+
+.motor-log-table th:first-child,
+.motor-log-table td:first-child {
+  width: 14%;
+}
+
+.motor-log-table th:nth-child(2),
+.motor-log-table th:nth-child(3),
+.motor-log-table th:nth-child(4),
+.motor-log-table td:nth-child(2),
+.motor-log-table td:nth-child(3),
+.motor-log-table td:nth-child(4) {
+  width: 10%;
+}
+
+.phase-cell {
+  display: grid;
+  gap: 2px;
+}
+
+.phase-cell small {
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: .92em;
 }
 
 .motor-log-foot {
@@ -6292,6 +6337,78 @@ select:focus-visible {
 
   .motor-finding-grid {
     grid-template-columns: 1fr;
+  }
+
+  .motor-phase-table-wrap,
+  .motor-log-table-wrap {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .motor-phase-table,
+  .motor-phase-table tbody,
+  .motor-log-table,
+  .motor-log-table tbody {
+    display: grid;
+    gap: 8px;
+  }
+
+  .motor-phase-table thead,
+  .motor-log-table thead {
+    display: none;
+  }
+
+  .motor-phase-table tr,
+  .motor-log-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid #e1eaec;
+    border-radius: 8px;
+    background: var(--surface);
+  }
+
+  .motor-phase-table td,
+  .motor-log-table td {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 8px 9px;
+    border: 0;
+    border-bottom: 1px solid #edf2f3;
+    white-space: normal;
+  }
+
+  .motor-phase-table td::before,
+  .motor-log-table td::before {
+    color: var(--ink-3);
+    font-family: inherit;
+    font-size: .88em;
+    font-weight: 700;
+  }
+
+  .motor-phase-table td:nth-child(1)::before { content: "Phase"; }
+  .motor-phase-table td:nth-child(2)::before { content: "Current A"; }
+  .motor-phase-table td:nth-child(3)::before { content: "Time high"; }
+  .motor-phase-table td:nth-child(4)::before { content: "Time low"; }
+  .motor-phase-table td:nth-child(5)::before { content: "Voltage V"; }
+  .motor-phase-table td:nth-child(6)::before { content: "Condition"; }
+  .motor-log-table td::before { content: attr(data-label); }
+
+  .motor-log-table td:first-child,
+  .motor-log-table td:nth-child(2),
+  .motor-log-table td:nth-child(3),
+  .motor-log-table td:nth-child(4) {
+    width: auto;
+  }
+
+  .motor-log-table td:first-child {
+    grid-column: 1 / -1;
   }
 
   .motor-analysis-scope .segmented {
