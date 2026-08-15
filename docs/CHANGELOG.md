@@ -4,6 +4,25 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Backend Architecture V1.0 / Tag & Display Mapping Register V1.0 / Backend Data Flow Graph V1.0 — 15 Agustus 2026
+
+**Status:** Baseline backend SCADA / MES selesai
+
+### Ditambahkan
+
+- Arsitektur transmisi read-only dari PLC, drive, meter, dan dispensing melalui OT Edge Gateway, DMZ, ingestion, historian, API, hingga dashboard.
+- Canonical tag registry, versioned source mapping, data quality, store-and-forward, dan aturan perubahan mapping.
+- Baseline database PostgreSQL + TimescaleDB untuk master asset/tag, MES transaction, raw telemetry, live snapshot, event, aggregate, KPI, dan diagnostic motor.
+- Register mapping awal tag ke Plant Overview, Jetflow, Calator, Dryer, Kalender, Chemical Dispensing, utility, dan motor 3-phase.
+- Graph alur telemetry, siklus sample, digital traceability batch, dan batas keamanan OT–IT.
+
+### Keputusan
+
+- Dashboard dan AI tetap read-only pada fase V1; tidak ada jalur command langsung ke PLC atau drive.
+- Integrasi harus configuration-driven agar ekspansi mesin/sensor tidak mengharuskan perubahan frontend.
+
+---
+
 ## Frontend Dashboard V1.43 / Chemical Dispensing Calator Concept V1.5 / Dashboard Concept V1.22 — 15 Agustus 2026
 
 **Status:** Custom Chemical Dispensing log range selesai

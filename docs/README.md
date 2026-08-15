@@ -15,6 +15,10 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `chemicals/Chemical_Dispensing_Calator_Concept_v1.5.md` | 1.5 | Aktif | Custom range pada log transaksi Chemical Dispensing Calator |
 | `dashboard/Dashboard_V1_Concept_v1.22.md` | 1.22 | Aktif | Custom start/end range untuk Chemical Dispensing log |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
+| `backend/Backend_Data_Architecture_Concept_v1.0.md` | 1.0 | Aktif | Fondasi edge-to-historian, model database, API, security, dan roadmap integrasi backend |
+| `backend/Tag_Display_Mapping_Register_v1.0.md` | 1.0 | Aktif | Baseline canonical tag ke tampilan proses, utility, chemical, dan motor diagnostic |
+| `backend/Backend_Data_Flow_Graph_v1.0.md` | 1.0 | Aktif | Graph transmisi telemetry, traceability batch, dan batas OT–IT |
+| `releases/Backend_Architecture_V1.0.md` | 1.0 | Selesai | Baseline arsitektur dan mapping backend |
 | `releases/Frontend_V1.43.md` | 1.43 | Selesai | Chemical Dispensing log custom range |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
@@ -28,4 +32,4 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 
 ## Status saat ini
 
-Dokumentasi berada pada tahap baseline konseptual. Konsep mesin, utilitas, chemical dispensing, Dashboard V1, serta mapping awal 138 aset mesin telah ditambahkan. Tahap berikutnya adalah menetapkan nomor mesin aktual, hubungan dispensing–Calator, pilot, data source, tag, topology, infrastructure, serta kebutuhan operasional aktual.
+Dokumentasi berada pada tahap baseline konseptual. Konsep mesin, utilitas, chemical dispensing, Dashboard V1, mapping awal 138 aset mesin, dan arsitektur backend telah ditambahkan. Tahap berikutnya adalah menetapkan nomor mesin aktual, hubungan dispensing–Calator, pilot, alamat data source, tag registry aktual, topology jaringan, infrastructure, serta kebutuhan operasional aktual.
