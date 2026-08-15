@@ -2485,6 +2485,92 @@ select:focus-visible {
   gap: 6px;
 }
 
+.process-filter-toolbar {
+  display: grid;
+  gap: 9px;
+  margin: 10px 0 12px;
+  padding: 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line-soft));
+  border-radius: var(--radius-sm);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent 54%);
+}
+
+.process-filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.process-filter-head > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.process-filter-head strong {
+  color: var(--ink-2);
+  font-size: .53rem;
+}
+
+.process-filter-head small {
+  color: var(--ink-3);
+  font-size: .43rem;
+}
+
+.process-toggle-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.process-toggle {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 132px;
+  padding: 7px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: 140ms ease;
+}
+
+.process-toggle:hover,
+.process-toggle:focus-within,
+.process-toggle.active {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--line-soft));
+  color: var(--ink-2);
+}
+
+.process-toggle.active {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.process-toggle input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.process-toggle span {
+  color: var(--accent-dark);
+  font-family: var(--font-data);
+  font-size: .39rem;
+  white-space: nowrap;
+}
+
+.process-toggle strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: .43rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sensor-trend-stack {
   display: grid;
   gap: 9px;
@@ -2671,6 +2757,12 @@ select:focus-visible {
   color: var(--ink-3);
   font-family: var(--font-data);
   font-size: .39rem;
+}
+
+.jetflow-overlay-empty {
+  padding: 4px 1px;
+  color: var(--ink-3);
+  font-size: .41rem;
 }
 
 .sensor-trend-canvas {

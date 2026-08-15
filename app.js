@@ -55,6 +55,9 @@ const state = {
       chemical: ["transfer_flow", "target_weight", "line_pressure"],
     },
   },
+  jetflowProgram: {
+    enabled: [],
+  },
   batchInvestigation: {
     jetflow: { machineId: null, batch: null },
     calator: { machineId: null, batch: null },
@@ -111,6 +114,8 @@ const jetflowProcessSteps = [
   "Unload",
   "ST To MT Filling",
 ];
+
+state.jetflowProgram.enabled = [...jetflowProcessSteps];
 
 // Durasi ini adalah template recipe untuk demonstrasi historian. Pada integrasi PLC/MES,
 // nilai ini akan diganti dengan timestamp aktual setiap process step pada batch.
@@ -453,13 +458,16 @@ function programTimeLabel(timestamp) {
 
 function jetflowTrendProgramOverlay(sensor, series) {
   const program = jetflowProgramForSensor(sensor);
+  const enabledProcesses = state.jetflowProgram.enabled;
+  const selectedPhases = jetflowProgramSchedule().filter((phase) => enabledProcesses.includes(phase.name));
+  const selectedMarkers = program.markers.filter((marker) => enabledProcesses.includes(marker.process));
   const timeAt = (position) => series.timestamps[Math.round(position * (series.timestamps.length - 1))];
-  const phases = program.phases.map((phase) => `<span class="jetflow-program-phase"><b>Step ${String(phase.step).padStart(2, "0")}</b><strong>${phase.name}</strong><small>${programTimeLabel(timeAt(phase.start))}–${programTimeLabel(timeAt(phase.end))}</small></span>`).join("");
-  const markers = program.markers.map((marker) => `<span class="jetflow-sv-marker"><b>${programTimeLabel(timeAt(marker.position))}</b><strong>SV → ${marker.value.toFixed(sensor.decimals)} ${sensor.unit}</strong><small>Step ${String(marker.step).padStart(2, "0")} · ${marker.process}</small></span>`).join("");
+  const phases = selectedPhases.map((phase) => `<span class="jetflow-program-phase"><b>Step ${String(phase.step).padStart(2, "0")}</b><strong>${phase.name}</strong><small>${programTimeLabel(timeAt(phase.start))}–${programTimeLabel(timeAt(phase.end))}</small></span>`).join("");
+  const markers = selectedMarkers.map((marker) => `<span class="jetflow-sv-marker"><b>${programTimeLabel(timeAt(marker.position))}</b><strong>SV → ${marker.value.toFixed(sensor.decimals)} ${sensor.unit}</strong><small>Step ${String(marker.step).padStart(2, "0")} · ${marker.process}</small></span>`).join("");
   return `<div class="jetflow-program-overlay" aria-label="Program proses dan perubahan SV untuk ${sensor.label}">
-    <div class="jetflow-overlay-heading"><span>Recipe program overlay</span><small>Area berwarna dan garis putus-putus pada trend menandai step program dan perubahan setpoint.</small></div>
-    <div class="jetflow-program-phases">${phases}</div>
-    <div class="jetflow-sv-markers">${markers}</div>
+    <div class="jetflow-overlay-heading"><span>Selected program overlay</span><small>Process yang dicentang tampil pada seluruh trend sensor.</small></div>
+    <div class="jetflow-program-phases">${phases || `<span class="jetflow-overlay-empty">Tidak ada process dipilih.</span>`}</div>
+    <div class="jetflow-sv-markers">${markers || `<span class="jetflow-overlay-empty">Tidak ada perubahan SV pada sensor ini di process terpilih.</span>`}</div>
   </div>`;
 }
 
@@ -468,6 +476,7 @@ function sensorTrendPanel(type, machine) {
   const enabled = state.sensorTrend.enabled[type] || [];
   const selectedBatch = selectedBatchFor(type, machine);
   const toggles = sensors.map((sensor) => `<label class="sensor-toggle ${enabled.includes(sensor.key) ? "active" : ""}"><input type="checkbox" data-sensor-toggle="${type}|${sensor.key}" ${enabled.includes(sensor.key) ? "checked" : ""}/><i style="--sensor-color:${sensor.color}"></i><span>${sensor.label}<small>${sensor.tag}</small></span></label>`).join("");
+  const processToggles = type === "jetflow" ? jetflowProcessSteps.map((process, index) => `<label class="process-toggle ${state.jetflowProgram.enabled.includes(process) ? "active" : ""}"><input type="checkbox" data-jetflow-process-toggle="${process}" ${state.jetflowProgram.enabled.includes(process) ? "checked" : ""}/><span>Step ${String(index + 1).padStart(2, "0")}</span><strong>${process}</strong></label>`).join("") : "";
   const rows = sensors.filter((sensor) => enabled.includes(sensor.key)).map((sensor) => {
     const series = sensorTrendSeries(type, sensor, selectedBatch);
     const pv = series.pv.at(-1);
@@ -485,6 +494,7 @@ function sensorTrendPanel(type, machine) {
   return `<section class="card sensor-comparison-panel">
     <div class="sensor-comparison-head"><div><span class="eyebrow">Machine sensor historian</span><h2>Sensor SV / PV Comparison</h2><p>${machine.id} · batch ${selectedBatch} · setiap sensor menggunakan skala engineering unit masing-masing.</p></div><div class="sensor-comparison-actions"><span class="data-pill neutral">${selectedBatch}</span><div class="sensor-line-key"><span><i></i>PV solid</span><span><i></i>SV dashed</span></div><div class="segmented">${ranges}</div></div></div>
     <div class="sensor-toggle-toolbar"><div class="sensor-toggle-list">${toggles}</div><div class="sensor-bulk-actions"><button class="button ghost small" data-sensor-bulk="${type}|on">All On</button><button class="button ghost small" data-sensor-bulk="${type}|off">All Off</button></div></div>
+    ${type === "jetflow" ? `<div class="process-filter-toolbar"><div class="process-filter-head"><div><strong>Process program filter</strong><small>Pilih process yang ingin ditampilkan pada semua trend sensor.</small></div><div class="sensor-bulk-actions"><button class="button ghost small" data-jetflow-process-bulk="on">All On</button><button class="button ghost small" data-jetflow-process-bulk="off">All Off</button></div></div><div class="process-toggle-list">${processToggles}</div></div>` : ""}
     <div class="sensor-trend-stack">${rows || `<div class="sensor-trend-empty"><strong>Semua sensor dalam kondisi OFF</strong><span>Aktifkan sensor melalui checkbox untuk menampilkan perbandingan trend SV dan PV.</span></div>`}</div>
   </section>`;
 }
@@ -1899,6 +1909,21 @@ function bindPageEvents() {
       renderPage({ preserveScroll: true });
     });
   });
+  document.querySelectorAll("[data-jetflow-process-toggle]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const process = checkbox.dataset.jetflowProcessToggle;
+      const enabled = state.jetflowProgram.enabled;
+      if (checkbox.checked && !enabled.includes(process)) enabled.push(process);
+      if (!checkbox.checked) state.jetflowProgram.enabled = enabled.filter((item) => item !== process);
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-jetflow-process-bulk]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.jetflowProgram.enabled = button.dataset.jetflowProcessBulk === "on" ? [...jetflowProcessSteps] : [];
+      renderPage({ preserveScroll: true });
+    });
+  });
   document.querySelectorAll("[data-sensor-range]").forEach((button) => {
     button.addEventListener("click", () => {
       state.sensorTrend.range = button.dataset.sensorRange;
@@ -2119,20 +2144,21 @@ function drawSensorComparisonTrends(type) {
   sensorTrendConfig[type].filter((sensor) => enabled.includes(sensor.key)).forEach((sensor) => {
     const series = sensorTrendSeries(type, sensor, selectedBatch);
     const program = type === "jetflow" ? jetflowProgramForSensor(sensor) : null;
+    const selectedProcesses = state.jetflowProgram.enabled;
     drawLineChart(`sensor-trend-${type}-${sensor.key}`, [
       { data: series.pv, color: sensor.color, fill: true },
       { data: series.sv, color: sensor.color, dash: true },
     ], series.timestamps, {
       topPad: program ? 42 : 18,
       annotations: program ? {
-        bands: program.phases.map((phase) => ({
+        bands: jetflowProgramSchedule().filter((phase) => selectedProcesses.includes(phase.name)).map((phase) => ({
           start: phase.start,
           end: phase.end,
           label: `S${String(phase.step).padStart(2, "0")} ${phase.name}`,
           color: `${sensor.color}14`,
           textColor: sensor.color,
         })),
-        markers: program.markers.map((marker) => ({
+        markers: program.markers.filter((marker) => selectedProcesses.includes(marker.process)).map((marker) => ({
           position: marker.position,
           label: `${marker.value.toFixed(sensor.decimals)}${sensor.unit}`,
           color: sensor.color,

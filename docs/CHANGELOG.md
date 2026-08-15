@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.28 / Jetflow Concept V1.6 / Dashboard Concept V1.7 — 15 Agustus 2026
+
+**Status:** Global process checklist pada batch trend Jetflow selesai
+
+### Ditambahkan
+
+- Filter checkbox untuk seluruh process Jetflow.
+- Process band yang konsisten pada semua chart sensor aktif.
+- Tombol All On dan All Off untuk process filter.
+- Marker SV hanya untuk sensor dan process yang relevan.
+
+### Batasan
+
+- Pilihan filter dan data program masih simulated di frontend.
+
+---
+
 ## Frontend Dashboard V1.27 / Jetflow Concept V1.5 / Dashboard Concept V1.6 — 15 Agustus 2026
 
 **Status:** Recipe program overlay untuk investigasi batch Jetflow selesai
