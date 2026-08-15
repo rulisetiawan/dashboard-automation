@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.17 — 15 Agustus 2026
+
+**Status:** Scrollable recent batch table selesai
+
+### Ditambahkan
+
+- Tabel recent batch dengan kolom Batch No., Start, End, Status, dan Action.
+- Vertical scroll, sticky header, serta horizontal scroll untuk layar sempit.
+- Highlight Loaded pada batch aktif.
+
+### Diubah
+
+- Recent batch shortcut buttons diganti menjadi tabel berisi 18 data contoh per mesin.
+
+### Batasan
+
+- Recent batch masih simulated dan belum memiliki pagination atau server-side filter.
+
+---
+
 ## Frontend Dashboard V1.16 — 14 Agustus 2026
 
 **Status:** Standard chemical usage bar chart selesai

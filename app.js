@@ -281,16 +281,38 @@ function batchSeed(batch) {
   return [...batch].reduce((total, character, index) => total + character.charCodeAt(0) * (index + 1), 0);
 }
 
+function recentBatchHistory(machine) {
+  const baseEnd = new Date("2026-08-15T06:40:00+07:00").getTime();
+  return Array.from({ length: 18 }, (_, index) => {
+    const batch = index === 0 && machine.batch && machine.batch !== "—"
+      ? machine.batch
+      : historicalBatchFor(machine, index + 1);
+    const end = baseEnd - index * 97 * 60 * 1000;
+    const start = end - (118 + (batchSeed(batch) % 145)) * 60 * 1000;
+    const status = index === 0 && machine.batch === batch ? "Running" : index % 7 === 0 ? "Hold" : "Completed";
+    const formatTime = (timestamp) => new Date(timestamp).toLocaleString("id-ID", {
+      timeZone: "Asia/Jakarta", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+    return { batch, start: formatTime(start), end: status === "Running" ? "Now" : formatTime(end), status };
+  });
+}
+
 function batchInvestigationPanel(type, machine) {
   const selectedBatch = selectedBatchFor(type, machine);
-  const suggestions = [machine.batch, historicalBatchFor(machine, 1), historicalBatchFor(machine, 2)]
-    .filter((batch, index, items) => batch && batch !== "—" && items.indexOf(batch) === index);
+  const recentBatches = recentBatchHistory(machine);
   return `<section class="card batch-investigation-card">
     <div class="batch-investigation-copy"><span class="eyebrow">Batch historian lookup</span><h2>Search Production Batch</h2><p>Masukkan nomor batch untuk memuat trend sensor SV/PV dan abnormality log khusus batch tersebut.</p></div>
     <form class="batch-search-form" data-batch-form="${type}|${machine.id}">
       <label for="batch-search-${type}">Batch number</label>
       <div class="batch-search-row"><input class="search-control batch-search-input" id="batch-search-${type}" data-batch-input="${type}" value="${selectedBatch || ""}" placeholder="Contoh: DB-260814-032" autocomplete="off" maxlength="32"/><button class="button primary" type="submit">Search batch</button>${selectedBatch ? `<button class="button ghost" type="button" data-batch-clear="${type}|${machine.id}">Clear</button>` : ""}</div>
-      <div class="batch-suggestion-row"><span>Recent batches</span>${suggestions.map((batch) => `<button type="button" data-batch-suggestion="${type}|${machine.id}|${batch}">${batch}</button>`).join("")}</div>
+      <div class="batch-recent-head"><span>Recent batches</span><small>${recentBatches.length} records · scroll untuk melihat lainnya</small></div>
+      <div class="batch-recent-table-wrap" tabindex="0" aria-label="Recent batch history ${machine.id}">
+        <table class="batch-recent-table"><thead><tr><th>Batch No.</th><th>Start</th><th>End</th><th>Status</th><th>Action</th></tr></thead><tbody>${recentBatches.map((item) => {
+          const tone = item.status === "Completed" ? "good" : item.status === "Hold" ? "warning" : "neutral";
+          const isSelected = selectedBatch === item.batch;
+          return `<tr class="${isSelected ? "selected" : ""}"><td class="mono"><strong>${item.batch}</strong></td><td class="mono">${item.start}</td><td class="mono">${item.end}</td><td><span class="data-pill ${tone}">${item.status}</span></td><td><button class="batch-load-button ${isSelected ? "loaded" : ""}" type="button" data-batch-suggestion="${type}|${machine.id}|${item.batch}" ${isSelected ? "disabled" : ""}>${isSelected ? "Loaded" : "Load"}</button></td></tr>`;
+        }).join("")}</tbody></table>
+      </div>
     </form>
     ${selectedBatch ? `<div class="batch-active-context"><span class="kpi-scope historical">BATCH LOADED</span><strong>${selectedBatch}</strong><small>${machine.id} · trend dan log menggunakan scope batch yang sama</small></div>` : ""}
   </section>`;

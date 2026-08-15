@@ -1719,35 +1719,109 @@ select:focus-visible {
   min-width: 0;
 }
 
-.batch-suggestion-row {
+.batch-recent-head {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 3px;
 }
 
-.batch-suggestion-row > span {
-  margin-right: 2px;
-  color: var(--ink-3);
-  font-size: 0.46rem;
-}
-
-.batch-suggestion-row button {
-  min-height: 25px;
-  padding: 0 8px;
-  border: 1px solid var(--line-soft);
-  border-radius: 5px;
-  background: var(--surface-2);
+.batch-recent-head span {
   color: var(--ink-2);
-  font-family: var(--font-data);
-  font-size: 0.47rem;
+  font-size: 0.5rem;
+  font-weight: 700;
+}
+
+.batch-recent-head small {
+  color: var(--ink-3);
+  font-size: 0.43rem;
+}
+
+.batch-recent-table-wrap {
+  max-height: 226px;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  outline: none;
+  scrollbar-gutter: stable;
+}
+
+.batch-recent-table-wrap:focus-visible {
+  box-shadow: 0 0 0 2px rgba(7, 142, 170, 0.2);
+}
+
+.batch-recent-table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: 0.5rem;
+}
+
+.batch-recent-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--line);
+  background: #f1f5f6;
+  color: var(--ink-3);
+  font-size: 0.43rem;
+  letter-spacing: 0.045em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.batch-recent-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.batch-recent-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.batch-recent-table tbody tr:hover,
+.batch-recent-table tbody tr.selected {
+  background: var(--surface-hover);
+}
+
+.batch-recent-table td strong {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.batch-recent-table tbody tr.selected td strong {
+  color: var(--primary);
+}
+
+.batch-load-button {
+  min-width: 48px;
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid rgba(7, 142, 170, 0.24);
+  border-radius: 5px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.45rem;
+  font-weight: 700;
   cursor: pointer;
 }
 
-.batch-suggestion-row button:hover {
-  border-color: rgba(7, 142, 170, 0.28);
-  background: var(--surface-hover);
-  color: var(--primary);
+.batch-load-button:hover {
+  border-color: var(--primary);
+}
+
+.batch-load-button.loaded,
+.batch-load-button:disabled {
+  border-color: var(--line-soft);
+  background: var(--surface-3);
+  color: var(--ink-3);
+  cursor: default;
 }
 
 .batch-active-context {
