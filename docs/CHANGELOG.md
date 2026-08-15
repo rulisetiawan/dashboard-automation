@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.25 / Dashboard Concept V1.4 — 15 Agustus 2026
+
+**Status:** Declarative Plant Operations Summary selesai
+
+### Diubah
+
+- Management Question Center menjadi Plant Operations Summary.
+- Tujuh judul kartu pertanyaan menjadi label operasional deklaratif.
+- Struktur data, scope, time range, tabel mesin, dan drill-down tetap dipertahankan.
+
+### Batasan
+
+- Data dashboard masih simulated.
+
+---
+
 ## Frontend Dashboard V1.24 / Dashboard Concept V1.3 — 15 Agustus 2026
 
 **Status:** Plant Management Question Center selesai
