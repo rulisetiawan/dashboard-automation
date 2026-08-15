@@ -60,6 +60,8 @@ const state = {
   },
   chemicalLog: {
     range: "24H",
+    customStart: Date.now() - 24 * 60 * 60 * 1000,
+    customEnd: Date.now(),
     variant: "all",
     mode: "all",
     status: "all",
@@ -1896,8 +1898,12 @@ function calatorChemicalRankingPanel(machine) {
 function chemicalDispensingLogPanel(machine) {
   const rangeHours = { "8H": 8, "24H": 24, "7D": 168 };
   const supported = dispensingSupportedCalators(machine).map((calator) => calator.id);
+  const now = Date.now();
+  const customActive = state.chemicalLog.range === "CUSTOM";
+  const rangeStart = customActive ? state.chemicalLog.customStart : now - rangeHours[state.chemicalLog.range] * 60 * 60 * 1000;
+  const rangeEnd = customActive ? state.chemicalLog.customEnd : now;
   const visible = chemicalDispensingLogs.filter((item) => dispenserForCalator(item.calator) === machine.id
-    && item.hoursAgo <= rangeHours[state.chemicalLog.range]
+    && (() => { const timestamp = now - item.hoursAgo * 60 * 60 * 1000; return timestamp >= rangeStart && timestamp <= rangeEnd; })()
     && (state.chemicalLog.variant === "all" || item.code === state.chemicalLog.variant)
     && (state.chemicalLog.mode === "all" || item.mode === state.chemicalLog.mode)
     && (state.chemicalLog.status === "all" || item.status === state.chemicalLog.status)
@@ -1905,17 +1911,18 @@ function chemicalDispensingLogPanel(machine) {
   const option = (value, label, selected) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
   return panel("Dispensing Request Log", "Track request code, proses penimbangan, dan transfer chemical ke Calator", `
     <div class="dispensing-filter-row">
-      <label>Time range<select class="select-control" data-chemical-log-filter="range">${option("8H", "Last 8 hours", state.chemicalLog.range)}${option("24H", "Last 24 hours", state.chemicalLog.range)}${option("7D", "Last 7 days", state.chemicalLog.range)}</select></label>
+      <label>Time range<select class="select-control" data-chemical-log-filter="range">${option("8H", "Last 8 hours", state.chemicalLog.range)}${option("24H", "Last 24 hours", state.chemicalLog.range)}${option("7D", "Last 7 days", state.chemicalLog.range)}${option("CUSTOM", "Custom range", state.chemicalLog.range)}</select></label>
       <label>Chemical variant<select class="select-control" data-chemical-log-filter="variant">${option("all", "All variants", state.chemicalLog.variant)}${chemicals.map((chemical) => option(chemical[0], `${chemical[0]} · ${chemical[1]}`, state.chemicalLog.variant)).join("")}</select></label>
       <label>Calator destination<select class="select-control" data-chemical-log-filter="calator">${option("all", "All supported Calators", state.chemicalLog.calator)}${supported.map((calator) => option(calator, calator, state.chemicalLog.calator)).join("")}</select></label>
       <label>Dispensing type<select class="select-control" data-chemical-log-filter="mode">${option("all", "Manual + Automatic", state.chemicalLog.mode)}${option("Manual", "Manual", state.chemicalLog.mode)}${option("Automatic", "Automatic", state.chemicalLog.mode)}</select></label>
       <label>Status<select class="select-control" data-chemical-log-filter="status">${option("all", "All status", state.chemicalLog.status)}${option("Completed", "Completed", state.chemicalLog.status)}${option("Weighing", "Weighing", state.chemicalLog.status)}${option("Hold", "Hold", state.chemicalLog.status)}</select></label>
     </div>
+    ${customActive ? `<div class="chemical-custom-range"><label class="date-field"><span>Start date & time</span><input type="datetime-local" data-chemical-custom-date="start" value="${toDateTimeLocal(state.chemicalLog.customStart)}" /></label><label class="date-field"><span>End date & time</span><input type="datetime-local" data-chemical-custom-date="end" value="${toDateTimeLocal(state.chemicalLog.customEnd)}" /></label><button class="button primary small" data-chemical-custom-apply>Apply range</button></div>` : ""}
     <div class="dispensing-log-table-wrap" tabindex="0" aria-label="Chemical dispensing request log"><table class="data-table dispensing-log-table"><thead><tr><th>Time</th><th>Request Code</th><th>Calator</th><th>Chemical Variant</th><th>Target</th><th>Actual</th><th>Type</th><th>Weighing Process</th><th>Status</th><th>Operator / Source</th></tr></thead><tbody>${visible.map((item) => {
       const tone = item.status === "Completed" ? "good" : item.status === "Hold" ? "warning" : "neutral";
       return `<tr><td class="mono">${item.time}</td><td class="mono"><strong>${item.request}</strong></td><td>${item.calator}</td><td><strong>${item.code}</strong> · ${item.variant}</td><td class="mono">${item.target}</td><td class="mono">${item.actual}</td><td><span class="data-pill ${item.mode === "Automatic" ? "good" : "neutral"}">${item.mode}</span></td><td>${item.stage}</td><td><span class="data-pill ${tone}">${item.status}</span></td><td>${item.operator}</td></tr>`;
     }).join("") || `<tr><td colspan="10" class="dispensing-empty-row">Tidak ada transaksi sesuai filter.</td></tr>`}</tbody></table></div>
-    <div class="dispensing-log-foot"><strong>${visible.length}</strong> transaksi ditemukan · data penimbangan dapat ditelusuri per request code.</div>
+    <div class="dispensing-log-foot"><strong>${visible.length}</strong> transaksi ditemukan · ${customActive ? `${formatDateTime(rangeStart, true)} — ${formatDateTime(rangeEnd, true)}` : `Last ${state.chemicalLog.range.replace("H", " hours").replace("7D", "7 days")}`} · data penimbangan dapat ditelusuri per request code.</div>
   `, `<span class="data-pill neutral">CALATOR DISPENSING</span>`, "dispensing-log-panel");
 }
 
@@ -2304,6 +2311,20 @@ function bindPageEvents() {
   document.querySelectorAll("[data-chemical-log-filter]").forEach((select) => {
     select.addEventListener("change", () => {
       state.chemicalLog[select.dataset.chemicalLogFilter] = select.value;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-chemical-custom-date]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const value = new Date(input.value).getTime();
+      if (Number.isFinite(value)) state.chemicalLog[input.dataset.chemicalCustomDate === "start" ? "customStart" : "customEnd"] = value;
+    });
+  });
+  document.querySelectorAll("[data-chemical-custom-apply]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (state.chemicalLog.customEnd < state.chemicalLog.customStart) {
+        [state.chemicalLog.customStart, state.chemicalLog.customEnd] = [state.chemicalLog.customEnd, state.chemicalLog.customStart];
+      }
       renderPage({ preserveScroll: true });
     });
   });

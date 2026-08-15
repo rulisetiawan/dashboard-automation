@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.43 / Chemical Dispensing Calator Concept V1.5 / Dashboard Concept V1.22 — 15 Agustus 2026
+
+**Status:** Custom Chemical Dispensing log range selesai
+
+### Ditambahkan
+
+- Custom start/end date-time pada Dispensing Request Log.
+- Apply range dan validasi start/end terbalik.
+- Kombinasi range dengan chemical, Calator, type, dan status filter.
+
+---
+
 ## Frontend Dashboard V1.42 / Jetflow Concept V1.7 / Calator Concept V1.2 / Dryer Concept V1.1 / Dashboard Concept V1.21 — 15 Agustus 2026
 
 **Status:** Motor diagnostic lintas proses selesai

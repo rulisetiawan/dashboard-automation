@@ -12,10 +12,10 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Dryer_v1.1.md` | 1.1 | Aktif | Diagnostic motor 3-phase untuk drive dan fan Dryer |
 | `machines/Machine_Concept_Kalender_v1.12.md` | 1.12 | Aktif | Perbaikan alignment historical log Motor & Drive |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
-| `chemicals/Chemical_Dispensing_Calator_Concept_v1.4.md` | 1.4 | Aktif | P&ID dispensing: 8 inlet, dua tank, loadcell, dan distribusi Calator |
-| `dashboard/Dashboard_V1_Concept_v1.21.md` | 1.21 | Aktif | Cross-process Motor & Drive diagnostic workspace |
+| `chemicals/Chemical_Dispensing_Calator_Concept_v1.5.md` | 1.5 | Aktif | Custom range pada log transaksi Chemical Dispensing Calator |
+| `dashboard/Dashboard_V1_Concept_v1.22.md` | 1.22 | Aktif | Custom start/end range untuk Chemical Dispensing log |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
-| `releases/Frontend_V1.42.md` | 1.42 | Selesai | Cross-process Motor & Drive diagnostic |
+| `releases/Frontend_V1.43.md` | 1.43 | Selesai | Chemical Dispensing log custom range |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
 ## Aturan pembaruan
