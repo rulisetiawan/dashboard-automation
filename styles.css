@@ -933,6 +933,71 @@ select:focus-visible {
   content: "";
 }
 
+.kpi-value .process-value {
+  display: block;
+  max-width: 100%;
+  font-family: var(--font-ui);
+  font-size: 1.05rem;
+  line-height: 1.22;
+  overflow-wrap: anywhere;
+}
+
+.jetflow-process-sequence {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.jetflow-process-step {
+  position: relative;
+  display: grid;
+  min-height: 82px;
+  align-content: space-between;
+  gap: 7px;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.jetflow-process-step span {
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: 0.46rem;
+}
+
+.jetflow-process-step strong {
+  color: var(--ink-2);
+  font-size: 0.55rem;
+  line-height: 1.35;
+}
+
+.jetflow-process-step small {
+  color: var(--ink-3);
+  font-size: 0.43rem;
+}
+
+.jetflow-process-step.completed {
+  border-color: rgba(17, 155, 112, 0.16);
+  background: var(--success-soft);
+}
+
+.jetflow-process-step.completed small {
+  color: var(--success);
+}
+
+.jetflow-process-step.active {
+  border-color: rgba(7, 142, 170, 0.35);
+  background: var(--primary-soft);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.jetflow-process-step.active strong,
+.jetflow-process-step.active small {
+  color: var(--primary);
+}
+
 .kpi-top {
   display: flex;
   align-items: center;
@@ -3818,6 +3883,10 @@ select:focus-visible {
 }
 
 @media (max-width: 1180px) {
+  .jetflow-process-sequence {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   :root {
     --sidebar-width: 76px;
   }
@@ -3907,6 +3976,10 @@ select:focus-visible {
 }
 
 @media (max-width: 920px) {
+  .jetflow-process-sequence {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4008,6 +4081,10 @@ select:focus-visible {
   :root {
     --sidebar-width: 248px;
     --topbar-height: 62px;
+  }
+
+  .jetflow-process-sequence {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .throughput-summary {

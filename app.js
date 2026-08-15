@@ -94,6 +94,21 @@ const processConfig = {
   chemical: { code: "DSP", singular: "Dispensing", plural: "Dispensing Calator", process: "Chemical transfer", areas: "3 areas" },
 };
 
+const jetflowProcessSteps = [
+  "Filling",
+  "Drain",
+  "Rinse Cooling",
+  "Check PH",
+  "Temperature Control",
+  "Inject DT 1",
+  "Inject DT 2",
+  "Dosing DT 1",
+  "Dosing DT 2",
+  "Load",
+  "Unload",
+  "ST To MT Filling",
+];
+
 function simulatedMachineState(index, areaIndex) {
   const marker = index + areaIndex * 5;
   if (marker % 19 === 0 && marker > 0) return "fault";
@@ -118,7 +133,7 @@ function createFleet(type) {
       progress: active ? 31 + ((index * 13 + areaIndex * 17) % 63) : 0,
       connected: machineState !== "offline",
     };
-    if (type === "jetflow") return { ...base, winches: 2 + ((index + areaIndex) % 7), recipe: active ? ["NAVY-R12", "BLACK-R08", "OLIVE-R03"][index % 3] : "—", step: active ? ["Filling", "Dosing", "Heating", "Holding"][index % 4] : "Ready" };
+    if (type === "jetflow") return { ...base, winches: 2 + ((index + areaIndex) % 7), recipe: active ? ["NAVY-R12", "BLACK-R08", "OLIVE-R03"][index % 3] : "—", step: jetflowProcessSteps[(index + areaIndex * 3) % jetflowProcessSteps.length] };
     if (type === "calator") return { ...base, subtype: index % 6 === 5 ? "Bianco" : "Standard", recipe: active ? ["WASH-S04", "SOFT-B12", "SOFT-B08"][index % 3] : "—" };
     if (type === "dryer") return { ...base, chambers: 6 + ((index + areaIndex) % 2) * 2, setup: active ? ["DRY-COT-18", "DRY-POL-22", "DRY-COT-16"][index % 3] : "—" };
     if (type === "kalender") return { ...base, setup: active ? ["FIN-COT-07", "FIN-POL-05", "FIN-COT-09"][index % 3] : "—" };
@@ -547,10 +562,10 @@ function statusCount(items, machineState) {
 
 const managementConfig = {
   jetflow: {
-    currentUtility: { label: "Water Flow Now", value: 184, unit: "m³/h" },
+    currentUtility: { label: "Active Process Stages", value: jetflowProcessSteps.length, unit: "stages" },
     output: { label: "Completed Batches", unit: "batch", rate: 0.12 },
     metrics: {
-      water: { label: "Water Consumption", short: "Water", unit: "m³", rate: 2.45 },
+      water: { label: "Total Water Consumption", short: "Water", unit: "m³", rate: 2.45 },
       energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 34 },
       steam: { label: "Steam Consumption", short: "Steam", unit: "ton", rate: 0.24 },
     },
@@ -746,7 +761,7 @@ function processFleetPage(type) {
       ${managementKpi("live", "Machines Running Now", running, `/ ${fleet.length}`, `${Math.round(running / fleet.length * 100)}% of mapped fleet`, "success")}
       ${managementKpi("live", "Machines Stopped Now", stopped, "machines", `${statusCount(fleet, "fault")} fault · ${statusCount(fleet, "idle")} idle`, stopped ? "warning" : "success")}
       ${managementKpi("live", "Active Exceptions", exceptions, "machines", `${statusCount(fleet, "warning")} warning · ${statusCount(fleet, "fault")} fault`, exceptions ? "danger" : "success")}
-      ${managementKpi("live", managementConfig[type].currentUtility.label, liveValue(managementConfig[type].currentUtility.value, "", managementConfig[type].currentUtility.value * .008, managementConfig[type].currentUtility.value < 10 ? 2 : 1), managementConfig[type].currentUtility.unit, "Current process demand", "")}
+      ${managementKpi("live", managementConfig[type].currentUtility.label, type === "jetflow" ? managementConfig[type].currentUtility.value : liveValue(managementConfig[type].currentUtility.value, "", managementConfig[type].currentUtility.value * .008, managementConfig[type].currentUtility.value < 10 ? 2 : 1), managementConfig[type].currentUtility.unit, type === "jetflow" ? "Configured Jetflow production sequence" : "Current process demand", "")}
     </section>
     <div class="management-section-label"><span class="kpi-scope historical">SELECTED RANGE</span><p>${formatDateTime(state.history.start, true)} — ${formatDateTime(state.history.end, true)}</p></div>
     <section class="management-kpi-grid historical-grid">
@@ -763,7 +778,7 @@ function processFleetPage(type) {
 }
 
 function machineSnapshot(type, machine, index) {
-  if (type === "jetflow") return `${machine.winches} winches · Tank ${(91.8 + index % 6 * .3).toFixed(1)}°C`;
+  if (type === "jetflow") return `${machine.step} · ${machine.winches} winches`;
   if (type === "calator") return `${machine.subtype} · OF Out ${(28.7 + index % 5 * .12).toFixed(1)} m/min`;
   if (type === "dryer") return `${machine.chambers} chambers · Avg ${(145.2 + index % 4 * .5).toFixed(1)}°C`;
   if (type === "kalender") return `Load balance ${(1.2 + index % 5 * .3).toFixed(1)}% · Width ${(180.8 + index % 4 * .2).toFixed(1)} cm`;
@@ -807,6 +822,9 @@ function chemicalPage() { return processPage("chemical", chemicalDetailPage); }
 
 function jetflowDetailPage() {
   const machine = jetflows.find((m) => m.id === state.selected.jetflow) || jetflows[0];
+  const waterSeed = [...machine.id].reduce((total, character) => total + character.charCodeAt(0), 0);
+  const totalWaterConsumption = (118 + waterSeed % 890 / 10).toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const processPosition = jetflowProcessSteps.indexOf(machine.step) + 1;
   const winches = Array.from({ length: machine.winches }, (_, i) => {
     const warn = machine.id === "JF-03" && i === 2;
     return `<div class="winch-card"><div class="winch-card-head"><strong>Winch ${i + 1}</strong><i class="equipment-state ${warn ? "warning" : ""}"></i></div><div class="card-reading">${liveValue(42 + i * .7, "Hz", .25, 1)}</div><div class="card-caption">Motor · ${warn ? "Tangle detected" : "Limit clear"}</div><div class="mini-bar"><span style="width:${65 + i * 3}%"></span></div></div>`;
@@ -818,10 +836,14 @@ function jetflowDetailPage() {
     ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Main Tank Temp", liveValue(92.6, "", .18, 1), "°C", "MT", "<strong>Target 93.0°C</strong>· holding")}
-      ${kpi("Water Level", liveValue(72.4, "", .12, 1), "%", "LV", "<strong>Within range</strong>· target 72%", "success")}
-      ${kpi("Flow Meter", liveValue(124.8, "", .7, 1), "m³/h", "FL", "<strong>↑ 1.2%</strong>stable flow")}
+      ${kpi("Current Process", `<span class="process-value">${machine.step}</span>`, "", "PR", `<strong>Step ${processPosition}</strong>of ${jetflowProcessSteps.length} process stages`, "success")}
+      ${kpi("Total Water Consumption", totalWaterConsumption, "m³", "WA", "<strong>Current batch</strong>· accumulated total")}
       ${kpi("Steam Header", liveValue(7.8, "", .07, 1), "bar", "ST", "<strong class='danger'>Low baseline</strong>· 8.1 bar", "warning")}
     </section>
+    ${panel("Jetflow Process Sequence", `Current process · ${machine.step}`, `<div class="jetflow-process-sequence">${jetflowProcessSteps.map((process, index) => {
+      const processState = index === processPosition - 1 ? "active" : index < processPosition - 1 ? "completed" : "upcoming";
+      return `<div class="jetflow-process-step ${processState}"><span>${String(index + 1).padStart(2, "0")}</span><strong>${process}</strong><small>${processState === "active" ? "Current" : processState === "completed" ? "Complete" : "Pending"}</small></div>`;
+    }).join("")}</div>`)}
     <section class="grid-2 abnormal-log-layout">
       ${panel("Tank & Dosing", "Live tank condition and data quality", `
         <div class="metric-grid">

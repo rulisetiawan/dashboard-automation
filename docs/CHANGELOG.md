@@ -4,6 +4,32 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.18 / Jetflow Concept V1.2 — 15 Agustus 2026
+
+**Status:** Jetflow water totalizer dan process sequence selesai
+
+### Ditambahkan
+
+- Current Process Jetflow dengan sequence 12 tahap.
+- Visual step Complete, Current, dan Pending pada detail mesin.
+- Dokumentasi konsep Jetflow V1.2.
+
+### Diubah
+
+- KPI Water Flow Jetflow menjadi Total Water Consumption.
+- KPI Water Level pada detail Jetflow menjadi Current Process.
+- Overview, donut per Lane, ranking mesin, dan detail menggunakan total konsumsi dalam `m³`.
+
+### Dipertahankan
+
+- Flow meter dan water level tetap tersedia sebagai sensor teknis untuk historian dan investigasi batch.
+
+### Batasan
+
+- Nilai frontend dan sequence masih simulated.
+
+---
+
 ## Frontend Dashboard V1.17 — 15 Agustus 2026
 
 **Status:** Scrollable recent batch table selesai
