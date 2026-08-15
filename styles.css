@@ -1802,12 +1802,16 @@ select:focus-visible {
 }
 
 .batch-investigation-card {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.72fr) minmax(380px, 1.28fr);
-  align-items: start;
-  gap: 18px;
   margin-bottom: 13px;
   padding: 17px;
+}
+
+.batch-investigation-header {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.62fr) minmax(480px, 1.38fr);
+  align-items: end;
+  gap: 24px;
+  margin-bottom: 14px;
 }
 
 .batch-investigation-copy h2 {
@@ -1891,9 +1895,32 @@ select:focus-visible {
 
 .batch-recent-table {
   width: 100%;
-  min-width: 620px;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: 0.5rem;
+  table-layout: fixed;
+}
+
+.batch-recent-table th:first-child,
+.batch-recent-table td:first-child {
+  width: 24%;
+}
+
+.batch-recent-table th:nth-child(2),
+.batch-recent-table td:nth-child(2),
+.batch-recent-table th:nth-child(3),
+.batch-recent-table td:nth-child(3) {
+  width: 21%;
+}
+
+.batch-recent-table th:nth-child(4),
+.batch-recent-table td:nth-child(4) {
+  width: 17%;
+}
+
+.batch-recent-table th:last-child,
+.batch-recent-table td:last-child {
+  width: 17%;
 }
 
 .batch-recent-table th {
@@ -4093,8 +4120,10 @@ select:focus-visible {
     flex-direction: column;
   }
 
-  .batch-investigation-card {
+  .batch-investigation-header {
     grid-template-columns: 1fr;
+    align-items: start;
+    gap: 12px;
   }
 
   .batch-active-context {

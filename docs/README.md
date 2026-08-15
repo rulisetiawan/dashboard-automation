@@ -13,9 +13,9 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Kalender_v1.2.md` | 1.2 | Aktif | Empat kartu utama Loadcell dan Temperature Upper/Lower dengan PV serta SV |
 | `utilities/Plant_Utility_Concept_v1.0.md` | 1.0 | Baseline | Konsep listrik, water, steam boiler, thermal oil boiler, energy balance, dan machine utility monitoring |
 | `chemicals/Chemical_Dispensing_Transfer_Concept_v1.1.md` | 1.1 | Aktif | Konsep tujuh varian chemical dan lima dispensing pada area Depan, Belakang, serta Timur |
-| `dashboard/Dashboard_V1_Concept_v1.1.md` | 1.1 | Aktif | Konsep dashboard real-time/historical dengan multi-speed Calator, machine monitoring, alarm, data health, utility, dan chemical |
+| `dashboard/Dashboard_V1_Concept_v1.2.md` | 1.2 | Aktif | Batch Historian Lookup dengan tabel Recent Batches full-width pada detail mesin |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
-| `releases/Frontend_V1.21.md` | 1.21 | Selesai | Empat kartu PV/SV utama pada detail mesin Kalender |
+| `releases/Frontend_V1.22.md` | 1.22 | Selesai | Recent Batches menggunakan tabel full-width pada Batch Historian Lookup |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
 ## Aturan pembaruan

@@ -4,6 +4,27 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.22 / Dashboard Concept V1.2 — 15 Agustus 2026
+
+**Status:** Full-width Recent Batches table selesai
+
+### Diubah
+
+- Tabel Recent Batches menggunakan seluruh lebar card Batch Historian Lookup.
+- Informasi lookup dan form pencarian menjadi header di atas tabel.
+- Proporsi Batch No., Start, End, Status, dan Action dirapikan.
+- Layout yang sama diterapkan pada seluruh detail jenis mesin.
+
+### Dipertahankan
+
+- Vertical scroll, sticky header, pemuatan batch, dan horizontal scroll pada layar kecil.
+
+### Batasan
+
+- Data recent batch masih simulated.
+
+---
+
 ## Frontend Dashboard V1.21 / Kalender Concept V1.2 — 15 Agustus 2026
 
 **Status:** Empat kartu PV/SV utama Kalender selesai
