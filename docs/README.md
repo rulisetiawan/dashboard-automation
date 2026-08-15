@@ -10,12 +10,12 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Jetflow_v1.6.md` | 1.6 | Aktif | Checklist process global untuk context seluruh trend sensor batch Jetflow |
 | `machines/Machine_Concept_Calator_v1.1.md` | 1.1 | Aktif | Konsep Calator dengan multi-speed, template Bianco, Overfeed Out, dancing roller, chemical, output, dan quality |
 | `machines/Machine_Concept_Dryer_v1.0.md` | 1.0 | Baseline | Konsep pengeringan, speed, multi-chamber temperature, output, quality, dan implementasi Dryer |
-| `machines/Machine_Concept_Kalender_v1.2.md` | 1.2 | Aktif | Empat kartu utama Loadcell dan Temperature Upper/Lower dengan PV serta SV |
+| `machines/Machine_Concept_Kalender_v1.3.md` | 1.3 | Aktif | Parameter configuration Kalender serta pemisahan PV utama dari utility live |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
 | `chemicals/Chemical_Dispensing_Transfer_Concept_v1.1.md` | 1.1 | Aktif | Konsep tujuh varian chemical dan lima dispensing pada area Depan, Belakang, serta Timur |
-| `dashboard/Dashboard_V1_Concept_v1.7.md` | 1.7 | Aktif | Filter process recipe global untuk perbandingan banyak sensor batch Jetflow |
+| `dashboard/Dashboard_V1_Concept_v1.8.md` | 1.8 | Aktif | Pemisahan configuration, PV utama, dan live utility pada detail Kalender |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
-| `releases/Frontend_V1.28.md` | 1.28 | Selesai | Global process checklist pada trend batch Jetflow |
+| `releases/Frontend_V1.29.md` | 1.29 | Selesai | Kalender parameter configuration dan standardisasi satuan |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
 ## Aturan pembaruan

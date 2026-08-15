@@ -3129,6 +3129,55 @@ select:focus-visible {
   text-align: right;
 }
 
+.parameter-config-wrap {
+  overflow: auto;
+  max-height: 322px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+}
+
+.parameter-config-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .5rem;
+}
+
+.parameter-config-table th,
+.parameter-config-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+}
+
+.parameter-config-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: .42rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.parameter-config-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.parameter-config-table td:first-child {
+  color: var(--ink-2);
+}
+
+.parameter-config-table td:nth-child(2) {
+  color: var(--accent-dark);
+}
+
+.parameter-config-table td:last-child {
+  color: var(--ink-3);
+}
+
 .utility-tree {
   display: flex;
   flex-direction: column;

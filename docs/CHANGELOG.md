@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.29 / Kalender Concept V1.3 / Dashboard Concept V1.8 — 15 Agustus 2026
+
+**Status:** Kalender parameter configuration selesai
+
+### Diubah
+
+- Upper / Lower Balance diganti menjadi Parameter Configuration berisi delapan parameter.
+- Satuan Loadcell dinormalisasi menjadi kg.
+- Live Process menjadi Live Process & Utility tanpa mengulang empat kartu PV utama.
+
+### Ditambahkan
+
+- Total energy consumption, power demand, dancing roller (%), inlet speed, expander overspeed, dan plaiter overspeed.
+
+### Batasan
+
+- Configuration dan utility masih simulated.
+
+---
+
 ## Frontend Dashboard V1.28 / Jetflow Concept V1.6 / Dashboard Concept V1.7 — 15 Agustus 2026
 
 **Status:** Global process checklist pada batch trend Jetflow selesai

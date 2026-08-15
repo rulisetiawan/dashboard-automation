@@ -353,8 +353,8 @@ const sensorTrendConfig = {
     { key: "temp_upper", label: "Upper Roll Temperature", tag: "TEMP_UPPER", unit: "°C", sv: 127, variance: 3.2, decimals: 1, color: "#078eaa" },
     { key: "temp_lower", label: "Lower Roll Temperature", tag: "TEMP_LOWER", unit: "°C", sv: 127, variance: 3.0, decimals: 1, color: "#4d8fd0" },
     { key: "overfeed", label: "Overfeed", tag: "OVERFEED", unit: "%", sv: 8.5, variance: 0.65, decimals: 1, color: "#119b70" },
-    { key: "load_upper", label: "Loadcell Upper", tag: "LOAD_UPPER", unit: "kN", sv: 4.8, variance: 0.24, decimals: 2, color: "#8267c7" },
-    { key: "load_lower", label: "Loadcell Lower", tag: "LOAD_LOWER", unit: "kN", sv: 4.8, variance: 0.24, decimals: 2, color: "#d68b05" },
+    { key: "load_upper", label: "Loadcell Upper", tag: "LOAD_UPPER", unit: "kg", sv: 480, variance: 24, decimals: 1, color: "#8267c7" },
+    { key: "load_lower", label: "Loadcell Lower", tag: "LOAD_LOWER", unit: "kg", sv: 475, variance: 24, decimals: 1, color: "#d68b05" },
     { key: "fabric_width", label: "Fabric Width", tag: "WIDTH_FABRIC", unit: "cm", sv: 181, variance: 1.2, decimals: 1, color: "#db6d48" },
   ],
   chemical: [
@@ -1092,7 +1092,7 @@ const abnormalLogTemplates = {
   ],
   kalender: [
     ["14 Aug · 10:24:32", "10:29:14", "Upper Roll Temperature", "127.0 °C", "122.8 °C", "-4.2 °C", 4.7, "Gramasi and shrinkage consistency risk", "Open"],
-    ["14 Aug · 10:03:18", "10:05:47", "Loadcell Upper", "4.80 kN", "5.34 kN", "+0.54 kN", 2.5, "Upper/lower pressure imbalance", "Recovered"],
+    ["14 Aug · 10:03:18", "10:05:47", "Loadcell Upper", "480.0 kg", "534.0 kg", "+54.0 kg", 2.5, "Upper/lower pressure imbalance", "Recovered"],
     ["14 Aug · 09:36:51", "09:40:05", "Fabric Width", "181.0 cm", "178.9 cm", "-2.1 cm", 3.2, "Width below finishing specification", "Acknowledged"],
     ["14 Aug · 08:48:09", "08:51:44", "Overfeed", "8.5 %", "6.9 %", "-1.6 %", 3.6, "Shrinkage correction below target", "Recovered"],
     ["14 Aug · 07:54:26", "07:59:18", "Lower Roll Temperature", "127.0 °C", "121.7 °C", "-5.3 °C", 4.9, "Bowing correction instability", "Recovered"],
@@ -1219,6 +1219,10 @@ function balanceRows(rows) {
   return `<div>${rows.map((r) => `<div class="balance-row"><span class="balance-label">${r[0]}</span><div class="balance-track"><i class="balance-indicator" style="left:${r[1]}%"></i></div><span class="balance-value">${r[2]}</span></div>`).join("")}</div>`;
 }
 
+function parameterConfigurationRows(rows) {
+  return `<div class="parameter-config-wrap" tabindex="0" aria-label="Kalender parameter configuration"><table class="parameter-config-table"><thead><tr><th>Parameter</th><th>Configuration</th><th>Unit</th></tr></thead><tbody>${rows.map((row) => `<tr><td><strong>${row[0]}</strong></td><td class="mono">${row[1]}</td><td>${row[2]}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
 function dryerDetailPage() {
   const machine = dryers.find((m) => m.id === state.selected.dryer) || dryers[0];
   const temps = Array.from({ length: machine.chambers }, (_, i) => ({ actual: 142 + i * 1.2 + (i === 4 ? -9 : 0), sp: 144 + i * 1.0 }));
@@ -1269,24 +1273,26 @@ function kalenderDetailPage() {
     ${machineHero(machine, "KL", `${machine.setup} · Dryer source DR-02 · Cotton 220 GSM`)}
     ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
-      ${kpi("Loadcell Upper", liveValue(4.82, "", .02, 2), "kN", "LU", "<strong>SV 4.80 kN</strong>· stable", "success")}
-      ${kpi("Loadcell Lower", liveValue(4.73, "", .02, 2), "kN", "LL", "<strong>SV 4.75 kN</strong>· stable", "success")}
+      ${kpi("Loadcell Upper", liveValue(482, "", 2, 1), "kg", "LU", "<strong>SV 480.0 kg</strong>· stable", "success")}
+      ${kpi("Loadcell Lower", liveValue(473, "", 2, 1), "kg", "LL", "<strong>SV 475.0 kg</strong>· stable", "success")}
       ${kpi("Temperature Upper", liveValue(126.4, "", .15, 1), "°C", "TU", "<strong>SV 127.0°C</strong>· good")}
       ${kpi("Temperature Lower", liveValue(125.8, "", .15, 1), "°C", "TL", "<strong>SV 127.0°C</strong>· monitor", "warning")}
     </section>
     <section class="grid-2">
-      ${panel("Upper / Lower Balance", "Mechanical, thermal, expander, dan felt synchronization", balanceRows([
-        ["Loadcell U/L", 52, "1.8%"], ["Temperature U/L", 49, "0.6°C"], ["Expander L/R", 51, "0.9%"],
-        ["Upper/Lower Felt", 48, "1.2%"], ["Dancing Roller", 54, "53.8%"], ["Fabric Width", 50, "181.2 cm"]
+      ${panel("Parameter Configuration", "Setpoint recipe, speed limit, dan target finishing aktif", parameterConfigurationRows([
+        ["SV Loadcell Upper", "480.0", "kg"], ["SV Loadcell Lower", "475.0", "kg"],
+        ["SV Temperature Upper", "127.0", "°C"], ["SV Temperature Lower", "127.0", "°C"],
+        ["Overspeed Expander", "2.0", "%"], ["Overspeed Inlet", "1.5", "%"],
+        ["Overspeed Plaiter", "1.8", "%"], ["Fabric Width", "181.0", "cm"]
       ]))}
-      ${panel("Live Process Measurements", "Input sampai output finishing", `
+      ${panel("Live Process & Utility", "Operational value yang tidak mengulang kartu utama", `
         <div class="metric-grid">
-          ${metricTile("Temp inlet", liveValue(74.8, "°C", .12, 1), "From Dryer")}
-          ${metricTile("Temp upper", liveValue(126.4, "°C", .13, 1), "SP 127.0")}
-          ${metricTile("Temp lower", liveValue(125.8, "°C", .13, 1), "SP 127.0")}
-          ${metricTile("Loadcell upper", liveValue(4.82, "kN", .02, 2), "Within range")}
-          ${metricTile("Loadcell lower", liveValue(4.73, "kN", .02, 2), "Within range")}
-          ${metricTile("Dancing roller", liveValue(53.8, "%", .22, 1), "Center 50.0")}
+          ${metricTile("Total energy consumption", "1,284<small>kWh</small>", "Current shift")}
+          ${metricTile("Power demand", liveValue(86.4, "kW", .35, 1), "Load 72%")}
+          ${metricTile("Dancing roller", liveValue(53.8, "%", .22, 1), "Center 50.0%")}
+          ${metricTile("Inlet speed", liveValue(27.6, "m/min", .08, 1), "Line reference")}
+          ${metricTile("Expander overspeed", liveValue(1.1, "%", .04, 1), "Limit 2.0%")}
+          ${metricTile("Plaiter overspeed", liveValue(.8, "%", .04, 1), "Limit 1.8%")}
         </div>
       `)}
     </section>
