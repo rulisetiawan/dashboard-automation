@@ -840,10 +840,11 @@ function jetflowDetailPage() {
       ${kpi("Total Water Consumption", totalWaterConsumption, "m³", "WA", "<strong>Current batch</strong>· accumulated total")}
       ${kpi("Steam Header", liveValue(7.8, "", .07, 1), "bar", "ST", "<strong class='danger'>Low baseline</strong>· 8.1 bar", "warning")}
     </section>
-    ${panel("Jetflow Process Sequence", `Current process · ${machine.step}`, `<div class="jetflow-process-sequence">${jetflowProcessSteps.map((process, index) => {
+    ${panel("Jetflow Process Sequence", `Current process · ${machine.step} · step ${processPosition} of ${jetflowProcessSteps.length}`, `<div class="jetflow-sequence-table-wrap" tabindex="0" aria-label="Jetflow process sequence ${machine.id}"><table class="jetflow-sequence-table"><thead><tr><th scope="col">Step</th><th scope="col">Process</th><th scope="col">Status</th></tr></thead><tbody>${jetflowProcessSteps.map((process, index) => {
       const processState = index === processPosition - 1 ? "active" : index < processPosition - 1 ? "completed" : "upcoming";
-      return `<div class="jetflow-process-step ${processState}"><span>${String(index + 1).padStart(2, "0")}</span><strong>${process}</strong><small>${processState === "active" ? "Current" : processState === "completed" ? "Complete" : "Pending"}</small></div>`;
-    }).join("")}</div>`)}
+      const processLabel = processState === "active" ? "Current" : processState === "completed" ? "Complete" : "Pending";
+      return `<tr class="${processState}"><td class="sequence-step-number">${String(index + 1).padStart(2, "0")}</td><td><strong>${process}</strong></td><td><span class="sequence-state ${processState}">${processLabel}</span></td></tr>`;
+    }).join("")}</tbody></table></div>`, `<span class="data-pill neutral">${jetflowProcessSteps.length} STEPS</span>`)}
     <section class="grid-2 abnormal-log-layout">
       ${panel("Tank & Dosing", "Live tank condition and data quality", `
         <div class="metric-grid">

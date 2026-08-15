@@ -7,7 +7,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | Dokumen | Versi | Status | Keterangan |
 |---|---:|---|---|
 | `SCADA_MES_Master_Concept_v1.0.md` | 1.0 | Baseline | Konsep induk, ruang lingkup, model operasional, arsitektur konseptual, dan roadmap |
-| `machines/Machine_Concept_Jetflow_v1.2.md` | 1.2 | Aktif | Total Water Consumption, Current Process, dan sequence 12 tahap Jetflow |
+| `machines/Machine_Concept_Jetflow_v1.3.md` | 1.3 | Aktif | Sequence Jetflow berupa tabel ringkas yang dapat digulir dan siap untuk sekitar 100 step |
 | `machines/Machine_Concept_Calator_v1.1.md` | 1.1 | Aktif | Konsep Calator dengan multi-speed, template Bianco, Overfeed Out, dancing roller, chemical, output, dan quality |
 | `machines/Machine_Concept_Dryer_v1.0.md` | 1.0 | Baseline | Konsep pengeringan, speed, multi-chamber temperature, output, quality, dan implementasi Dryer |
 | `machines/Machine_Concept_Kalender_v1.1.md` | 1.1 | Aktif | Konsep Kalender dengan sensor inlet/upper/lower, dancing roller, fabric width, motor equipment, steam, quality, dan analitik |
@@ -15,7 +15,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `chemicals/Chemical_Dispensing_Transfer_Concept_v1.1.md` | 1.1 | Aktif | Konsep tujuh varian chemical dan lima dispensing pada area Depan, Belakang, serta Timur |
 | `dashboard/Dashboard_V1_Concept_v1.1.md` | 1.1 | Aktif | Konsep dashboard real-time/historical dengan multi-speed Calator, machine monitoring, alarm, data health, utility, dan chemical |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
-| `releases/Frontend_V1.18.md` | 1.18 | Selesai | Jetflow menggunakan Total Water Consumption dan Current Process |
+| `releases/Frontend_V1.19.md` | 1.19 | Selesai | Process sequence Jetflow menggunakan tabel ringkas dengan tinggi tetap |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
 ## Aturan pembaruan

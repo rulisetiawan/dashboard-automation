@@ -4,6 +4,24 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.19 / Jetflow Concept V1.3 — 15 Agustus 2026
+
+**Status:** Compact process sequence table selesai
+
+### Diubah
+
+- Kartu process sequence Jetflow diganti menjadi tabel ringkas berisi Step, Process, dan Status.
+- Tinggi daftar dibuat tetap dengan vertical scroll agar sequence hingga sekitar 100 step tidak memakan ruang halaman.
+- Header tabel tetap terlihat selama daftar digulir.
+- Current Process, Complete, dan Pending tetap memiliki indikator visual tersendiri.
+- Layar sempit dapat menggulir tabel secara horizontal.
+
+### Batasan
+
+- Frontend masih menggunakan 12 step simulated; recipe aktual belum terhubung ke PLC.
+
+---
+
 ## Frontend Dashboard V1.18 / Jetflow Concept V1.2 — 15 Agustus 2026
 
 **Status:** Jetflow water totalizer dan process sequence selesai
