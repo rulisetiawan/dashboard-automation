@@ -1361,7 +1361,56 @@ function motorThreePhaseHistoricalData(motor) {
   });
   const maxImbalance = imbalancePoints.reduce((highest, point) => point.value > highest.value ? point : highest, imbalancePoints[0]);
   const maxVoltageSpread = voltageSpreadPoints.reduce((highest, point) => point.value > highest.value ? point : highest, voltageSpreadPoints[0]);
-  return { phases, maxImbalance, maxVoltageSpread };
+  return { timestamps, phases, maxImbalance, maxVoltageSpread };
+}
+
+function motorHistoricalLogData(motor, phaseHistory) {
+  const currentLimit = motor.hz === 42 ? 34 : 32;
+  return phaseHistory.timestamps.map((timestamp, index) => {
+    const currentR = phaseHistory.phases[0].current[index];
+    const currentS = phaseHistory.phases[1].current[index];
+    const currentT = phaseHistory.phases[2].current[index];
+    const voltageR = phaseHistory.phases[0].voltage[index];
+    const voltageS = phaseHistory.phases[1].voltage[index];
+    const voltageT = phaseHistory.phases[2].voltage[index];
+    const currentAverage = (currentR + currentS + currentT) / 3;
+    const voltageAverage = (voltageR + voltageS + voltageT) / 3;
+    const imbalance = Math.max(Math.abs(currentR - currentAverage), Math.abs(currentS - currentAverage), Math.abs(currentT - currentAverage)) / currentAverage * 100;
+    const lineVoltage = voltageAverage * Math.sqrt(3);
+    const kw = motor.kw * (currentAverage / motor.amps) * (1 + Math.sin(index * .17) * .018);
+    const hz = motor.hz + Math.sin(index * .21 + motor.name.length) * .22;
+    const status = currentAverage > currentLimit || imbalance > 3 ? "Review" : "Normal";
+    return { timestamp, currentR, currentS, currentT, voltageR, voltageS, voltageT, currentAverage, lineVoltage, kw, hz, imbalance, status };
+  });
+}
+
+function motorHistoricalLogPanel(motor, phaseHistory, rangeLabel) {
+  const rows = motorHistoricalLogData(motor, phaseHistory);
+  return `<section class="motor-log-panel" aria-label="Motor historical data log">
+    <div class="motor-log-head"><div><strong>Complete Historical Data Log</strong><small>${rows.length} record · ${rangeLabel} · semua nilai mengikuti time range aktif.</small></div><button class="button ghost small" data-motor-log-export>Export CSV</button></div>
+    <div class="motor-log-table-wrap" tabindex="0"><table class="data-table motor-log-table"><thead><tr><th>Timestamp</th><th>Current R</th><th>Current S</th><th>Current T</th><th>Avg Current</th><th>Voltage R-N</th><th>Voltage S-N</th><th>Voltage T-N</th><th>Line Voltage</th><th>kW</th><th>Hz</th><th>Imbalance</th><th>Status</th></tr></thead><tbody>${rows.map((row) => `<tr><td class="mono">${formatDateTime(row.timestamp, true)}</td><td class="mono">${row.currentR.toFixed(1)} A</td><td class="mono">${row.currentS.toFixed(1)} A</td><td class="mono">${row.currentT.toFixed(1)} A</td><td class="mono"><strong>${row.currentAverage.toFixed(1)} A</strong></td><td class="mono">${row.voltageR.toFixed(1)} V</td><td class="mono">${row.voltageS.toFixed(1)} V</td><td class="mono">${row.voltageT.toFixed(1)} V</td><td class="mono">${row.lineVoltage.toFixed(0)} V</td><td class="mono">${row.kw.toFixed(1)}</td><td class="mono">${row.hz.toFixed(1)}</td><td class="mono">${row.imbalance.toFixed(1)}%</td><td><span class="data-pill ${row.status === "Review" ? "warning" : "good"}">${row.status}</span></td></tr>`).join("")}</tbody></table></div>
+    <div class="motor-log-foot"><span>Gunakan timestamp untuk menghubungkan kondisi motor dengan batch, event proses, alarm, dan log operator.</span><span>CSV akan memakai data dan time range yang sama.</span></div>
+  </section>`;
+}
+
+function exportMotorHistoricalLog() {
+  const motors = kalenderMotorAssets();
+  const motor = motors.find((item) => item.id === state.motorDrive.selected);
+  if (!motor) return;
+  const phaseHistory = motorThreePhaseHistoricalData(motor);
+  const rows = motorHistoricalLogData(motor, phaseHistory);
+  const headers = ["Timestamp", "Motor ID", "Phase R Current A", "Phase S Current A", "Phase T Current A", "Average Current A", "Phase R Voltage V", "Phase S Voltage V", "Phase T Voltage V", "Line Voltage V", "Active Power kW", "Drive Frequency Hz", "Current Imbalance %", "Status"];
+  const csvRows = rows.map((row) => [
+    new Date(row.timestamp).toISOString(), motor.id, row.currentR.toFixed(2), row.currentS.toFixed(2), row.currentT.toFixed(2), row.currentAverage.toFixed(2), row.voltageR.toFixed(2), row.voltageS.toFixed(2), row.voltageT.toFixed(2), row.lineVoltage.toFixed(2), row.kw.toFixed(2), row.hz.toFixed(2), row.imbalance.toFixed(2), row.status,
+  ]);
+  const quote = (value) => `"${String(value).replaceAll('"', '""')}"`;
+  const blob = new Blob([[headers, ...csvRows].map((row) => row.map(quote).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${motor.id.toLowerCase()}-historical-${state.motorDrive.range.toLowerCase()}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function motorPhaseTroubleshootingPanel(motor, phaseHistory, rangeLabel) {
@@ -1420,6 +1469,7 @@ function motorDriveDetailPanel(motor) {
     <div class="motor-trend-window"><span id="motor-trend-visible-label">Visible window</span><span>${rangeLabel}</span></div>
     <canvas class="chart-canvas motor-drive-trend-canvas" id="motor-drive-trend" tabindex="0" aria-label="Motor drive historical trend ${motor.name}"></canvas>
     <div class="trend-navigator motor-trend-navigator" id="motor-trend-navigator" role="slider" tabindex="0" aria-label="Posisi waktu motor historical"><div class="navigator-track"><div class="navigator-selection" id="motor-navigator-selection"><span></span><span></span></div></div></div>
+    ${motorHistoricalLogPanel(motor, phaseHistory, rangeLabel)}
     <div class="motor-maintenance-grid">
       ${panel("Maintenance Target Plan", "Target berbasis runtime, inspeksi, dan condition threshold", `<div class="table-wrap"><table class="data-table motor-maintenance-table"><thead><tr><th>Plan</th><th>Target</th><th>Current</th><th>Next Action</th><th>Status</th></tr></thead><tbody>
         <tr><td>Preventive drive inspection</td><td class="mono">${motor.pmRuntime.toLocaleString()} runtime h</td><td class="mono">${motor.runtime.toLocaleString()} h</td><td>Due in ${due.toLocaleString()} runtime h</td><td><span class="data-pill ${due < 150 ? "warning" : "good"}">${due < 150 ? "Plan soon" : "On plan"}</span></td></tr>
@@ -2260,6 +2310,9 @@ function bindPageEvents() {
       state.motorDrive.selected = null;
       renderPage({ preserveScroll: true });
     });
+  });
+  document.querySelectorAll("[data-motor-log-export]").forEach((button) => {
+    button.addEventListener("click", exportMotorHistoricalLog);
   });
   document.querySelectorAll("[data-history-range]").forEach((button) => {
     button.addEventListener("click", () => selectHistoryRange(button.dataset.historyRange));

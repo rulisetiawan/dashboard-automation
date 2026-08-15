@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.38 / Kalender Concept V1.9 / Dashboard Concept V1.17 — 15 Agustus 2026
+
+**Status:** Motor complete historical log dan export selesai
+
+### Ditambahkan
+
+- Tabel seluruh log motor berdasarkan selected range.
+- Timestamp, current dan voltage R/S/T, kW, Hz, imbalance, dan status.
+- Export CSV dengan scope motor serta time range aktif.
+
+### Batasan
+
+- Data tabel dan export masih generated untuk demonstrasi.
+
+---
+
 ## Frontend Dashboard V1.37 / Kalender Concept V1.8 / Dashboard Concept V1.16 — 15 Agustus 2026
 
 **Status:** Motor troubleshooting detail selesai

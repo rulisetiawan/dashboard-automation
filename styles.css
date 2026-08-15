@@ -3596,6 +3596,71 @@ select:focus-visible {
   line-height: 1.5;
 }
 
+.motor-log-panel {
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.motor-log-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 11px;
+}
+
+.motor-log-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.motor-log-head strong {
+  color: var(--ink-2);
+  font-size: .64rem;
+}
+
+.motor-log-head small,
+.motor-log-foot {
+  color: var(--ink-3);
+  font-size: .48rem;
+}
+
+.motor-log-table-wrap {
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid #e1eaec;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.motor-log-table {
+  min-width: 1350px;
+}
+
+.motor-log-table th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: #edf3f4;
+}
+
+.motor-log-table th,
+.motor-log-table td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  white-space: nowrap;
+}
+
+.motor-log-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 9px;
+  line-height: 1.5;
+}
+
 .motor-trend-head {
   align-items: flex-end;
   padding-top: 2px;
@@ -6215,6 +6280,12 @@ select:focus-visible {
   }
 
   .motor-troubleshooting-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .motor-log-head,
+  .motor-log-foot {
     align-items: flex-start;
     flex-direction: column;
   }
