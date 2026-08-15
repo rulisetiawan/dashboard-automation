@@ -345,10 +345,38 @@ function machineHero(machine, code, meta) {
   `;
 }
 
-function remoteDisplayPanel(machine) {
-  return `<section class="card remote-display-card">
-    <div class="remote-display-head"><div><h2>Remote Display</h2><p>${machine.id} · reserved viewport untuk remote HMI/display melalui IP</p></div><span class="data-pill neutral">IP not configured</span></div>
-    <div class="remote-display-viewport" role="img" aria-label="Placeholder remote display untuk ${machine.name}"></div>
+function chemicalDispensingPidPanel(machine) {
+  const destinations = dispensingSupportedCalators(machine);
+  const destinationYs = destinations.map((_, index) => 350 + index * 62);
+  const diagramHeight = Math.max(610, 310 + destinations.length * 62);
+  const valve = (x, y, label, flow = "inlet") => `<g class="pid-valve pid-${flow}"><title>${label} · open</title><path d="M ${x - 13} ${y} L ${x} ${y - 13} L ${x + 13} ${y} L ${x} ${y + 13} Z"/><circle cx="${x}" cy="${y}" r="3"/><text x="${x}" y="${y - 22}" text-anchor="middle">${label}</text></g>`;
+  const inletLeft = [0, 1, 2, 3].map((index) => {
+    const y = 170 + index * 36;
+    return `<g><line class="pid-pipe" x1="105" y1="${y}" x2="420" y2="${y}"/>${valve(300, y, `XV-10${index + 1}`)}<text class="pid-source-label" x="116" y="${y - 9}">INLET ${index + 1}</text></g>`;
+  }).join("");
+  const inletRight = [0, 1, 2, 3].map((index) => {
+    const y = 170 + index * 36;
+    return `<g><line class="pid-pipe" x1="610" y1="${y}" x2="925" y2="${y}"/>${valve(730, y, `XV-10${index + 5}`)}<text class="pid-source-label" x="908" y="${y - 9}" text-anchor="end">INLET ${index + 5}</text></g>`;
+  }).join("");
+  const branches = destinations.map((calator, index) => {
+    const y = destinationYs[index];
+    return `<g class="pid-destination"><line class="pid-pipe pid-discharge" x1="715" y1="${y}" x2="805" y2="${y}"/><circle cx="715" cy="${y}" r="4"/><rect x="805" y="${y - 22}" width="245" height="44" rx="8"/><text class="pid-destination-id" x="824" y="${y - 2}">${calator.id}</text><text class="pid-destination-name" x="824" y="${y + 14}">${calator.name}</text></g>`;
+  }).join("");
+  return `<section class="card pid-card">
+    <div class="pid-head"><div><span class="eyebrow">P&amp;ID CONCEPT</span><h2>Chemical Dispensing Flow · ${machine.id}</h2><p>Diagram proses read-only: delapan inlet menuju Tank 1, transfer ke Tank 2, lalu distribusi ke Calator area ${machine.areaLabel}.</p></div><div class="pid-legend"><span><i class="pid-legend-valve"></i>Valve open</span><span><i class="pid-legend-line"></i>Process line</span></div></div>
+    <div class="pid-scroll" tabindex="0" aria-label="P and ID chemical dispensing ${machine.id}">
+      <svg class="chemical-dispensing-pid" viewBox="0 0 1120 ${diagramHeight}" role="img" aria-label="P and ID dispensing chemical: 8 valve ke Tank 1, loadcell, valve transfer, Tank 2, dan distribusi ke Calator">
+        <defs><linearGradient id="pidTankFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d8f2ed"/><stop offset="100%" stop-color="#eff8f6"/></linearGradient><marker id="pidArrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#078eaa"/></marker></defs>
+        <text class="pid-section-label" x="104" y="112">CHEMICAL SUPPLY INLETS</text>
+        ${inletLeft}${inletRight}
+        <g class="pid-tank"><ellipse cx="515" cy="160" rx="95" ry="20"/><path d="M420 160 V303 C420 331 610 331 610 303 V160"/><ellipse cx="515" cy="303" rx="95" ry="20"/><rect x="431" y="239" width="168" height="61" rx="0"/><text class="pid-tank-title" x="515" y="226">TANK 1</text><text class="pid-tank-sub" x="515" y="247">WEIGHING / BUFFER TANK</text><text class="pid-tank-value" x="515" y="281">Level 68.4%</text></g>
+        <g class="pid-loadcells"><text x="515" y="362" text-anchor="middle">LOADCELL · LC-101 / LC-102 / LC-103</text><path d="M450 327 L464 350 H436 Z"/><path d="M515 327 L529 350 H501 Z"/><path d="M580 327 L594 350 H566 Z"/><line class="pid-pipe thin" x1="448" y1="353" x2="582" y2="353"/></g>
+        <g><line class="pid-pipe pid-transfer-line" x1="515" y1="323" x2="515" y2="420" marker-end="url(#pidArrow)"/>${valve(515, 382, "XV-201", "transfer")}<text class="pid-flow-label" x="535" y="391">TRANSFER TO TANK 2</text></g>
+        <g class="pid-tank pid-tank-2"><ellipse cx="515" cy="432" rx="88" ry="18"/><path d="M427 432 V535 C427 559 603 559 603 535 V432"/><ellipse cx="515" cy="535" rx="88" ry="18"/><rect x="438" y="486" width="154" height="46" rx="0"/><text class="pid-tank-title" x="515" y="471">TANK 2</text><text class="pid-tank-sub" x="515" y="490">DISTRIBUTION TANK</text><text class="pid-tank-value" x="515" y="517">Ready to dose</text></g>
+        <g><line class="pid-pipe pid-discharge" x1="603" y1="484" x2="715" y2="484" marker-end="url(#pidArrow)"/><line class="pid-pipe pid-discharge" x1="715" y1="${destinationYs[0]}" x2="715" y2="${destinationYs[destinationYs.length - 1]}"/><text class="pid-section-label" x="804" y="315">CALATOR DESTINATIONS</text>${branches}</g>
+      </svg>
+    </div>
+    <div class="pid-foot"><span><strong>8</strong> inlet valve · <strong>1</strong> transfer valve · <strong>${destinations.length}</strong> Calator destination</span><small>Konsep visual; tag, interlock, valve state, dan route aktual harus diverifikasi dari P&amp;ID/SOP engineering.</small></div>
   </section>`;
 }
 
@@ -1042,7 +1070,6 @@ function jetflowDetailPage() {
     ${processBreadcrumb("jetflow", machine)}
     ${pageHead("jetflow", selector(jetflows.filter((item) => item.area === machine.area), "jetflow"))}
     ${machineHero(machine, "JF", `${machine.winches} winches · ${machine.recipe} · Active step: ${machine.step}`)}
-    ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Main Tank Temp", liveValue(92.6, "", .18, 1), "°C", "MT", "<strong>Target 93.0°C</strong>· holding")}
       ${kpi("Current Process", `<span class="process-value">${machine.step}</span>`, "", "PR", `<strong>Step ${processPosition}</strong>of ${jetflowProcessSteps.length} process stages`, "success")}
@@ -1199,7 +1226,6 @@ function calatorDetailPage() {
     ${processBreadcrumb("calator", machine)}
     ${pageHead("calator", selector(calators.filter((item) => item.area === machine.area), "calator"))}
     ${machineHero(machine, "CL", `${machine.subtype} · ${machine.recipe} · Jetflow source JF-04`)}
-    ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Overfeed Out Avg", liveValue(29.18, "", .08, 2), "m/min", "OF", "<strong>Balance 1.4%</strong>· within range")}
       ${kpi("Dancing Roller", liveValue(51.6, "", .35, 1), "%", "DR", "<strong>Center ±3%</strong>· stable", "success")}
@@ -1327,7 +1353,6 @@ function dryerDetailPage() {
     ${processBreadcrumb("dryer", machine)}
     ${pageHead("dryer", selector(dryers.filter((item) => item.area === machine.area), "dryer"))}
     ${machineHero(machine, "DR", `${machine.chambers} chambers · ${machine.setup} · Calator source CL-03`)}
-    ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Machine Speed", liveValue(32.4, "", .08, 1), "m/min", "SP", "<strong>Target 32.5</strong>· stable")}
       ${kpi("Avg. Chamber Temp", liveValue(146.8, "", .12, 1), "°C", "TP", "<strong>7 / 8 ready</strong>· one deviation", "warning")}
@@ -1369,7 +1394,6 @@ function kalenderDetailPage() {
     ${processBreadcrumb("kalender", machine)}
     ${pageHead("kalender", selector(kalenders.filter((item) => item.area === machine.area), "kalender"))}
     ${machineHero(machine, "KL", `${machine.setup} · Dryer source DR-02 · Cotton 220 GSM`)}
-    ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Energy Consumption", "1,284", "kWh", "EN", "<strong>Current shift</strong>· total consumption")}
       ${kpi("Power Demand", liveValue(86.4, "", .35, 1), "kW", "PW", "<strong>72% load</strong>· within capacity", "success")}
@@ -1731,7 +1755,7 @@ function chemicalDetailPage() {
     ${processBreadcrumb("chemical", machine)}
     ${pageHead("chemical", selector(dispensers.filter((item) => item.area === machine.area), "chemical"))}
     ${machineHero(machine, "DSP", `${machine.areaLabel} · Chemical Dispensing Calator · 7 variants`)}
-    ${remoteDisplayPanel(machine)}
+    ${chemicalDispensingPidPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Supported Calators", supported.length, "machines", "CL", `<strong>${machine.areaLabel}</strong>· area coverage`)}
       ${kpi("Active Requests", "2", "requests", "RQ", "<strong>1 weighing · 1 hold</strong>")}

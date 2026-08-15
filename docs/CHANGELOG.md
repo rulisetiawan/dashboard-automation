@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.35 / Chemical Dispensing Calator Concept V1.4 / Dashboard Concept V1.14 — 15 Agustus 2026
+
+**Status:** P&ID dispensing Calator selesai
+
+### Ditambahkan
+
+- P&ID SVG 8 inlet valve menuju Tank 1.
+- Indikator tiga loadcell Tank 1, valve transfer, dan Tank 2.
+- Distribution manifold ke Calator yang didukung setiap unit dispensing.
+
+### Dihapus
+
+- Placeholder Remote Display dari detail mesin.
+
+### Batasan
+
+- Diagram bersifat read-only dan state masih simulated hingga tag PLC/P&ID engineering tervalidasi.
+
+---
+
 ## Frontend Dashboard V1.34 / Chemical Dispensing Calator Concept V1.3 / Dashboard Concept V1.13 — 15 Agustus 2026
 
 **Status:** Mapping dispensing unit dan usage per Calator selesai

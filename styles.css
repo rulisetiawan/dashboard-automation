@@ -2198,40 +2198,213 @@ select:focus-visible {
   padding: 16px 18px;
 }
 
-.remote-display-card {
+.pid-card {
   margin-bottom: 13px;
-  padding: 16px;
+  padding: 17px;
 }
 
-.remote-display-head {
+.pid-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 12px;
+  gap: 18px;
+  margin-bottom: 14px;
 }
 
-.remote-display-head h2 {
-  margin: 0 0 4px;
-  font-size: 0.76rem;
+.pid-head h2 {
+  margin: 4px 0 5px;
+  font-size: 0.84rem;
 }
 
-.remote-display-head p {
+.pid-head p {
+  max-width: 700px;
   margin: 0;
   color: var(--ink-3);
-  font-size: 0.55rem;
+  font-size: 0.57rem;
+  line-height: 1.55;
 }
 
-.remote-display-viewport {
-  width: 100%;
-  min-height: 330px;
-  border: 1px dashed #b9c8cd;
+.pid-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 5px;
+  color: var(--ink-3);
+  font-size: 0.52rem;
+  white-space: nowrap;
+}
+
+.pid-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pid-legend-valve {
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  border: 2px solid var(--success);
+  background: #effbf7;
+}
+
+.pid-legend-line {
+  width: 16px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.pid-scroll {
+  overflow-x: auto;
+  border: 1px solid #dce7e9;
   border-radius: var(--radius-sm);
   background:
-    linear-gradient(90deg, rgba(19, 46, 57, 0.018) 1px, transparent 1px),
-    linear-gradient(rgba(19, 46, 57, 0.018) 1px, transparent 1px),
-    #f4f7f8;
-  background-size: 28px 28px;
+    linear-gradient(90deg, rgba(19, 46, 57, 0.025) 1px, transparent 1px),
+    linear-gradient(rgba(19, 46, 57, 0.025) 1px, transparent 1px),
+    #fbfdfd;
+  background-size: 24px 24px;
+}
+
+.chemical-dispensing-pid {
+  display: block;
+  min-width: 860px;
+  width: 100%;
+  height: auto;
+  font-family: var(--font-mono);
+}
+
+.chemical-dispensing-pid .pid-pipe {
+  fill: none;
+  stroke: #457b88;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chemical-dispensing-pid .pid-pipe.thin {
+  stroke-width: 2;
+  stroke: #87a7ae;
+}
+
+.chemical-dispensing-pid .pid-transfer-line,
+.chemical-dispensing-pid .pid-discharge {
+  stroke: #078eaa;
+}
+
+.chemical-dispensing-pid .pid-valve path {
+  fill: #effbf7;
+  stroke: var(--success);
+  stroke-width: 2;
+}
+
+.chemical-dispensing-pid .pid-valve circle {
+  fill: var(--success);
+}
+
+.chemical-dispensing-pid .pid-transfer path {
+  fill: #eef8fb;
+  stroke: var(--accent);
+}
+
+.chemical-dispensing-pid .pid-transfer circle {
+  fill: var(--accent);
+}
+
+.chemical-dispensing-pid .pid-valve text,
+.chemical-dispensing-pid .pid-loadcells text,
+.chemical-dispensing-pid .pid-flow-label {
+  fill: #416773;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.chemical-dispensing-pid .pid-source-label,
+.chemical-dispensing-pid .pid-section-label {
+  fill: #78929a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.chemical-dispensing-pid .pid-tank ellipse,
+.chemical-dispensing-pid .pid-tank path {
+  fill: url(#pidTankFill);
+  stroke: #2b8290;
+  stroke-width: 2;
+}
+
+.chemical-dispensing-pid .pid-tank rect {
+  fill: rgba(63, 173, 154, .19);
+}
+
+.chemical-dispensing-pid .pid-tank-title {
+  fill: #163f49;
+  font-size: 17px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.chemical-dispensing-pid .pid-tank-sub {
+  fill: #5f7d86;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-anchor: middle;
+}
+
+.chemical-dispensing-pid .pid-tank-value {
+  fill: #087b88;
+  font-size: 12px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.chemical-dispensing-pid .pid-loadcells path {
+  fill: #f4fbfc;
+  stroke: #4b8792;
+  stroke-width: 2;
+}
+
+.chemical-dispensing-pid .pid-destination rect {
+  fill: #fff;
+  stroke: #b8d2d8;
+  stroke-width: 1.5;
+}
+
+.chemical-dispensing-pid .pid-destination circle {
+  fill: var(--accent);
+}
+
+.chemical-dispensing-pid .pid-destination-id {
+  fill: #176a7a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.chemical-dispensing-pid .pid-destination-name {
+  fill: #6f8890;
+  font-size: 10px;
+}
+
+.pid-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 11px;
+  color: var(--ink-3);
+  font-size: 0.53rem;
+  line-height: 1.5;
+}
+
+.pid-foot strong {
+  color: var(--ink-1);
+}
+
+.pid-foot small {
+  max-width: 550px;
+  text-align: right;
+  font-size: inherit;
 }
 
 .batch-investigation-card {
@@ -5661,13 +5834,22 @@ select:focus-visible {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .remote-display-head {
+  .pid-head {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .remote-display-viewport {
-    min-height: 220px;
+  .pid-legend {
+    justify-content: flex-start;
+  }
+
+  .pid-foot {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pid-foot small {
+    text-align: left;
   }
 
   .panel {
