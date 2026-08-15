@@ -1322,6 +1322,70 @@ function motorThreePhaseReadings(motor) {
   return { phases, imbalance };
 }
 
+function motorThreePhaseHistoricalData(motor) {
+  const rangeHours = { "1H": 1, "8H": 8, "24H": 24, "7D": 168 }[state.motorDrive.range] || 8;
+  const count = 96;
+  const end = Date.now();
+  const start = end - rangeHours * 60 * 60 * 1000;
+  const seed = [...motor.id].reduce((total, character) => total + character.charCodeAt(0), 0);
+  const timestamps = Array.from({ length: count }, (_, index) => start + (end - start) * index / (count - 1));
+  const factors = [-.018, .013, .005];
+  const phases = ["R", "S", "T"].map((phase, phaseIndex) => {
+    const current = timestamps.map((_, index) => motor.amps * (1 + factors[phaseIndex] + Math.sin(index * .34 + phaseIndex * .85 + seed * .01) * .055 + Math.cos(index * .11 + phaseIndex) * .019));
+    const voltage = timestamps.map((_, index) => 229.8 + phaseIndex * .35 + Math.sin(index * .22 + phaseIndex) * 1.65 + Math.cos(index * .07) * .55);
+    const average = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
+    const maxIndex = current.indexOf(Math.max(...current));
+    const minIndex = current.indexOf(Math.min(...current));
+    return {
+      phase,
+      current,
+      voltage,
+      currentMin: current[minIndex],
+      currentAverage: average(current),
+      currentMax: current[maxIndex],
+      voltageMin: Math.min(...voltage),
+      voltageAverage: average(voltage),
+      voltageMax: Math.max(...voltage),
+      highTime: timestamps[maxIndex],
+      lowTime: timestamps[minIndex],
+    };
+  });
+  const imbalancePoints = timestamps.map((time, index) => {
+    const values = phases.map((phase) => phase.current[index]);
+    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+    return { time, value: Math.max(...values.map((value) => Math.abs(value - average))) / average * 100 };
+  });
+  const voltageSpreadPoints = timestamps.map((time, index) => {
+    const values = phases.map((phase) => phase.voltage[index]);
+    return { time, value: Math.max(...values) - Math.min(...values) };
+  });
+  const maxImbalance = imbalancePoints.reduce((highest, point) => point.value > highest.value ? point : highest, imbalancePoints[0]);
+  const maxVoltageSpread = voltageSpreadPoints.reduce((highest, point) => point.value > highest.value ? point : highest, voltageSpreadPoints[0]);
+  return { phases, maxImbalance, maxVoltageSpread };
+}
+
+function motorPhaseTroubleshootingPanel(motor, phaseHistory, rangeLabel) {
+  const limit = motor.hz === 42 ? 34 : 32;
+  const phaseWithHighestCurrent = phaseHistory.phases.reduce((highest, phase) => phase.currentMax > highest.currentMax ? phase : highest, phaseHistory.phases[0]);
+  const phaseWithLowestCurrent = phaseHistory.phases.reduce((lowest, phase) => phase.currentMin < lowest.currentMin ? phase : lowest, phaseHistory.phases[0]);
+  const showTime = (timestamp) => formatDateTime(timestamp, true);
+  const highestTone = phaseWithHighestCurrent.currentMax > limit ? "warning" : "good";
+  const imbalanceTone = phaseHistory.maxImbalance.value > 3 ? "warning" : "good";
+  return `<section class="motor-troubleshooting-panel" aria-label="Three phase troubleshooting analysis">
+    <div class="motor-troubleshooting-head"><div><strong>3-Phase Historical Diagnostic</strong><small>Minimum, average, maximum, dan waktu ekstrem dalam ${rangeLabel}.</small></div><span class="data-pill neutral">TROUBLESHOOTING REFERENCE</span></div>
+    <div class="motor-phase-table-wrap" tabindex="0"><table class="data-table motor-phase-table"><thead><tr><th>Phase</th><th>Current Min</th><th>Current Avg</th><th>Current Max</th><th>Time High</th><th>Time Low</th><th>Voltage Min / Avg / Max</th><th>Condition</th></tr></thead><tbody>${phaseHistory.phases.map((phase) => {
+      const phaseTone = phase.currentMax > limit ? "warning" : "good";
+      return `<tr><td><span class="phase-name phase-${phase.phase.toLowerCase()}">${phase.phase}</span></td><td class="mono">${phase.currentMin.toFixed(1)} A</td><td class="mono">${phase.currentAverage.toFixed(1)} A</td><td class="mono"><strong>${phase.currentMax.toFixed(1)} A</strong></td><td class="mono">${showTime(phase.highTime)}</td><td class="mono">${showTime(phase.lowTime)}</td><td class="mono">${phase.voltageMin.toFixed(1)} / ${phase.voltageAverage.toFixed(1)} / ${phase.voltageMax.toFixed(1)} V</td><td><span class="data-pill ${phaseTone}">${phase.currentMax > limit ? "High review" : "Within limit"}</span></td></tr>`;
+    }).join("")}</tbody></table></div>
+    <div class="motor-finding-grid">
+      <article class="motor-finding ${highestTone}"><span>Highest RMS current</span><strong>Phase ${phaseWithHighestCurrent.phase} · ${phaseWithHighestCurrent.currentMax.toFixed(1)} A</strong><small>${showTime(phaseWithHighestCurrent.highTime)} · limit ${limit.toFixed(1)} A</small><p>Jika meningkat melewati baseline/limit, periksa beban mekanis, bearing, tension felt/belt, alignment, dan kondisi driven equipment.</p></article>
+      <article class="motor-finding"><span>Lowest RMS current</span><strong>Phase ${phaseWithLowestCurrent.phase} · ${phaseWithLowestCurrent.currentMin.toFixed(1)} A</strong><small>${showTime(phaseWithLowestCurrent.lowTime)} · compare dengan kondisi proses</small><p>Gunakan waktu ini untuk cek kemungkinan no-load, slip, material tidak masuk, coupling, atau pembacaan sensor yang tidak normal.</p></article>
+      <article class="motor-finding ${imbalanceTone}"><span>Maximum current imbalance</span><strong>${phaseHistory.maxImbalance.value.toFixed(1)}%</strong><small>${showTime(phaseHistory.maxImbalance.time)} · action threshold 3.0%</small><p>Jika melewati threshold, verifikasi terminal, kabel, contactor, output drive, dan ketidakseimbangan beban antar fase.</p></article>
+      <article class="motor-finding ${phaseHistory.maxVoltageSpread.value > 4 ? "warning" : "good"}"><span>Maximum voltage spread</span><strong>${phaseHistory.maxVoltageSpread.value.toFixed(1)} V</strong><small>${showTime(phaseHistory.maxVoltageSpread.time)} · phase-to-neutral</small><p>Jika spread meningkat, cek incoming supply, terminal connection, fuse/contactor, serta kualitas suplai drive.</p></article>
+    </div>
+  </section>`;
+}
+
 function motorDriveDetailPanel(motor) {
   const rangeLabel = { "1H": "Last 1 hour", "8H": "Last 8 hours", "24H": "Last 24 hours", "7D": "Last 7 days" }[state.motorDrive.range];
   const runtime = ({ "1H": .9, "8H": 7.4, "24H": 20.8, "7D": 143.6 })[state.motorDrive.range];
@@ -1329,6 +1393,7 @@ function motorDriveDetailPanel(motor) {
   const metrics = [["amp", "RMS Amp"], ["voltage", "Voltage"], ["kw", "kW"]].map(([key, label]) => `<button class="segment ${state.motorDrive.metric === key ? "active" : ""}" data-motor-drive-metric="${key}">${label}</button>`).join("");
   const due = Math.max(0, motor.pmRuntime - motor.runtime);
   const phaseData = motorThreePhaseReadings(motor);
+  const phaseHistory = motorThreePhaseHistoricalData(motor);
   return `<div class="motor-modal-backdrop" data-motor-drive-backdrop>
   <section class="card motor-drive-analysis" id="motor-drive-analysis" role="dialog" aria-modal="true" aria-labelledby="motor-drive-title">
     <div class="motor-analysis-head"><div><span class="eyebrow">Motor & drive diagnostic</span><h2 id="motor-drive-title">${motor.name} · ${motor.id}</h2><p>Read-only analysis untuk kondisi drive, historical operation, dan target maintenance.</p></div><div class="motor-analysis-actions"><span class="data-pill ${motor.status === "warning" ? "warning" : "good"}">${motor.status === "warning" ? "CHECK CURRENT" : "RUNNING"}</span><button class="button ghost small" data-motor-drive-close>Close detail</button></div></div>
@@ -1350,6 +1415,7 @@ function motorDriveDetailPanel(motor) {
       ${metricTile("Energy", `${(motor.kw * runtime * .88).toFixed(1)}<small>kWh</small>`, "Selected range")}
       ${metricTile("Unplanned Stop", motor.status === "warning" ? "4.2<small>min</small>" : "0.0<small>min</small>", motor.status === "warning" ? "Review drive load" : "No event")}
     </div>
+    ${motorPhaseTroubleshootingPanel(motor, phaseHistory, rangeLabel)}
     <div class="motor-trend-head"><div><strong>Drive Historical Trend</strong><small>Drag chart atau navigator untuk menggeser waktu.</small></div><div class="segmented">${metrics}</div></div>
     <div class="motor-trend-window"><span id="motor-trend-visible-label">Visible window</span><span>${rangeLabel}</span></div>
     <canvas class="chart-canvas motor-drive-trend-canvas" id="motor-drive-trend" tabindex="0" aria-label="Motor drive historical trend ${motor.name}"></canvas>

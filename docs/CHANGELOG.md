@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.37 / Kalender Concept V1.8 / Dashboard Concept V1.16 — 15 Agustus 2026
+
+**Status:** Motor troubleshooting detail selesai
+
+### Ditambahkan
+
+- Minimum, average, maximum current per fase R/S/T.
+- Timestamp current high dan low untuk investigasi event.
+- Voltage min/avg/max per fase.
+- Finding peak current, low current, current imbalance, dan voltage spread dengan arahan pemeriksaan.
+
+### Batasan
+
+- Nilai, timestamp, dan finding masih simulated serta bukan diagnosis otomatis.
+
+---
+
 ## Frontend Dashboard V1.36 / Kalender Concept V1.7 / Dashboard Concept V1.15 — 15 Agustus 2026
 
 **Status:** Motor & Drive 3-phase diagnostic modal selesai

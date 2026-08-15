@@ -3482,6 +3482,120 @@ select:focus-visible {
 .motor-phase-reading.phase-s { --phase-color: #d89b25; }
 .motor-phase-reading.phase-t { --phase-color: #078eaa; }
 
+.motor-troubleshooting-panel {
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.motor-troubleshooting-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 11px;
+}
+
+.motor-troubleshooting-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.motor-troubleshooting-head strong {
+  color: var(--ink-2);
+  font-size: .64rem;
+}
+
+.motor-troubleshooting-head small {
+  color: var(--ink-3);
+  font-size: .48rem;
+}
+
+.motor-phase-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e1eaec;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.motor-phase-table {
+  min-width: 960px;
+}
+
+.motor-phase-table th,
+.motor-phase-table td {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  white-space: nowrap;
+}
+
+.phase-name {
+  display: inline-grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border-radius: 6px;
+  color: #fff;
+  font-family: var(--font-data);
+  font-size: .58rem;
+  font-weight: 700;
+}
+
+.phase-name.phase-r { background: #d5604b; }
+.phase-name.phase-s { background: #d89b25; }
+.phase-name.phase-t { background: #078eaa; }
+
+.motor-finding-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.motor-finding {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid #e0eaec;
+  border-left: 3px solid #9cb8bf;
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.motor-finding.good { border-left-color: var(--success); }
+.motor-finding.warning { border-left-color: var(--warning); }
+
+.motor-finding > span {
+  color: var(--ink-3);
+  font-size: .47rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.motor-finding strong {
+  color: var(--ink-2);
+  font-family: var(--font-data);
+  font-size: .61rem;
+  font-weight: 600;
+}
+
+.motor-finding small {
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: .46rem;
+}
+
+.motor-finding p {
+  margin: 3px 0 0;
+  color: var(--ink-3);
+  font-size: .47rem;
+  line-height: 1.5;
+}
+
 .motor-trend-head {
   align-items: flex-end;
   padding-top: 2px;
@@ -5620,6 +5734,10 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .motor-finding-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .motor-maintenance-grid {
     grid-template-columns: 1fr;
   }
@@ -6094,6 +6212,15 @@ select:focus-visible {
   .motor-phase-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .motor-troubleshooting-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .motor-finding-grid {
+    grid-template-columns: 1fr;
   }
 
   .motor-analysis-scope .segmented {
