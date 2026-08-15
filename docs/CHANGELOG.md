@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.21 / Kalender Concept V1.2 — 15 Agustus 2026
+
+**Status:** Empat kartu PV/SV utama Kalender selesai
+
+### Diubah
+
+- Kartu utama Kalender menjadi Loadcell Upper, Loadcell Lower, Temperature Upper, dan Temperature Lower.
+- PV ditampilkan sebagai angka utama dan SV ditampilkan pada keterangan setiap kartu.
+- Jumlah kartu tetap empat.
+
+### Dipertahankan
+
+- Overfeed dan Fabric Width tetap tersedia pada monitoring lanjutan dan investigasi batch.
+
+### Batasan
+
+- PV dan SV masih simulated dan belum berasal dari PLC.
+
+---
+
 ## Frontend Dashboard V1.20 / Jetflow Concept V1.4 — 15 Agustus 2026
 
 **Status:** Process start dan end time selesai

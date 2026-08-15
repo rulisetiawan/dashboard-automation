@@ -1101,10 +1101,10 @@ function kalenderDetailPage() {
     ${machineHero(machine, "KL", `${machine.setup} · Dryer source DR-02 · Cotton 220 GSM`)}
     ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
-      ${kpi("Loadcell Balance", liveValue(1.8, "", .05, 1), "%", "LC", "<strong>Within ±3%</strong>· stable", "success")}
-      ${kpi("Temperature Upper", liveValue(126.4, "", .15, 1), "°C", "TU", "<strong>Target 127°C</strong>· good")}
-      ${kpi("Overfeed", liveValue(8.6, "", .04, 1), "%", "OF", "<strong>Target 8.5%</strong>· stable")}
-      ${kpi("Fabric Width", liveValue(181.2, "", .06, 1), "cm", "FW", "<strong>Target 181.0</strong>· good", "success")}
+      ${kpi("Loadcell Upper", liveValue(4.82, "", .02, 2), "kN", "LU", "<strong>SV 4.80 kN</strong>· stable", "success")}
+      ${kpi("Loadcell Lower", liveValue(4.73, "", .02, 2), "kN", "LL", "<strong>SV 4.75 kN</strong>· stable", "success")}
+      ${kpi("Temperature Upper", liveValue(126.4, "", .15, 1), "°C", "TU", "<strong>SV 127.0°C</strong>· good")}
+      ${kpi("Temperature Lower", liveValue(125.8, "", .15, 1), "°C", "TL", "<strong>SV 127.0°C</strong>· monitor", "warning")}
     </section>
     <section class="grid-2">
       ${panel("Upper / Lower Balance", "Mechanical, thermal, expander, dan felt synchronization", balanceRows([
