@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.30 / Kalender Concept V1.4 / Dashboard Concept V1.9 — 15 Agustus 2026
+
+**Status:** Kalender production dan delivery context selesai
+
+### Diubah
+
+- Quality Context diganti menjadi Production & Delivery Detail.
+- Live container berisi sensor terkait tanpa energy atau data output duplikat.
+- Kartu utama menjadi energy, power, progress output, dan completed batches.
+
+### Ditambahkan
+
+- Customer, jenis kain, gramasi, lebar target, expected output, delivery target, dan production progress bar.
+
+### Batasan
+
+- Data MES/order masih simulated.
+
+---
+
 ## Frontend Dashboard V1.29 / Kalender Concept V1.3 / Dashboard Concept V1.8 — 15 Agustus 2026
 
 **Status:** Kalender parameter configuration selesai

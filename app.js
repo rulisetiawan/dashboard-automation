@@ -1273,10 +1273,10 @@ function kalenderDetailPage() {
     ${machineHero(machine, "KL", `${machine.setup} · Dryer source DR-02 · Cotton 220 GSM`)}
     ${remoteDisplayPanel(machine)}
     <section class="kpi-grid">
-      ${kpi("Loadcell Upper", liveValue(482, "", 2, 1), "kg", "LU", "<strong>SV 480.0 kg</strong>· stable", "success")}
-      ${kpi("Loadcell Lower", liveValue(473, "", 2, 1), "kg", "LL", "<strong>SV 475.0 kg</strong>· stable", "success")}
-      ${kpi("Temperature Upper", liveValue(126.4, "", .15, 1), "°C", "TU", "<strong>SV 127.0°C</strong>· good")}
-      ${kpi("Temperature Lower", liveValue(125.8, "", .15, 1), "°C", "TL", "<strong>SV 127.0°C</strong>· monitor", "warning")}
+      ${kpi("Energy Consumption", "1,284", "kWh", "EN", "<strong>Current shift</strong>· total consumption")}
+      ${kpi("Power Demand", liveValue(86.4, "", .35, 1), "kW", "PW", "<strong>72% load</strong>· within capacity", "success")}
+      ${kpi("Output Progress", "68", "%", "OP", "<strong>3,264 / 4,800 m</strong>· shift target")}
+      ${kpi("Completed Batches", "12", "batch", "BT", "<strong>Current day</strong>· 2 in process")}
     </section>
     <section class="grid-2">
       ${panel("Parameter Configuration", "Setpoint recipe, speed limit, dan target finishing aktif", parameterConfigurationRows([
@@ -1285,30 +1285,32 @@ function kalenderDetailPage() {
         ["Overspeed Expander", "2.0", "%"], ["Overspeed Inlet", "1.5", "%"],
         ["Overspeed Plaiter", "1.8", "%"], ["Fabric Width", "181.0", "cm"]
       ]))}
-      ${panel("Live Process & Utility", "Operational value yang tidak mengulang kartu utama", `
+      ${panel("Live Sensor Measurements", "Actual sensor yang terkait langsung dengan mesin Kalender", `
         <div class="metric-grid">
-          ${metricTile("Total energy consumption", "1,284<small>kWh</small>", "Current shift")}
-          ${metricTile("Power demand", liveValue(86.4, "kW", .35, 1), "Load 72%")}
+          ${metricTile("Loadcell upper", liveValue(482, "kg", 2, 1), "SV 480.0 kg")}
+          ${metricTile("Loadcell lower", liveValue(473, "kg", 2, 1), "SV 475.0 kg")}
+          ${metricTile("Temperature upper", liveValue(126.4, "°C", .13, 1), "SV 127.0°C")}
+          ${metricTile("Temperature lower", liveValue(125.8, "°C", .13, 1), "SV 127.0°C")}
           ${metricTile("Dancing roller", liveValue(53.8, "%", .22, 1), "Center 50.0%")}
-          ${metricTile("Inlet speed", liveValue(27.6, "m/min", .08, 1), "Line reference")}
-          ${metricTile("Expander overspeed", liveValue(1.1, "%", .04, 1), "Limit 2.0%")}
-          ${metricTile("Plaiter overspeed", liveValue(.8, "%", .04, 1), "Limit 1.8%")}
+          ${metricTile("Fabric width", liveValue(181.2, "cm", .12, 1), "Target 181.0 cm")}
         </div>
       `)}
     </section>
-    <section class="grid-2 abnormal-log-layout">
-      ${panel("Quality Context", "Target dan latest inspection result", `
-        <div class="ring-wrap">
-          <div class="ring" style="--value:94;--ring-color:#119b70"><div class="ring-copy"><strong>94.2%</strong><small>Quality score</small></div></div>
-          <div class="ring-stats">
-            <div class="ring-stat"><span>Gramasi</span><strong>221.4 GSM</strong></div>
-            <div class="ring-stat"><span>Bowing</span><strong>1.2%</strong></div>
-            <div class="ring-stat"><span>Shrinkage</span><strong>-3.4%</strong></div>
-            <div class="ring-stat"><span>Fabric width</span><strong>181.2 cm</strong></div>
-          </div>
-        </div>
-      `)}
-    </section>
+    ${panel("Production & Delivery Detail", "Order, target finishing, dan progress proses mesin berjalan", `
+      <div class="process-detail-grid">
+        <div class="process-detail-item"><span>Customer</span><strong>PT Nusantara Apparel</strong></div>
+        <div class="process-detail-item"><span>Fabric Type</span><strong>Cotton Combed 30s</strong></div>
+        <div class="process-detail-item"><span>Target Grammage</span><strong>220 GSM</strong></div>
+        <div class="process-detail-item"><span>Target Fabric Width</span><strong>181.0 cm</strong></div>
+        <div class="process-detail-item"><span>Expected Output</span><strong>4,800 m / shift</strong></div>
+        <div class="process-detail-item"><span>Delivery Target</span><strong>15 Aug 2026 · 18:00</strong></div>
+      </div>
+      <div class="production-progress-block">
+        <div class="production-progress-head"><div><strong>Machine Production Progress</strong><small>KL-DPN-01 · FIN-COT-07 · running</small></div><strong>68%</strong></div>
+        <div class="production-progress-track"><i style="width:68%"></i></div>
+        <div class="production-progress-foot"><span>Actual output <strong>3,264 m</strong></span><span>Remaining <strong>1,536 m</strong></span><span>Est. completion <strong>17:12</strong></span></div>
+      </div>
+    `)}
     ${panel("Motor & Driven Equipment", "Status dari inlet sampai output table", `<div class="motor-grid">${motors.map((m, i) => `<div class="motor-card"><div class="motor-card-head"><strong>${m}</strong><i class="equipment-state ${i === 8 ? "warning" : ""}"></i></div><div class="card-reading">${(24 + i * 1.2).toFixed(1)}<small>Hz</small></div><div class="card-caption">${i === 8 ? "Current above baseline" : "Running · Good"}</div></div>`).join("")}</div>`)}
     ${batchInvestigationPanel("kalender", machine)}
     ${batchTrendWorkspace("kalender", machine)}
