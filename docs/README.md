@@ -13,9 +13,9 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Kalender_v1.2.md` | 1.2 | Aktif | Empat kartu utama Loadcell dan Temperature Upper/Lower dengan PV serta SV |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
 | `chemicals/Chemical_Dispensing_Transfer_Concept_v1.1.md` | 1.1 | Aktif | Konsep tujuh varian chemical dan lima dispensing pada area Depan, Belakang, serta Timur |
-| `dashboard/Dashboard_V1_Concept_v1.4.md` | 1.4 | Aktif | Plant Operations Summary dengan tujuh label operasional deklaratif |
+| `dashboard/Dashboard_V1_Concept_v1.5.md` | 1.5 | Aktif | KPI utility utama tanpa inner container abu-abu pada Plant Operations Summary |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
-| `releases/Frontend_V1.25.md` | 1.25 | Selesai | Judul Plant Overview menggunakan label deklaratif tanpa pertanyaan |
+| `releases/Frontend_V1.26.md` | 1.26 | Selesai | Current dan Total Utility tampil sebagai KPI utama tanpa sub-card abu-abu |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
 ## Aturan pembaruan

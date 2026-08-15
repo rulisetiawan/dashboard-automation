@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.26 / Dashboard Concept V1.5 — 15 Agustus 2026
+
+**Status:** Primary utility KPI treatment selesai
+
+### Diubah
+
+- Inner container abu-abu pada Current Utility Usage dan Total Utility Consumption dihapus.
+- Nilai utility menggunakan ukuran serta kontras yang lebih kuat.
+- Pemisah antarutility menggunakan garis aksen tipis tanpa bentuk sub-card.
+- Warning Steam tetap dipertahankan melalui warna status.
+
+### Batasan
+
+- Nilai utility masih simulated.
+
+---
+
 ## Frontend Dashboard V1.25 / Dashboard Concept V1.4 — 15 Agustus 2026
 
 **Status:** Declarative Plant Operations Summary selesai

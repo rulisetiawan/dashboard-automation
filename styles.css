@@ -1397,9 +1397,13 @@ select:focus-visible {
   font-size: 0.42rem;
 }
 
-.plant-answer-breakdown span.warning,
-.plant-utility-mini span.warning {
+.plant-answer-breakdown span.warning {
   background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.plant-utility-mini span.warning {
+  border-bottom-color: rgba(214, 139, 5, 0.5);
   color: var(--warning);
 }
 
@@ -1419,32 +1423,41 @@ select:focus-visible {
 .plant-utility-total-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px;
-  margin-top: 10px;
+  column-gap: 18px;
+  row-gap: 8px;
+  margin-top: 12px;
 }
 
 .plant-utility-mini span,
 .plant-utility-total-grid span {
   display: grid;
   min-width: 0;
-  gap: 3px;
-  padding: 7px;
-  border: 1px solid var(--line-soft);
-  border-radius: 6px;
-  background: var(--surface-2);
+  gap: 5px;
+  padding: 4px 0 9px;
+  border: 0;
+  border-bottom: 2px solid rgba(7, 142, 170, 0.18);
+  border-radius: 0;
+  background: transparent;
   color: var(--ink-3);
-  font-size: 0.4rem;
+  font-size: 0.43rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .plant-utility-mini b,
 .plant-utility-total-grid b {
   overflow: hidden;
-  color: var(--ink-2);
+  color: var(--ink);
   font-family: var(--font-data);
-  font-size: 0.49rem;
+  font-size: 0.64rem;
   font-weight: 500;
+  line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.plant-utility-total-grid b {
+  font-size: 0.7rem;
 }
 
 .plant-utility-mini b small {
