@@ -112,6 +112,77 @@ const jetflowProcessSteps = [
   "ST To MT Filling",
 ];
 
+// Durasi ini adalah template recipe untuk demonstrasi historian. Pada integrasi PLC/MES,
+// nilai ini akan diganti dengan timestamp aktual setiap process step pada batch.
+const jetflowProcessDurations = [12, 8, 16, 7, 24, 9, 9, 14, 14, 18, 12, 11];
+
+function jetflowProgramSchedule() {
+  const total = jetflowProcessDurations.reduce((sum, duration) => sum + duration, 0);
+  let cursor = 0;
+  return jetflowProcessSteps.map((name, index) => {
+    const start = cursor / total;
+    cursor += jetflowProcessDurations[index];
+    return { name, step: index + 1, start, end: cursor / total };
+  });
+}
+
+function jetflowProgramForSensor(sensor) {
+  const schedule = jetflowProgramSchedule();
+  const phase = (name) => schedule.find((item) => item.name === name);
+  const profiles = {
+    main_temp: {
+      initial: 28,
+      phases: ["Temperature Control", "Rinse Cooling"],
+      stages: [
+        ["Temperature Control", .10, 60],
+        ["Temperature Control", .42, 80],
+        ["Temperature Control", .72, 93],
+        ["Rinse Cooling", .18, 45],
+      ],
+    },
+    water_level: {
+      initial: 12,
+      phases: ["Filling", "Drain", "ST To MT Filling"],
+      stages: [["Filling", .54, 72], ["Drain", .20, 18], ["ST To MT Filling", .38, 55]],
+    },
+    flow_meter: {
+      initial: 0,
+      phases: ["Filling", "Drain", "ST To MT Filling"],
+      stages: [["Filling", .30, 125], ["Drain", .22, 78], ["ST To MT Filling", .38, 110]],
+    },
+    dosing_temp_1: {
+      initial: 30,
+      phases: ["Inject DT 1", "Dosing DT 1"],
+      stages: [["Inject DT 1", .30, 42], ["Dosing DT 1", .42, 58]],
+    },
+    dosing_temp_2: {
+      initial: 28,
+      phases: ["Inject DT 2", "Dosing DT 2"],
+      stages: [["Inject DT 2", .30, 38], ["Dosing DT 2", .42, 43]],
+    },
+    dosing_level: {
+      initial: 82,
+      phases: ["Inject DT 1", "Dosing DT 1", "Inject DT 2", "Dosing DT 2"],
+      stages: [["Inject DT 1", .25, 72], ["Dosing DT 1", .58, 65], ["Inject DT 2", .28, 48], ["Dosing DT 2", .55, 34]],
+    },
+  };
+  const profile = profiles[sensor.key] || { initial: sensor.sv * .5, phases: [], stages: [] };
+  const markers = profile.stages.map(([process, offset, value]) => {
+    const step = phase(process);
+    return {
+      process,
+      step: step.step,
+      position: step.start + (step.end - step.start) * offset,
+      value,
+    };
+  }).sort((a, b) => a.position - b.position);
+  return {
+    initial: profile.initial,
+    phases: profile.phases.map((name) => phase(name)),
+    markers,
+  };
+}
+
 function simulatedMachineState(index, areaIndex) {
   const marker = index + areaIndex * 5;
   if (marker % 19 === 0 && marker > 0) return "fault";
@@ -356,9 +427,40 @@ function sensorTrendSeries(type, sensor, batch) {
   const keyPhase = sensor.key.length * 0.17 + seed % 19 * 0.07;
   const batchEnd = new Date("2026-08-14T14:00:00+07:00").getTime() - seed % 96 * 30 * 60 * 1000;
   const timestamps = Array.from({ length: count }, (_, index) => batchEnd - span + span * index / (count - 1));
+  if (type === "jetflow") {
+    const program = jetflowProgramForSensor(sensor);
+    const sv = timestamps.map((_, index) => {
+      const position = index / Math.max(1, count - 1);
+      return program.markers.reduce((target, marker) => position >= marker.position ? marker.value : target, program.initial);
+    });
+    let actual = program.initial - sensor.variance * .18;
+    const pv = sv.map((target, index) => {
+      const response = index === 0 ? .14 : .2;
+      actual += (target - actual) * response;
+      actual += Math.sin(index * .54 + keyPhase) * sensor.variance * .08 + Math.cos(index * .21 + keyPhase) * sensor.variance * .035;
+      return actual;
+    });
+    return { timestamps, sv, pv };
+  }
   const sv = timestamps.map((_, index) => sensor.sv + (index > count * 0.68 ? sensor.variance * 0.08 : 0));
   const pv = sv.map((target, index) => target + Math.sin(index * 0.44 + typePhase + keyPhase) * sensor.variance * 0.52 + Math.cos(index * 0.17 + keyPhase) * sensor.variance * 0.18);
   return { timestamps, sv, pv };
+}
+
+function programTimeLabel(timestamp) {
+  return new Date(timestamp).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function jetflowTrendProgramOverlay(sensor, series) {
+  const program = jetflowProgramForSensor(sensor);
+  const timeAt = (position) => series.timestamps[Math.round(position * (series.timestamps.length - 1))];
+  const phases = program.phases.map((phase) => `<span class="jetflow-program-phase"><b>Step ${String(phase.step).padStart(2, "0")}</b><strong>${phase.name}</strong><small>${programTimeLabel(timeAt(phase.start))}–${programTimeLabel(timeAt(phase.end))}</small></span>`).join("");
+  const markers = program.markers.map((marker) => `<span class="jetflow-sv-marker"><b>${programTimeLabel(timeAt(marker.position))}</b><strong>SV → ${marker.value.toFixed(sensor.decimals)} ${sensor.unit}</strong><small>Step ${String(marker.step).padStart(2, "0")} · ${marker.process}</small></span>`).join("");
+  return `<div class="jetflow-program-overlay" aria-label="Program proses dan perubahan SV untuk ${sensor.label}">
+    <div class="jetflow-overlay-heading"><span>Recipe program overlay</span><small>Area berwarna dan garis putus-putus pada trend menandai step program dan perubahan setpoint.</small></div>
+    <div class="jetflow-program-phases">${phases}</div>
+    <div class="jetflow-sv-markers">${markers}</div>
+  </div>`;
 }
 
 function sensorTrendPanel(type, machine) {
@@ -371,9 +473,11 @@ function sensorTrendPanel(type, machine) {
     const pv = series.pv.at(-1);
     const sv = series.sv.at(-1);
     const delta = pv - sv;
+    const programOverlay = type === "jetflow" ? jetflowTrendProgramOverlay(sensor, series) : "";
     return `<article class="sensor-trend-row">
       <div class="sensor-trend-row-head"><div><i style="background:${sensor.color}"></i><span><strong>${sensor.label}</strong><small>${sensor.tag} · ${sensor.unit}</small></span></div><div class="sensor-trend-readings"><span>PV<strong>${pv.toFixed(sensor.decimals)} ${sensor.unit}</strong></span><span>SV<strong>${sv.toFixed(sensor.decimals)} ${sensor.unit}</strong></span><span>Δ<strong class="${Math.abs(delta) > sensor.variance * .55 ? "warning" : ""}">${delta >= 0 ? "+" : ""}${delta.toFixed(sensor.decimals)} ${sensor.unit}</strong></span></div></div>
       <div class="sensor-line-legend"><span><i style="background:${sensor.color}"></i>PV · Process Value</span><span><i style="border-color:${sensor.color}"></i>SV · Set Value</span></div>
+      ${programOverlay}
       <canvas class="sensor-trend-canvas" id="sensor-trend-${type}-${sensor.key}" aria-label="Trend PV dan SV ${sensor.label}"></canvas>
     </article>`;
   }).join("");
@@ -880,16 +984,15 @@ function jetflowDetailPage() {
   const waterSeed = [...machine.id].reduce((total, character) => total + character.charCodeAt(0), 0);
   const totalWaterConsumption = (118 + waterSeed % 890 / 10).toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const processPosition = jetflowProcessSteps.indexOf(machine.step) + 1;
-  const processDurations = [12, 8, 16, 7, 24, 9, 9, 14, 14, 18, 12, 11];
   const currentElapsedMinutes = 5 + waterSeed % 8;
-  const completedDuration = processDurations.slice(0, processPosition - 1).reduce((total, duration) => total + duration, 0);
+  const completedDuration = jetflowProcessDurations.slice(0, processPosition - 1).reduce((total, duration) => total + duration, 0);
   let sequenceCursor = Date.now() - (completedDuration + currentElapsedMinutes) * 60 * 1000;
   const formatProcessTime = (timestamp) => new Date(timestamp).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   const processTimeline = jetflowProcessSteps.map((process, index) => {
     if (index > processPosition - 1) return { start: "—", end: "—" };
     const start = formatProcessTime(sequenceCursor);
     if (index === processPosition - 1) return { start, end: "In progress" };
-    sequenceCursor += processDurations[index] * 60 * 1000;
+    sequenceCursor += jetflowProcessDurations[index] * 60 * 1000;
     return { start, end: formatProcessTime(sequenceCursor) };
   });
   const winches = Array.from({ length: machine.winches }, (_, i) => {
@@ -2015,10 +2118,26 @@ function drawSensorComparisonTrends(type) {
   const enabled = state.sensorTrend.enabled[type] || [];
   sensorTrendConfig[type].filter((sensor) => enabled.includes(sensor.key)).forEach((sensor) => {
     const series = sensorTrendSeries(type, sensor, selectedBatch);
+    const program = type === "jetflow" ? jetflowProgramForSensor(sensor) : null;
     drawLineChart(`sensor-trend-${type}-${sensor.key}`, [
       { data: series.pv, color: sensor.color, fill: true },
       { data: series.sv, color: sensor.color, dash: true },
     ], series.timestamps, {
+      topPad: program ? 42 : 18,
+      annotations: program ? {
+        bands: program.phases.map((phase) => ({
+          start: phase.start,
+          end: phase.end,
+          label: `S${String(phase.step).padStart(2, "0")} ${phase.name}`,
+          color: `${sensor.color}14`,
+          textColor: sensor.color,
+        })),
+        markers: program.markers.map((marker) => ({
+          position: marker.position,
+          label: `${marker.value.toFixed(sensor.decimals)}${sensor.unit}`,
+          color: sensor.color,
+        })),
+      } : null,
       labelFormatter: (timestamp) => new Date(timestamp).toLocaleTimeString("id-ID", state.sensorTrend.range === "24H"
         ? { day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }
         : { hour: "2-digit", minute: "2-digit", hour12: false }),
@@ -2041,7 +2160,7 @@ function drawLineChart(id, series, labels, options = {}) {
   ctx.scale(ratio, ratio);
   const width = rect.width;
   const height = rect.height;
-  const pad = { top: 18, right: 12, bottom: 25, left: 42 };
+  const pad = { top: options.topPad || 18, right: 12, bottom: 25, left: 42 };
   const all = series.flatMap((s) => s.data);
   let min = Math.min(...all);
   let max = Math.max(...all);
@@ -2050,6 +2169,28 @@ function drawLineChart(id, series, labels, options = {}) {
   max += spread * .14;
   ctx.clearRect(0, 0, width, height);
   ctx.font = "9px DM Mono, monospace";
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const xAt = (i, len) => pad.left + (i / Math.max(1, len - 1)) * plotW;
+  const yAt = (value) => pad.top + (1 - (value - min) / (max - min)) * plotH;
+  const annotation = options.annotations || {};
+  (annotation.bands || []).forEach((band) => {
+    const x = pad.left + Math.max(0, band.start) * plotW;
+    const endX = pad.left + Math.min(1, band.end) * plotW;
+    const bandWidth = Math.max(1, endX - x);
+    ctx.fillStyle = band.color || "rgba(7,142,170,.08)";
+    ctx.fillRect(x, pad.top, bandWidth, plotH);
+    if (bandWidth > 42) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x + 2, 2, Math.max(1, bandWidth - 4), pad.top - 4);
+      ctx.clip();
+      ctx.fillStyle = band.textColor || "#078eaa";
+      ctx.font = "7px DM Mono, monospace";
+      ctx.fillText(band.label, x + 4, 10);
+      ctx.restore();
+    }
+  });
   ctx.fillStyle = "#8b999f";
   ctx.strokeStyle = "rgba(19,46,57,.08)";
   ctx.lineWidth = 1;
@@ -2064,10 +2205,6 @@ function drawLineChart(id, series, labels, options = {}) {
     const value = max - ((max - min) / 4) * i;
     ctx.fillText(formatAxis(value), 2, y + 3);
   }
-  const plotW = width - pad.left - pad.right;
-  const plotH = height - pad.top - pad.bottom;
-  const xAt = (i, len) => pad.left + (i / Math.max(1, len - 1)) * plotW;
-  const yAt = (value) => pad.top + (1 - (value - min) / (max - min)) * plotH;
   series.forEach((line) => {
     ctx.beginPath();
     ctx.lineWidth = line.dash ? 1.4 : 2;
@@ -2090,6 +2227,30 @@ function drawLineChart(id, series, labels, options = {}) {
       ctx.fillStyle = gradient;
       ctx.fill();
     }
+  });
+  (annotation.markers || []).forEach((marker, index) => {
+    const x = pad.left + Math.max(0, Math.min(1, marker.position)) * plotW;
+    ctx.strokeStyle = marker.color || "#078eaa";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x, pad.top);
+    ctx.lineTo(x, height - pad.bottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = marker.color || "#078eaa";
+    ctx.beginPath();
+    ctx.arc(x, pad.top + 2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    const text = marker.label || "SV";
+    ctx.font = "7px DM Mono, monospace";
+    const labelWidth = ctx.measureText(text).width + 6;
+    const labelX = Math.max(pad.left, Math.min(x - labelWidth / 2, width - pad.right - labelWidth));
+    const labelY = 15 + (index % 3) * 9;
+    ctx.fillStyle = "rgba(255,255,255,.94)";
+    ctx.fillRect(labelX, labelY - 7, labelWidth, 9);
+    ctx.fillStyle = marker.color || "#078eaa";
+    ctx.fillText(text, labelX + 3, labelY);
   });
   const tickCount = Math.min(6, labels.length);
   for (let i = 0; i < tickCount; i += 1) {

@@ -2590,6 +2590,89 @@ select:focus-visible {
   border-top: 2px dashed;
 }
 
+.jetflow-program-overlay {
+  display: grid;
+  gap: 7px;
+  margin: 9px 0 4px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line-soft));
+  border-radius: 7px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 42%);
+}
+
+.jetflow-overlay-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.jetflow-overlay-heading > span {
+  color: var(--accent-dark);
+  font-family: var(--font-data);
+  font-size: .43rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.jetflow-overlay-heading small {
+  color: var(--ink-3);
+  font-size: .42rem;
+  text-align: right;
+}
+
+.jetflow-program-phases,
+.jetflow-sv-markers {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.jetflow-program-phase,
+.jetflow-sv-marker {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 2px;
+  min-width: 114px;
+  padding: 6px 7px;
+  border-radius: 5px;
+  background: var(--surface);
+  font-size: .4rem;
+}
+
+.jetflow-program-phase {
+  border-left: 3px solid var(--accent);
+}
+
+.jetflow-sv-marker {
+  border-left: 3px dashed var(--accent);
+}
+
+.jetflow-program-phase b,
+.jetflow-sv-marker b {
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: .4rem;
+  font-weight: 500;
+}
+
+.jetflow-program-phase strong,
+.jetflow-sv-marker strong {
+  color: var(--ink-2);
+  font-size: .44rem;
+  font-weight: 700;
+}
+
+.jetflow-program-phase small,
+.jetflow-sv-marker small {
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: .39rem;
+}
+
 .sensor-trend-canvas {
   display: block;
   width: 100%;

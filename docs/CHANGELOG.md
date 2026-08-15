@@ -4,6 +4,25 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.27 / Jetflow Concept V1.5 / Dashboard Concept V1.6 — 15 Agustus 2026
+
+**Status:** Recipe program overlay untuk investigasi batch Jetflow selesai
+
+### Ditambahkan
+
+- Area process step relevan pada trend PV/SV Jetflow.
+- Marker vertikal dan label nilai untuk perubahan SV recipe.
+- Ringkasan step, interval waktu, serta perubahan setpoint per sensor.
+- Profile SV bertahap dan respons PV simulasi agar pembacaan ramp/cooling dapat diuji.
+- Dokumentasi Jetflow v1.5, Dashboard v1.6, dan release frontend v1.27.
+
+### Batasan
+
+- Event recipe, setpoint, timestamp, dan historian PV masih simulated.
+- Achievement rule berdasarkan tolerance dan hold time belum tersambung.
+
+---
+
 ## Frontend Dashboard V1.26 / Dashboard Concept V1.5 — 15 Agustus 2026
 
 **Status:** Primary utility KPI treatment selesai
