@@ -4,6 +4,31 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.24 / Dashboard Concept V1.3 — 15 Agustus 2026
+
+**Status:** Plant Management Question Center selesai
+
+### Ditambahkan
+
+- Tujuh kartu jawaban utama untuk machine state, output, utility, dan batch.
+- Tabel scrollable Mesin Running Sekarang.
+- Tabel scrollable Stop / Maintenance / Problem.
+- Breakdown utility live dan total consumption dengan satuan masing-masing.
+- Active batch unik dan completed batch selected range.
+- Pemilih 1H, 8H, 24H, dan 7D pada Management Question Center.
+- Navigasi baris status menuju detail mesin.
+
+### Aturan Scope
+
+- Machine state, active batch, dan utility condition menggunakan Live Now.
+- Output, completed batch, dan total utility consumption menggunakan Selected Range.
+
+### Batasan
+
+- Data masih simulated; maintenance aktual belum terhubung ke CMMS.
+
+---
+
 ## Frontend Dashboard V1.23 / Plant Utility Concept V1.1 — 15 Agustus 2026
 
 **Status:** Machine power meter area-to-machine drill-down selesai

@@ -1275,6 +1275,285 @@ select:focus-visible {
   font-weight: 500;
 }
 
+.plant-question-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 12px;
+}
+
+.plant-question-head h2 {
+  margin: 5px 0 4px;
+  font-size: 0.94rem;
+}
+
+.plant-question-head p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.54rem;
+}
+
+.plant-question-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.plant-answer-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 13px;
+}
+
+.plant-answer-card {
+  position: relative;
+  grid-column: span 3;
+  min-height: 205px;
+  padding: 15px;
+  overflow: hidden;
+}
+
+.plant-answer-card::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: var(--primary);
+  content: "";
+}
+
+.plant-answer-card.live-answer::before {
+  background: var(--success);
+}
+
+.plant-answer-card.danger-answer::before {
+  background: var(--danger);
+}
+
+.plant-answer-card.utility-live-answer::before {
+  background: var(--warning);
+}
+
+.plant-answer-card.utility-total-answer {
+  grid-column: span 6;
+}
+
+.plant-answer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plant-answer-top > span:last-child {
+  color: var(--ink-4);
+  font-family: var(--font-data);
+  font-size: 0.47rem;
+}
+
+.plant-answer-card h3 {
+  min-height: 36px;
+  margin: 12px 0 8px;
+  color: var(--ink-2);
+  font-size: 0.62rem;
+  line-height: 1.45;
+}
+
+.plant-answer-value {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.plant-answer-value strong {
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-size: 1.38rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.plant-answer-value small {
+  color: var(--ink-3);
+  font-size: 0.47rem;
+}
+
+.plant-answer-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.plant-answer-breakdown span {
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-family: var(--font-data);
+  font-size: 0.42rem;
+}
+
+.plant-answer-breakdown span.warning,
+.plant-utility-mini span.warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.plant-answer-breakdown span.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.plant-answer-card > p {
+  margin: 11px 0 0;
+  color: var(--ink-3);
+  font-size: 0.44rem;
+  line-height: 1.5;
+}
+
+.plant-utility-mini,
+.plant-utility-total-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.plant-utility-mini span,
+.plant-utility-total-grid span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: 0.4rem;
+}
+
+.plant-utility-mini b,
+.plant-utility-total-grid b {
+  overflow: hidden;
+  color: var(--ink-2);
+  font-family: var(--font-data);
+  font-size: 0.49rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plant-utility-mini b small {
+  margin-left: 3px;
+  color: inherit;
+  font-size: 0.39rem;
+}
+
+.overview-machine-directory {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.overview-machine-table-wrap {
+  max-height: 310px;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  scrollbar-gutter: stable;
+}
+
+.overview-machine-table {
+  width: 100%;
+  min-width: 590px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.overview-machine-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--line);
+  background: #f1f5f6;
+  color: var(--ink-3);
+  font-size: 0.42rem;
+  letter-spacing: 0.045em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.overview-machine-table th:first-child,
+.overview-machine-table td:first-child {
+  width: 28%;
+}
+
+.overview-machine-table th:nth-child(2),
+.overview-machine-table td:nth-child(2) {
+  width: 16%;
+}
+
+.overview-machine-table th:nth-child(3),
+.overview-machine-table td:nth-child(3) {
+  width: 17%;
+}
+
+.overview-machine-table th:nth-child(4),
+.overview-machine-table td:nth-child(4) {
+  width: 23%;
+}
+
+.overview-machine-table th:last-child,
+.overview-machine-table td:last-child {
+  width: 16%;
+}
+
+.overview-machine-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-2);
+  font-size: 0.48rem;
+  white-space: nowrap;
+}
+
+.overview-machine-table tbody tr {
+  cursor: pointer;
+}
+
+.overview-machine-table tbody tr:hover,
+.overview-machine-table tbody tr:focus-visible {
+  background: var(--surface-hover);
+  outline: none;
+}
+
+.overview-machine-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.overview-machine-table td:first-child strong,
+.overview-machine-table td:first-child small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-machine-table td:first-child strong {
+  font-family: var(--font-data);
+  font-size: 0.49rem;
+}
+
+.overview-machine-table td:first-child small {
+  margin-top: 2px;
+  color: var(--ink-3);
+  font-size: 0.39rem;
+}
+
 .chart-container.compact {
   height: 210px;
 }
@@ -4172,6 +4451,14 @@ select:focus-visible {
 }
 
 @media (max-width: 1180px) {
+  .plant-answer-card {
+    grid-column: span 6;
+  }
+
+  .plant-answer-card.utility-total-answer {
+    grid-column: span 12;
+  }
+
   :root {
     --sidebar-width: 76px;
   }
@@ -4268,6 +4555,10 @@ select:focus-visible {
   .grid-2,
   .grid-equal,
   .management-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-machine-directory {
     grid-template-columns: 1fr;
   }
 
@@ -4372,6 +4663,27 @@ select:focus-visible {
   }
 
   .throughput-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .plant-question-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .plant-question-actions {
+    width: 100%;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .plant-answer-card,
+  .plant-answer-card.utility-total-answer {
+    grid-column: span 12;
+  }
+
+  .plant-utility-mini,
+  .plant-utility-total-grid {
     grid-template-columns: 1fr;
   }
 

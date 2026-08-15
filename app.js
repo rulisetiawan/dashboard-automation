@@ -405,6 +405,7 @@ function productionOutputDataset() {
       runtime: 108,
       downtime: 5.4,
       energy: 3.4,
+      completedBatches: 4,
     },
     "8H": {
       labels: ["06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00"],
@@ -415,6 +416,7 @@ function productionOutputDataset() {
       runtime: 852,
       downtime: 42.6,
       energy: 26.8,
+      completedBatches: 31,
     },
     "24H": {
       labels: ["00:00", "02:00", "04:00", "06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"],
@@ -425,6 +427,7 @@ function productionOutputDataset() {
       runtime: 2498,
       downtime: 126,
       energy: 78.9,
+      completedBatches: 88,
     },
     "7D": {
       labels: ["08 Agu", "09 Agu", "10 Agu", "11 Agu", "12 Agu", "13 Agu", "14 Agu"],
@@ -435,6 +438,7 @@ function productionOutputDataset() {
       runtime: 17540,
       downtime: 864,
       energy: 552,
+      completedBatches: 612,
     },
   };
   const selected = datasets[state.range] || datasets["8H"];
@@ -451,21 +455,67 @@ function formatProductionOutput(value) {
   return Number(value).toLocaleString("id-ID", { maximumFractionDigits: 0 });
 }
 
+function overviewMachineRecords() {
+  return Object.keys(processConfig).filter((type) => type !== "chemical").flatMap((type) => fleetFor(type).map((machine) => {
+    const seed = [...machine.id].reduce((total, character) => total + character.charCodeAt(0), 0);
+    const condition = machine.state === "running" ? "running"
+      : machine.state === "warning" ? "problem"
+        : machine.state === "fault" ? "fault"
+          : seed % 3 === 0 ? "maintenance" : "stopped";
+    return { ...machine, type, condition, operating: machine.state === "running" || machine.state === "warning" };
+  }));
+}
+
+function overviewConditionPill(condition) {
+  const labels = { running: "Running", problem: "Problem", fault: "Fault", maintenance: "Maintenance", stopped: "Stopped" };
+  const tones = { running: "good", problem: "warning", fault: "danger", maintenance: "neutral", stopped: "neutral" };
+  return `<span class="data-pill ${tones[condition]}">${labels[condition]}</span>`;
+}
+
+function overviewMachineStatusTable(records, emptyLabel) {
+  if (!records.length) return `<div class="empty-state"><strong>${emptyLabel}</strong><span>Tidak ada mesin pada kategori ini.</span></div>`;
+  return `<div class="overview-machine-table-wrap"><table class="overview-machine-table"><thead><tr><th>Machine</th><th>Process</th><th>Area / Lane</th><th>Batch</th><th>Condition</th></tr></thead><tbody>${records.map((machine) => `<tr data-machine-target="${machine.type}|${machine.id}" tabindex="0"><td><strong>${machine.id}</strong><small>${machine.name}</small></td><td>${processConfig[machine.type].singular}</td><td>${machine.areaLabel}</td><td class="mono">${machine.batch}</td><td>${overviewConditionPill(machine.condition)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function plantManagementAnswers(productionOutput, records) {
+  const operating = records.filter((machine) => machine.operating);
+  const normalRunning = records.filter((machine) => machine.condition === "running").length;
+  const problems = records.filter((machine) => machine.condition === "problem").length;
+  const faults = records.filter((machine) => machine.condition === "fault").length;
+  const maintenance = records.filter((machine) => machine.condition === "maintenance").length;
+  const stopped = records.filter((machine) => machine.condition === "stopped").length;
+  const attention = records.length - normalRunning;
+  const activeBatches = new Set(operating.filter((machine) => machine.batch !== "—").map((machine) => machine.batch)).size;
+  const rangeHours = { "1H": 1, "8H": 8, "24H": 24, "7D": 168 }[state.range] || 8;
+  const steamConsumption = rangeHours * 11.8;
+  const thermalOilConsumption = rangeHours * 105.2;
+  return `
+    <div class="plant-question-head"><div><span class="eyebrow">Management question center</span><h2>Jawaban utama kondisi pabrik</h2><p>Live status untuk operasi sekarang; output, konsumsi, dan completed batch mengikuti selected time range.</p></div><div class="plant-question-actions"><span class="quality-pill good">Simulated data</span>${rangeButtons()}</div></div>
+    <section class="plant-answer-grid">
+      <article class="card plant-answer-card live-answer"><div class="plant-answer-top"><span class="kpi-scope live">LIVE NOW</span><span>01</span></div><h3>Mesin mana saja yang running?</h3><div class="plant-answer-value"><strong>${operating.length}</strong><small>/ ${records.length} mesin</small></div><div class="plant-answer-breakdown"><span>${normalRunning} normal</span><span class="warning">${problems} dengan warning</span></div><p>Daftar lengkap tersedia tepat di bawah.</p></article>
+      <article class="card plant-answer-card danger-answer"><div class="plant-answer-top"><span class="kpi-scope live">LIVE NOW</span><span>02</span></div><h3>Mesin stop, maintenance, atau bermasalah?</h3><div class="plant-answer-value"><strong>${attention}</strong><small>perlu diketahui</small></div><div class="plant-answer-breakdown compact"><span>${stopped} stop</span><span>${maintenance} maintenance</span><span class="warning">${problems} problem</span><span class="danger">${faults} fault</span></div><p>Warning dapat terjadi saat mesin masih running.</p></article>
+      <article class="card plant-answer-card"><div class="plant-answer-top"><span class="kpi-scope historical">SELECTED RANGE</span><span>03</span></div><h3>Berapa total output produksi?</h3><div class="plant-answer-value"><strong>${formatProductionOutput(productionOutput.total)}</strong><small>m good fabric</small></div><div class="plant-answer-breakdown"><span>Avg ${formatProductionOutput(productionOutput.average)} m / ${productionOutput.interval}</span><span>Peak ${formatProductionOutput(productionOutput.peak)} m</span></div><p>${state.range} · ${productionOutput.scope}</p></article>
+      <article class="card plant-answer-card utility-live-answer"><div class="plant-answer-top"><span class="kpi-scope live">LIVE NOW</span><span>04</span></div><h3>Bagaimana penggunaan utilitas sekarang?</h3><div class="plant-answer-value"><strong>3</strong><small>normal · 1 watch</small></div><div class="plant-utility-mini"><span><b>${liveValue(1.84, "MW", .02, 2)}</b>Electrical</span><span><b>${liveValue(184, "m³/h", 1, 0)}</b>Water</span><span class="warning"><b>${liveValue(12.8, "t/h", .09, 1)}</b>Steam · 7.8 bar</span><span><b>${liveValue(218.4, "°C", .2, 1)}</b>Thermal oil</span></div></article>
+      <article class="card plant-answer-card utility-total-answer"><div class="plant-answer-top"><span class="kpi-scope historical">SELECTED RANGE</span><span>05</span></div><h3>Berapa total konsumsi utilitas?</h3><div class="plant-utility-total-grid"><span><b>${formatManagementValue(productionOutput.energy, "MWh")} MWh</b>Electrical energy</span><span><b>${formatProductionOutput(productionOutput.water)} m³</b>Water</span><span><b>${formatManagementValue(steamConsumption, "ton")} ton</b>Steam</span><span><b>${formatManagementValue(thermalOilConsumption, "GJ")} GJ</b>Thermal oil</span></div><p>${state.range} · seluruh total mengikuti periode yang sama.</p></article>
+      <article class="card plant-answer-card live-answer"><div class="plant-answer-top"><span class="kpi-scope live">LIVE NOW</span><span>06</span></div><h3>Berapa batch yang sedang proses?</h3><div class="plant-answer-value"><strong>${activeBatches}</strong><small>batch aktif</small></div><div class="plant-answer-breakdown"><span>${operating.length} active process runs</span></div><p>Dihitung sebagai batch number unik pada mesin aktif.</p></article>
+      <article class="card plant-answer-card"><div class="plant-answer-top"><span class="kpi-scope historical">SELECTED RANGE</span><span>07</span></div><h3>Berapa batch yang sudah selesai?</h3><div class="plant-answer-value"><strong>${productionOutput.completedBatches}</strong><small>batch selesai</small></div><div class="plant-answer-breakdown"><span>${state.range} · ${productionOutput.scope}</span></div><p>Completion mengikuti boundary batch historian.</p></article>
+    </section>
+  `;
+}
+
 function overviewPage() {
   const alarmItems = alarms.filter((a) => !a.ack).slice(0, 3).map(alarmRow).join("");
-  const productionFleet = [...jetflows, ...calators, ...dryers, ...kalenders];
-  const runningMachines = statusCount(productionFleet, "running");
-  const stoppedMachines = statusCount(productionFleet, "idle") + statusCount(productionFleet, "fault");
-  const activeExceptions = statusCount(productionFleet, "warning") + statusCount(productionFleet, "fault");
   const productionOutput = productionOutputDataset();
+  const machineRecords = overviewMachineRecords();
+  const operatingMachines = machineRecords.filter((machine) => machine.operating).sort((a, b) => a.type.localeCompare(b.type) || a.id.localeCompare(b.id));
+  const attentionPriority = { fault: 0, problem: 1, maintenance: 2, stopped: 3 };
+  const attentionMachines = machineRecords.filter((machine) => machine.condition !== "running").sort((a, b) => attentionPriority[a.condition] - attentionPriority[b.condition] || a.id.localeCompare(b.id));
   return `
     ${pageHead("overview", `<button class="button" data-page-target="health">⊕ Data health</button><button class="button primary" data-page-target="trends">⌗ Open trends</button>`)}
-    <div class="management-section-label overview-section-label"><span class="kpi-scope live">LIVE NOW</span><p>Snapshot aktual plant; nilai tidak berubah saat time range historis diganti.</p></div>
-    <section class="kpi-grid">
-      ${kpi("Machines Running", runningMachines, "/ 133", "MC", `<strong>${(runningMachines / 133 * 100).toFixed(1)}%</strong>simulated fleet state`, "success")}
-      ${kpi("Machines Stopped", stoppedMachines, "machines", "ST", `<strong class='danger'>${statusCount(productionFleet, "fault")} fault</strong>· ${statusCount(productionFleet, "idle")} idle`, stoppedMachines ? "warning" : "success")}
-      ${kpi("Electrical Demand", "1.84", "MW", "EL", "<strong class='danger'>92%</strong>of demand baseline", "warning")}
-      ${kpi("Active Exceptions", activeExceptions, "machines", "AL", `<strong class='danger'>${alarms.filter((alarm) => !alarm.ack).length} alarms</strong>not acknowledged`, activeExceptions ? "danger" : "success")}
+    ${plantManagementAnswers(productionOutput, machineRecords)}
+    <section class="overview-machine-directory">
+      ${panel("Mesin Running Sekarang", `${operatingMachines.length} mesin operating · termasuk mesin running dengan warning`, overviewMachineStatusTable(operatingMachines, "Tidak ada mesin running"), `<span class="data-pill good">LIVE NOW</span>`)}
+      ${panel("Stop / Maintenance / Problem", `${attentionMachines.length} mesin memerlukan status awareness`, overviewMachineStatusTable(attentionMachines, "Tidak ada exception mesin"), `<span class="data-pill warning">LIVE NOW</span>`)}
     </section>
     <section class="grid-2">
       ${panel("Requires Attention", "Exception paling penting saat ini", `<div class="alarm-list">${alarmItems}</div>`, `<button class="button ghost small" data-page-target="alarms">View all →</button>`)}
