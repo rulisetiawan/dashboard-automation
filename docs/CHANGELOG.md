@@ -4,6 +4,17 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.41 / Kalender Concept V1.12 / Dashboard Concept V1.20 — 15 Agustus 2026
+
+**Status:** Alignment Motor & Drive log diperbaiki
+
+### Diperbaiki
+
+- Sel tabel R/S/T, Load, Drive, dan Quality tidak lagi berubah menjadi layout grid.
+- Kolom historical log kembali sejajar dan data tidak menumpuk.
+
+---
+
 ## Frontend Dashboard V1.40 / Kalender Concept V1.11 / Dashboard Concept V1.19 — 15 Agustus 2026
 
 **Status:** Tabel Motor & Drive grouped dirapikan

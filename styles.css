@@ -3702,12 +3702,16 @@ select:focus-visible {
 }
 
 .phase-cell {
-  display: grid;
-  gap: 5px;
   min-width: 0;
+  vertical-align: middle;
 }
 
-.phase-cell > span:not(.data-pill) {
+.phase-cell-inner {
+  display: grid;
+  gap: 5px;
+}
+
+.phase-cell-inner > span:not(.data-pill) {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -3734,6 +3738,10 @@ select:focus-visible {
 }
 
 .quality-cell {
+  vertical-align: middle;
+}
+
+.quality-cell .phase-cell-inner {
   align-content: center;
   justify-items: start;
 }
@@ -6459,7 +6467,14 @@ select:focus-visible {
     grid-column: 1 / -1;
   }
 
-  .motor-log-table .phase-cell > span:not(.data-pill) {
+  .motor-log-table .phase-cell .phase-cell-inner {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .motor-log-table .phase-cell .phase-cell-inner > span:not(.data-pill) {
     display: grid;
     gap: 2px;
   }

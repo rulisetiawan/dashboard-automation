@@ -10,12 +10,12 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Jetflow_v1.6.md` | 1.6 | Aktif | Checklist process global untuk context seluruh trend sensor batch Jetflow |
 | `machines/Machine_Concept_Calator_v1.1.md` | 1.1 | Aktif | Konsep Calator dengan multi-speed, template Bianco, Overfeed Out, dancing roller, chemical, output, dan quality |
 | `machines/Machine_Concept_Dryer_v1.0.md` | 1.0 | Baseline | Konsep pengeringan, speed, multi-chamber temperature, output, quality, dan implementasi Dryer |
-| `machines/Machine_Concept_Kalender_v1.11.md` | 1.11 | Aktif | Motor log grouped yang rapi untuk R/S/T, load, drive, dan quality |
+| `machines/Machine_Concept_Kalender_v1.12.md` | 1.12 | Aktif | Perbaikan alignment historical log Motor & Drive |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
 | `chemicals/Chemical_Dispensing_Calator_Concept_v1.4.md` | 1.4 | Aktif | P&ID dispensing: 8 inlet, dua tank, loadcell, dan distribusi Calator |
-| `dashboard/Dashboard_V1_Concept_v1.19.md` | 1.19 | Aktif | Grouped Motor & Drive historical log table |
+| `dashboard/Dashboard_V1_Concept_v1.20.md` | 1.20 | Aktif | Bug fix alignment Motor & Drive historical log |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
-| `releases/Frontend_V1.40.md` | 1.40 | Selesai | Grouped Motor & Drive diagnostic table |
+| `releases/Frontend_V1.41.md` | 1.41 | Selesai | Motor historical log alignment fix |
 | `CHANGELOG.md` | Berkelanjutan | Aktif | Catatan perubahan antarversi |
 
 ## Aturan pembaruan
