@@ -1308,21 +1308,41 @@ function motorDriveData(motor) {
   return { timestamps, values: values[state.motorDrive.metric], ...config };
 }
 
+function motorThreePhaseReadings(motor) {
+  const seed = [...motor.id].reduce((total, character) => total + character.charCodeAt(0), 0);
+  const offsets = [-.018, .013, .005];
+  const voltageOffsets = [-.7, .5, .2];
+  const phases = ["R", "S", "T"].map((phase, index) => ({
+    phase,
+    current: motor.amps * (1 + offsets[index]) + (seed % 3) * .04,
+    voltage: 229.8 + voltageOffsets[index] + (seed % 2) * .15,
+  }));
+  const averageCurrent = phases.reduce((sum, item) => sum + item.current, 0) / phases.length;
+  const imbalance = Math.max(...phases.map((item) => Math.abs(item.current - averageCurrent))) / averageCurrent * 100;
+  return { phases, imbalance };
+}
+
 function motorDriveDetailPanel(motor) {
   const rangeLabel = { "1H": "Last 1 hour", "8H": "Last 8 hours", "24H": "Last 24 hours", "7D": "Last 7 days" }[state.motorDrive.range];
   const runtime = ({ "1H": .9, "8H": 7.4, "24H": 20.8, "7D": 143.6 })[state.motorDrive.range];
   const ranges = ["1H", "8H", "24H", "7D"].map((range) => `<button class="segment ${state.motorDrive.range === range ? "active" : ""}" data-motor-drive-range="${range}">${range}</button>`).join("");
   const metrics = [["amp", "RMS Amp"], ["voltage", "Voltage"], ["kw", "kW"]].map(([key, label]) => `<button class="segment ${state.motorDrive.metric === key ? "active" : ""}" data-motor-drive-metric="${key}">${label}</button>`).join("");
   const due = Math.max(0, motor.pmRuntime - motor.runtime);
-  return `<section class="card motor-drive-analysis" id="motor-drive-analysis">
-    <div class="motor-analysis-head"><div><span class="eyebrow">Motor & drive diagnostic</span><h2>${motor.name} · ${motor.id}</h2><p>Read-only analysis untuk kondisi drive, historical operation, dan target maintenance.</p></div><div class="motor-analysis-actions"><span class="data-pill ${motor.status === "warning" ? "warning" : "good"}">${motor.status === "warning" ? "CHECK CURRENT" : "RUNNING"}</span><button class="button ghost small" data-motor-drive-close>Close detail</button></div></div>
+  const phaseData = motorThreePhaseReadings(motor);
+  return `<div class="motor-modal-backdrop" data-motor-drive-backdrop>
+  <section class="card motor-drive-analysis" id="motor-drive-analysis" role="dialog" aria-modal="true" aria-labelledby="motor-drive-title">
+    <div class="motor-analysis-head"><div><span class="eyebrow">Motor & drive diagnostic</span><h2 id="motor-drive-title">${motor.name} · ${motor.id}</h2><p>Read-only analysis untuk kondisi drive, historical operation, dan target maintenance.</p></div><div class="motor-analysis-actions"><span class="data-pill ${motor.status === "warning" ? "warning" : "good"}">${motor.status === "warning" ? "CHECK CURRENT" : "RUNNING"}</span><button class="button ghost small" data-motor-drive-close>Close detail</button></div></div>
     <div class="motor-analysis-scope"><span class="kpi-scope live">LIVE NOW</span><span>Nilai aktual drive saat ini</span></div>
     <div class="motor-live-grid">
-      ${metricTile("RMS Current", liveValue(motor.amps, "A", .28, 1), `Limit ${motor.hz === 42 ? "34.0" : "32.0"} A`)}
-      ${metricTile("Voltage", liveValue(motor.voltage, "V", 1.2, 0), "Window 380–415 V")}
+      ${metricTile("RMS Current Avg.", liveValue(motor.amps, "A", .28, 1), `R/S/T · Limit ${motor.hz === 42 ? "34.0" : "32.0"} A`)}
+      ${metricTile("Line Voltage Avg.", liveValue(motor.voltage, "V", 1.2, 0), "L-L · Window 380–415 V")}
       ${metricTile("Active Power", liveValue(motor.kw, "kW", .16, 1), `Drive ${motor.hz.toFixed(1)} Hz`)}
       ${metricTile("Drive Frequency", liveValue(motor.hz, "Hz", .08, 1), "Command tracking good")}
     </div>
+    <section class="motor-phase-panel" aria-label="Three phase measurement R S T">
+      <div class="motor-phase-head"><div><strong>3-Phase Live Measurement</strong><small>Phase-to-neutral voltage dan RMS current per phase.</small></div><span class="data-pill ${phaseData.imbalance > 3 ? "warning" : "good"}">Current imbalance ${phaseData.imbalance.toFixed(1)}%</span></div>
+      <div class="motor-phase-grid">${phaseData.phases.map((item) => `<article class="motor-phase-reading phase-${item.phase.toLowerCase()}"><span>Phase ${item.phase}</span><strong>${item.current.toFixed(1)}<small>A</small></strong><em>${item.voltage.toFixed(1)} V</em><i>${Math.abs(item.current - motor.amps) < motor.amps * .03 ? "Balanced" : "Review"}</i></article>`).join("")}</div>
+    </section>
     <div class="motor-analysis-scope historical"><span class="kpi-scope historical">SELECTED RANGE</span><span>${rangeLabel}</span><div class="segmented">${ranges}</div></div>
     <div class="motor-history-grid">
       ${metricTile("Runtime", `${runtime.toFixed(1)}<small>h</small>`, "Running time")}
@@ -1343,7 +1363,7 @@ function motorDriveDetailPanel(motor) {
       </tbody></table></div>`, "", "motor-maintenance-panel")}
       ${panel("Maintenance Recommendation", "Condition-based suggestion dari data drive", `<div class="maintenance-recommendation"><strong>${motor.status === "warning" ? "Review load profile before next production run" : "Maintain current preventive schedule"}</strong><span>${motor.status === "warning" ? "Current motor ini berada di atas baseline. Verifikasi mechanical load, alignment, belt/felt tension, dan terminal drive sebelum kondisi meningkat." : "Current, voltage, dan power masih berada pada window normal. Lanjutkan inspeksi cooling, terminal, dan lubrication sesuai target plan."}</span></div>`, "", "motor-recommendation-panel")}
     </div>
-  </section>`;
+  </section></div>`;
 }
 
 function dryerDetailPage() {
@@ -2164,6 +2184,13 @@ function bindPageEvents() {
   });
   document.querySelectorAll("[data-motor-drive-close]").forEach((button) => {
     button.addEventListener("click", () => {
+      state.motorDrive.selected = null;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-motor-drive-backdrop]").forEach((backdrop) => {
+    backdrop.addEventListener("click", (event) => {
+      if (event.target !== backdrop) return;
       state.motorDrive.selected = null;
       renderPage({ preserveScroll: true });
     });

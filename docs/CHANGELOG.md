@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.36 / Kalender Concept V1.7 / Dashboard Concept V1.15 — 15 Agustus 2026
+
+**Status:** Motor & Drive 3-phase diagnostic modal selesai
+
+### Ditambahkan
+
+- Detail motor terpusat sebagai modal dengan ruang aman dari tepi layar.
+- RMS current dan voltage phase-to-neutral untuk fase R, S, dan T.
+- Current imbalance dan status balance per fase.
+
+### Batasan
+
+- Data 3-phase masih simulated dan seluruh diagnostic bersifat read-only.
+
+---
+
 ## Frontend Dashboard V1.35 / Chemical Dispensing Calator Concept V1.4 / Dashboard Concept V1.14 — 15 Agustus 2026
 
 **Status:** P&ID dispensing Calator selesai

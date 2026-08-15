@@ -3292,9 +3292,27 @@ select:focus-visible {
   transform: translateY(-1px);
 }
 
+.motor-modal-backdrop {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: clamp(22px, 4.2vw, 72px);
+  background: rgba(18, 43, 52, .38);
+  backdrop-filter: blur(4px);
+}
+
 .motor-drive-analysis {
   display: grid;
+  width: min(1360px, 100%);
+  max-height: calc(100dvh - clamp(44px, 8.4vw, 144px));
   gap: 13px;
+  overflow-y: auto;
+  padding: clamp(18px, 2vw, 30px);
+  border: 1px solid rgba(7, 142, 170, .24);
+  box-shadow: 0 24px 64px rgba(12, 38, 48, .27);
 }
 
 .motor-analysis-head,
@@ -3357,6 +3375,112 @@ select:focus-visible {
   min-height: 108px;
   background: var(--surface-2);
 }
+
+.motor-phase-panel {
+  padding: 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(7, 142, 170, .055), rgba(255, 255, 255, .72));
+}
+
+.motor-phase-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.motor-phase-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.motor-phase-head strong {
+  color: var(--ink-2);
+  font-size: .62rem;
+}
+
+.motor-phase-head small {
+  color: var(--ink-3);
+  font-size: .48rem;
+}
+
+.motor-phase-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.motor-phase-reading {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(50, 113, 127, .15);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.motor-phase-reading::before {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  width: 32px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--phase-color);
+  content: "";
+}
+
+.motor-phase-reading > span {
+  align-self: start;
+  color: var(--ink-3);
+  font-size: .5rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.motor-phase-reading strong {
+  color: var(--ink-1);
+  font-family: var(--font-data);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.motor-phase-reading strong small {
+  margin-left: 3px;
+  color: var(--ink-3);
+  font-size: .5em;
+}
+
+.motor-phase-reading em,
+.motor-phase-reading i {
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: .5rem;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.motor-phase-reading i {
+  grid-column: 1 / -1;
+  color: var(--success);
+  font-family: inherit;
+  font-size: .46rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.motor-phase-reading.phase-r { --phase-color: #d5604b; }
+.motor-phase-reading.phase-s { --phase-color: #d89b25; }
+.motor-phase-reading.phase-t { --phase-color: #078eaa; }
 
 .motor-trend-head {
   align-items: flex-end;
@@ -5492,6 +5616,10 @@ select:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .motor-phase-grid {
+    grid-template-columns: 1fr;
+  }
+
   .motor-maintenance-grid {
     grid-template-columns: 1fr;
   }
@@ -5949,6 +6077,21 @@ select:focus-visible {
   .motor-analysis-scope.historical,
   .motor-trend-head,
   .motor-trend-window {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .motor-modal-backdrop {
+    align-items: start;
+    padding: 14px;
+  }
+
+  .motor-drive-analysis {
+    max-height: calc(100dvh - 28px);
+    padding: 16px;
+  }
+
+  .motor-phase-head {
     align-items: flex-start;
     flex-direction: column;
   }
