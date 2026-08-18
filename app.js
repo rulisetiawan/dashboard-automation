@@ -1345,8 +1345,8 @@ function calatorDetailPage() {
       ${kpi("Chemical Usage", "184.6", "kg", "CH", "<strong>98.7%</strong>recipe adherence")}
     </section>
     <section class="grid-2">
-      ${panel(`Multi-Speed Profile · ${machine.subtype}`, "Actual speed dari feeding sampai plaiter", `<div class="speed-grid">${speeds.map(speedCard).join("")}</div>`)}
-      ${panel("Critical Process", "Overfeed Out, dancing roller, dan current transfer", `
+      ${panel("Critical Process", `Speed ${machine.subtype} dari feeding sampai plaiter`, `<div class="speed-grid">${speeds.map(speedCard).join("")}</div>`)}
+      ${panel("Live Monitoring", "Overfeed Out, dancing roller, chemical transfer, dan output saat ini", `
         <div class="metric-grid">
           ${metricTile("OF Out spread", liveValue(0.42, "m/min", .03, 2), "Limit 0.60")}
           ${metricTile("Dancing roller", liveValue(51.6, "%", .3, 1), "Center 50.0")}

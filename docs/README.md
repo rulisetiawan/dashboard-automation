@@ -8,12 +8,12 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 |---|---:|---|---|
 | `SCADA_MES_Master_Concept_v1.0.md` | 1.0 | Baseline | Konsep induk, ruang lingkup, model operasional, arsitektur konseptual, dan roadmap |
 | `machines/Machine_Concept_Jetflow_v1.9.md` | 1.9 | Aktif | SV/PV per langkah Jetflow Process Sequence |
-| `machines/Machine_Concept_Calator_v1.3.md` | 1.3 | Aktif | Detail Calator tanpa panel Speed Synchronization |
+| `machines/Machine_Concept_Calator_v1.4.md` | 1.4 | Aktif | Critical Process dan Live Monitoring Calator |
 | `machines/Machine_Concept_Dryer_v1.1.md` | 1.1 | Aktif | Diagnostic motor 3-phase untuk drive dan fan Dryer |
 | `machines/Machine_Concept_Kalender_v1.12.md` | 1.12 | Aktif | Perbaikan alignment historical log Motor & Drive |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
 | `chemicals/Chemical_Dispensing_Calator_Concept_v1.5.md` | 1.5 | Aktif | Custom range pada log transaksi Chemical Dispensing Calator |
-| `dashboard/Dashboard_V1_Concept_v1.26.md` | 1.26 | Aktif | SV/PV pada Jetflow Process Sequence |
+| `dashboard/Dashboard_V1_Concept_v1.27.md` | 1.27 | Aktif | Hirarki panel Critical Process dan Live Monitoring Calator |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
 | `backend/Backend_Data_Architecture_Concept_v1.0.md` | 1.0 | Aktif | Fondasi edge-to-historian, model database, API, security, dan roadmap integrasi backend |
 | `backend/Tag_Display_Mapping_Register_v1.0.md` | 1.0 | Aktif | Baseline canonical tag ke tampilan proses, utility, chemical, dan motor diagnostic |

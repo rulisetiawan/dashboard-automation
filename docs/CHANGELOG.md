@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.48 / Calator Concept V1.4 / Dashboard Concept V1.27 — 18 Agustus 2026
+
+**Status:** Hirarki panel Calator diperjelas
+
+### Diubah
+
+- Multi-Speed Profile diganti menjadi Critical Process.
+- Critical Process sebelumnya diganti menjadi Live Monitoring.
+- Data speed, overfeed out, dancing roller, chemical transfer, dan output tetap dipertahankan.
+
+---
+
 ## NestJS PostgreSQL Integration V1.0 — 18 Agustus 2026
 
 **Status:** Backend local framework migration selesai
