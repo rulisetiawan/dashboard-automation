@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.31 / NestJS PostgreSQL Integration V1.5 — 18 Agustus 2026
+
+**Status:** Dashboard database-driven
+
+### Ditambahkan
+
+- Master dan snapshot motor/drive 3-phase pada PostgreSQL.
+- Detail equipment: R/S/T, voltage, kW, Hz, runtime, energy, dan maintenance due.
+- Dataset `TEST_SAMPLE` untuk Jetflow, Calator, Dryer, Kalender, Dispensing, dan 37 equipment.
+
+### Diubah
+
+- Fleet, area, detail mesin, sensor, process run, dan motor membaca data API PostgreSQL.
+- Field yang belum ada tidak menggunakan nilai hard-code.
+
+---
+
 ## Calator Concept V1.5 — 18 Agustus 2026
 
 **Status:** Detail Calator memakai snapshot aktual

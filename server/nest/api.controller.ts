@@ -3,6 +3,7 @@ import { DatabaseService } from "./database.service.js";
 
 const validProcesses = new Set(["jetflow", "calator", "dryer", "kalender", "chemical"]);
 const assetProjection = "SELECT a.*, s.machine_state, s.batch_no, s.progress_percent, s.connected, s.source_ts, s.quality, s.values_json FROM asset a LEFT JOIN asset_snapshot s ON s.asset_id = a.asset_id";
+const equipmentProjection = "SELECT e.*, s.equipment_state, s.current_r_a, s.current_s_a, s.current_t_a, s.voltage_rs_v, s.voltage_st_v, s.voltage_tr_v, s.active_power_kw, s.drive_frequency_hz, s.runtime_hours, s.energy_kwh, s.maintenance_due_at, s.source_ts, s.quality, s.values_json FROM equipment e LEFT JOIN equipment_snapshot s ON s.equipment_id = e.equipment_id";
 const actualDataMode = "ACTUAL_DATABASE";
 
 function assetRow(row: Record<string, any>) {
@@ -18,6 +19,33 @@ function assetRow(row: Record<string, any>) {
     batch: row.batch_no || "—",
     progress: Number(row.progress_percent || 0),
     connected: row.connected || false,
+    sourceTs: row.source_ts || null,
+    quality: row.quality || "NO_DATA",
+    values: row.values_json || {},
+  };
+}
+
+function equipmentRow(row: Record<string, any>) {
+  return {
+    id: row.equipment_id,
+    assetId: row.asset_id,
+    type: row.equipment_type,
+    code: row.equipment_code,
+    name: row.display_name,
+    category: row.category,
+    ...(row.config_json || {}),
+    state: row.equipment_state || "offline",
+    currentR: row.current_r_a,
+    currentS: row.current_s_a,
+    currentT: row.current_t_a,
+    voltageRS: row.voltage_rs_v,
+    voltageST: row.voltage_st_v,
+    voltageTR: row.voltage_tr_v,
+    powerKw: row.active_power_kw,
+    frequencyHz: row.drive_frequency_hz,
+    runtimeHours: row.runtime_hours,
+    energyKwh: row.energy_kwh,
+    maintenanceDueAt: row.maintenance_due_at,
     sourceTs: row.source_ts || null,
     quality: row.quality || "NO_DATA",
     values: row.values_json || {},
@@ -76,6 +104,22 @@ export class ApiController {
       LIMIT $1
     `, [limit]);
     return { data_mode: actualDataMode, samples: result.rows };
+  }
+
+  @Get("equipment")
+  async equipment(@Query("asset_id") assetId?: string) {
+    const result = assetId
+      ? await this.database.query(`${equipmentProjection} WHERE e.asset_id = $1 AND e.active = TRUE ORDER BY e.equipment_code`, [assetId])
+      : await this.database.query(`${equipmentProjection} WHERE e.active = TRUE ORDER BY e.asset_id, e.equipment_code`);
+    return { data_mode: actualDataMode, equipment: result.rows.map(equipmentRow) };
+  }
+
+  @Get("batch/process-runs")
+  async processRuns(@Query("asset_id") assetId?: string) {
+    const result = assetId
+      ? await this.database.query("SELECT * FROM batch_process_run WHERE asset_id = $1 ORDER BY started_at DESC NULLS LAST LIMIT 100", [assetId])
+      : await this.database.query("SELECT * FROM batch_process_run ORDER BY started_at DESC NULLS LAST LIMIT 250");
+    return { data_mode: actualDataMode, runs: result.rows };
   }
 
   @Get("alarms/recent")

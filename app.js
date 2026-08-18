@@ -98,6 +98,8 @@ const backendConnection = {
 let backendUtilities = [];
 let backendTelemetry = [];
 let backendAlarmEvents = [];
+let backendEquipment = [];
+let backendProcessRuns = [];
 let realtimeSocket = null;
 let realtimeRefreshTimer = null;
 
@@ -314,6 +316,7 @@ function hydrateChemicalTransactions(rows) {
     hoursAgo: Math.max(0, (now - new Date(item.occurred_at).getTime()) / 3600000),
     time: backendTimeLabel(item.occurred_at),
     request: item.request_code,
+    dispenser: item.dispenser_id,
     calator: item.calator_id,
     code: item.chemical_code,
     variant: item.chemical_name,
@@ -339,15 +342,19 @@ async function connectNonJetflowBackend() {
     }));
     const chemicalResponse = await fetch("/api/v1/dispensing/transactions", { cache: "no-store" });
     const utilityResponse = await fetch("/api/v1/utilities/snapshot", { cache: "no-store" });
-    const telemetryResponse = await fetch("/api/v1/telemetry/recent?limit=100", { cache: "no-store" });
+    const telemetryResponse = await fetch("/api/v1/telemetry/recent?limit=500", { cache: "no-store" });
     const alarmResponse = await fetch("/api/v1/alarms/recent?limit=100", { cache: "no-store" });
-    if (!chemicalResponse.ok || !utilityResponse.ok || !telemetryResponse.ok || !alarmResponse.ok) throw new Error("Operational API unavailable");
+    const equipmentResponse = await fetch("/api/v1/equipment", { cache: "no-store" });
+    const processRunResponse = await fetch("/api/v1/batch/process-runs", { cache: "no-store" });
+    if (!chemicalResponse.ok || !utilityResponse.ok || !telemetryResponse.ok || !alarmResponse.ok || !equipmentResponse.ok || !processRunResponse.ok) throw new Error("Operational API unavailable");
     const targetFleet = { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers };
     responses.forEach(([process, payload]) => targetFleet[process].splice(0, targetFleet[process].length, ...payload.assets));
     hydrateChemicalTransactions((await chemicalResponse.json()).transactions);
     backendUtilities = (await utilityResponse.json()).utilities;
     backendTelemetry = (await telemetryResponse.json()).samples;
     backendAlarmEvents = (await alarmResponse.json()).alarms;
+    backendEquipment = (await equipmentResponse.json()).equipment;
+    backendProcessRuns = (await processRunResponse.json()).runs;
     backendConnection.status = "connected";
     backendConnection.storage = status.storage;
     backendConnection.dataMode = status.data_mode;
@@ -2268,8 +2275,8 @@ function actualSensorValues(assets) {
   const rows = assets.flatMap((asset) => Object.entries(asset.values || {}).filter(([key]) => !["source", "note"].includes(key)).map(([key, value]) => ({ asset, key, value })));
   if (!rows.length) return actualEmpty("Belum ada nilai sensor pada asset_snapshot.values_json");
   return `<div class="actual-sensor-grid">${rows.map(({ asset, key, value }) => {
-    const role = key.replace(/_/g, ".").toUpperCase();
-    const tag = backendTelemetry.find((item) => item.asset_id === asset.id && item.signal_role === role);
+    const normalizedKey = key.toUpperCase();
+    const tag = backendTelemetry.find((item) => item.asset_id === asset.id && String(item.signal_role || "").replace(/[._]/g, "_") === normalizedKey);
     const unit = tag?.engineering_unit || "";
     return `<article class="actual-sensor-card">
       <div class="actual-sensor-card-top"><span class="actual-sensor-asset">${actualText(asset.id)}</span><span class="quality-pill ${String(asset.quality).toLowerCase() === "good" ? "good" : "stale"}">${actualText(asset.quality)}</span></div>
@@ -2342,6 +2349,144 @@ function actualHealthPage() {
   return `${pageHead("health", `<span class="range-badge">ACTUAL DATABASE</span>`)}<section class="grid-equal">${panel("Integration health", "Koneksi aktual", `<div class="definition-list"><div><span>Database</span><strong>${actualText(backendConnection.storage || "—")}</strong></div><div><span>REST API</span><strong>${actualText(backendConnection.status)}</strong></div><div><span>WebSocket</span><strong>${actualText(backendConnection.realtime)}</strong></div><div><span>Last sync</span><strong>${actualTime(backendConnection.lastSync)}</strong></div></div>`)}${panel("Actual record coverage", "Record yang sudah tersedia", `<div class="definition-list"><div><span>Assets</span><strong>${assets.length}</strong></div><div><span>Telemetry samples loaded</span><strong>${backendTelemetry.length}</strong></div><div><span>Alarm events loaded</span><strong>${backendAlarmEvents.length}</strong></div><div><span>Chemical transactions loaded</span><strong>${chemicalDispensingLogs.length}</strong></div></div>`)}</section>`;
 }
 
+function databaseSnapshotMetrics(machine, limit = 4) {
+  return Object.entries(machine.values || {})
+    .filter(([key]) => !["source", "note"].includes(key))
+    .slice(0, limit)
+    .map(([key, value]) => {
+      const normalizedKey = key.toUpperCase();
+      const tag = backendTelemetry.find((item) => item.asset_id === machine.id && String(item.signal_role || "").replace(/[._]/g, "_") === normalizedKey);
+      return { label: actualLabel(key), value, unit: tag?.engineering_unit || "" };
+    });
+}
+
+function databaseMachineReading(machine) {
+  const metrics = databaseSnapshotMetrics(machine, 2);
+  return metrics.length ? metrics.map((item) => `${item.label}: ${item.value}${item.unit ? ` ${item.unit}` : ""}`).join(" · ") : "No live snapshot";
+}
+
+function databaseOverviewPage() {
+  const assets = actualFleet();
+  const running = assets.filter((asset) => asset.state === "running").length;
+  const stopped = assets.filter((asset) => ["idle", "fault", "offline"].includes(asset.state)).length;
+  const batches = new Set(assets.map((asset) => asset.batch).filter((batch) => batch && batch !== "—")).size;
+  const processFlow = ["jetflow", "calator", "dryer", "kalender"].map((type) => {
+    const fleet = fleetFor(type);
+    return processNode(processConfig[type].plural, `${fleet.length} asset terdaftar`, type, statusCount(fleet, "running"), statusCount(fleet, "warning"), statusCount(fleet, "fault"));
+  }).join("");
+  const runs = backendProcessRuns.length
+    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Batch</th><th>Asset</th><th>Recipe</th><th>Status</th><th>Output</th><th>Start</th></tr></thead><tbody>${backendProcessRuns.slice(0, 10).map((run) => `<tr><td class="mono">${actualText(run.batch_no)}</td><td>${actualText(run.asset_id)}</td><td class="mono">${actualText(run.recipe_code)}</td><td>${actualText(run.run_status)}</td><td>${actualText(run.output_quantity ?? "—")} ${actualText(run.output_unit || "")}</td><td class="mono">${actualTime(run.started_at)}</td></tr>`).join("")}</tbody></table></div>`
+    : actualEmpty("Belum ada process run aktual");
+  return `
+    ${pageHead("overview", `<span class="range-badge">POSTGRESQL ACTUAL</span>`)}
+    <section class="kpi-grid">
+      ${actualMetric("Registered machines", assets.length, "asset", "asset master aktual")}
+      ${actualMetric("Machine running", running, "asset", "asset_snapshot.machine_state")}
+      ${actualMetric("Stop / fault / offline", stopped, "asset", "asset_snapshot.machine_state")}
+      ${actualMetric("Active batches", batches, "batch", "batch unik pada snapshot")}
+    </section>
+    <section class="grid-2">
+      ${panel("Machine status", "Status aktual tiap asset", actualAssetTable(assets))}
+      ${panel("Utility snapshot", "Nilai terbaru dari utility_snapshot", backendUtilities.length ? `<div class="metric-grid">${backendUtilities.map((item) => metricTile(actualText(item.label), `${actualText(item.value)}<small>${actualText(item.unit)}</small>`, `${actualTime(item.source_ts)} · ${actualText(item.quality)}`)).join("")}</div>` : actualEmpty("Belum ada utility snapshot"))}
+    </section>
+    ${panel("Textile process flow", "Jumlah dan kondisi asset yang terdaftar", `<div class="process-flow">${processFlow}</div>`)}
+    ${panel("Active process runs", "Batch dan output yang sudah tersimpan di database", runs)}
+  `;
+}
+
+function databaseFleetPage(type) {
+  const fleet = fleetFor(type);
+  const areas = [...new Map(fleet.map((machine) => [machine.area, machine.areaLabel || machine.area])).entries()];
+  const cards = areas.length ? areas.map(([areaCode, areaLabel]) => {
+    const machines = fleet.filter((machine) => machine.area === areaCode);
+    const tone = statusCount(machines, "fault") ? "fault" : statusCount(machines, "warning") ? "warning" : statusCount(machines, "running") ? "running" : "offline";
+    return `<article class="card area-card" data-area-target="${type}|${areaCode}" role="button" tabindex="0">
+      <div class="area-card-head"><div><span class="area-code">${actualText(areaCode)}</span><h2>${actualText(areaLabel)}</h2></div>${statusPill(tone)}</div>
+      <div class="area-total"><strong>${machines.length}</strong><span>${actualText(processConfig[type].singular)} registered</span></div>
+      <div class="area-state-grid"><span><strong>${statusCount(machines, "running")}</strong>Run</span><span><strong>${statusCount(machines, "idle")}</strong>Idle</span><span><strong>${statusCount(machines, "warning")}</strong>Warn</span><span><strong>${statusCount(machines, "fault")}</strong>Fault</span></div>
+      <div class="area-card-foot"><span>Snapshot aktual</span><strong>Open assets →</strong></div>
+    </article>`;
+  }).join("") : actualEmpty("Belum ada asset untuk proses ini");
+  return `
+    ${pageHead(type, `<span class="range-badge">POSTGRESQL ACTUAL</span>`)}
+    <section class="fleet-summary card"><div><span class="eyebrow">${actualText(processConfig[type].process)}</span><h2>${actualText(processConfig[type].plural)} Fleet Overview</h2><p>Pilih area untuk membuka asset dan detail sensor/motor aktual.</p></div><div class="fleet-total"><strong>${fleet.length}</strong><span>Total assets</span></div></section>
+    <section class="management-kpi-grid live-grid">
+      ${actualMetric("Machines running", statusCount(fleet, "running"), "asset", "machine_state aktual")}
+      ${actualMetric("Warnings", statusCount(fleet, "warning"), "asset", "machine_state aktual")}
+      ${actualMetric("Faults", statusCount(fleet, "fault"), "asset", "machine_state aktual")}
+      ${actualMetric("Active batches", new Set(fleet.map((machine) => machine.batch).filter((batch) => batch && batch !== "—")).size, "batch", "batch snapshot aktual")}
+    </section>
+    <section class="area-grid">${cards}</section>
+  `;
+}
+
+function databaseAreaPage(type) {
+  const area = state.drill[type].area;
+  const machines = fleetFor(type).filter((machine) => machine.area === area);
+  const areaLabel = machines[0]?.areaLabel || area;
+  const cards = machines.length ? machines.map((machine, index) => `<article class="card fleet-machine-card" data-machine-target="${type}|${machine.id}" data-machine-state="${machine.state}" data-machine-search="${actualText(machine.id).toLowerCase()} ${actualText(machine.name).toLowerCase()}" role="button" tabindex="0">
+    <div class="fleet-machine-top"><span class="machine-code ranking-badge">#${index + 1}</span><div><strong>${actualText(machine.id)}</strong><span>${actualText(machine.name)}</span></div>${statusPill(machine.state)}</div>
+    <div class="fleet-machine-reading"><span>${actualText(databaseMachineReading(machine))}</span><small>Batch <strong>${actualText(machine.batch)}</strong></small></div>
+    <div class="fleet-machine-meta"><span>Progress<strong>${actualText(machine.progress)}%</strong></span><span>Quality<strong>${actualText(machine.quality)}</strong></span><span>Update<strong>${actualTime(machine.sourceTs)}</strong></span></div>
+    <div class="fleet-machine-foot"><span>${machine.connected ? "● Connected" : "○ Offline"}</span><strong>Machine detail →</strong></div>
+  </article>`).join("") : actualEmpty("Belum ada asset di area ini");
+  return `
+    ${processBreadcrumb(type)}
+    ${pageHead(type, `<button class="button" data-process-level="overview" data-process-type="${type}">← All areas</button><span class="range-badge">ACTUAL</span>`)}
+    <section class="fleet-area-head card"><div><span class="area-code">${actualText(area)}</span><div><h2>${actualText(processConfig[type].plural)} ${actualText(areaLabel)}</h2><p>Asset, snapshot, dan status dari PostgreSQL.</p></div></div><div class="area-health"><strong>${machines.length}</strong><span>Assets</span></div></section>
+    <section class="fleet-machine-grid" id="fleet-machine-grid">${cards}</section>
+  `;
+}
+
+function databaseEquipmentPanel(machine) {
+  const equipment = backendEquipment.filter((item) => item.assetId === machine.id);
+  if (!equipment.length) return panel("Motor & driven equipment", "Belum ada equipment master/snapshot untuk asset ini", actualEmpty("No equipment data"));
+  const cards = equipment.map((item) => {
+    const current = [item.currentR, item.currentS, item.currentT].filter((value) => Number.isFinite(Number(value)));
+    const average = current.length ? (current.reduce((sum, value) => sum + Number(value), 0) / current.length).toFixed(1) : "—";
+    return `<article class="motor-card"><div class="motor-card-head"><strong>${actualText(item.name)}</strong><i class="equipment-state ${item.state === "warning" ? "warning" : item.state === "running" ? "" : "offline"}"></i></div><div class="card-reading">${actualText(average)}<small>A avg</small></div><div class="card-caption">${actualText(item.powerKw ?? "—")} kW · ${actualText(item.frequencyHz ?? "—")} Hz · ${actualText(item.state)}</div></article>`;
+  }).join("");
+  const table = `<div class="table-wrap"><table class="data-table"><thead><tr><th>Motor / Drive</th><th>R</th><th>S</th><th>T</th><th>V RS/ST/TR</th><th>kW</th><th>Hz</th><th>Runtime</th><th>Energy</th><th>Maintenance</th></tr></thead><tbody>${equipment.map((item) => `<tr><td><strong>${actualText(item.name)}</strong><br><small>${actualText(item.code)}</small></td><td>${actualText(item.currentR ?? "—")} A</td><td>${actualText(item.currentS ?? "—")} A</td><td>${actualText(item.currentT ?? "—")} A</td><td>${actualText(item.voltageRS ?? "—")} / ${actualText(item.voltageST ?? "—")} / ${actualText(item.voltageTR ?? "—")} V</td><td>${actualText(item.powerKw ?? "—")}</td><td>${actualText(item.frequencyHz ?? "—")}</td><td>${actualText(item.runtimeHours ?? "—")} h</td><td>${actualText(item.energyKwh ?? "—")} kWh</td><td>${actualTime(item.maintenanceDueAt)}</td></tr>`).join("")}</tbody></table></div>`;
+  return `${panel("Motor & driven equipment", "Current R/S/T, voltage, power, runtime, energy, dan maintenance aktual", `<div class="motor-grid">${cards}</div>`)}${panel("Motor diagnostic log", "Snapshot equipment 3-phase dari equipment_snapshot", table)}`;
+}
+
+function databaseMachineDetailPage(type) {
+  const machineId = state.drill[type].machine || state.selected[type];
+  const machine = fleetFor(type).find((item) => item.id === machineId);
+  if (!machine) return databaseFleetPage(type);
+  const metrics = databaseSnapshotMetrics(machine, 4);
+  const runs = backendProcessRuns.filter((run) => run.asset_id === machine.id);
+  const chemicalTransactions = type === "chemical" ? chemicalDispensingLogs.filter((item) => item.dispenser === machine.id) : [];
+  const runContent = runs.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Batch</th><th>Recipe</th><th>Status</th><th>Output</th><th>Start</th></tr></thead><tbody>${runs.map((run) => `<tr><td class="mono">${actualText(run.batch_no)}</td><td class="mono">${actualText(run.recipe_code)}</td><td>${actualText(run.run_status)}</td><td>${actualText(run.output_quantity ?? "—")} ${actualText(run.output_unit || "")}</td><td class="mono">${actualTime(run.started_at)}</td></tr>`).join("")}</tbody></table></div>` : actualEmpty("No process run data");
+  return `
+    ${processBreadcrumb(type, machine)}
+    ${pageHead(type, `<button class="button" data-process-level="area" data-process-type="${type}">← ${actualText(machine.areaLabel || machine.area)}</button><span class="range-badge">ACTUAL</span>`)}
+    ${machineHero(machine, processConfig[type].code, `${actualText(machine.subtype || "—")} · ${actualText(machine.recipe || "Recipe belum dimapping")} · source ${actualText(machine.quality)}`)}
+    <section class="kpi-grid">${metrics.length ? metrics.map((metric, index) => kpi(metric.label, actualText(metric.value), metric.unit, ["PV", "SN", "LV", "OP"][index], "Snapshot PostgreSQL aktual")).join("") : actualMetric("Live snapshot", "—", "", "No data")}</section>
+    ${panel("Live sensor measurements", "Seluruh nilai dari asset_snapshot.values_json dan unit dari tag_definition", actualSensorValues([machine]))}
+    ${databaseEquipmentPanel(machine)}
+    ${panel("Process run history", "Batch dan recipe dari batch_process_run", runContent)}
+    ${type === "chemical" ? panel("Chemical transfer log", "Transaksi aktual dari chemical_transaction", chemicalTransactions.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Request</th><th>Calator</th><th>Variant</th><th>Target</th><th>Actual</th><th>Status</th></tr></thead><tbody>${chemicalTransactions.map((item) => `<tr><td class="mono">${actualText(item.time)}</td><td class="mono">${actualText(item.request)}</td><td>${actualText(item.calator)}</td><td>${actualText(item.variant)}</td><td>${actualText(item.target)}</td><td>${actualText(item.actual)}</td><td>${actualText(item.status)}</td></tr>`).join("")}</tbody></table></div>` : actualEmpty("No chemical transaction data")) : ""}
+  `;
+}
+
+function databaseProcessPage(type) {
+  const drill = state.drill[type];
+  if (!drill.area) return databaseFleetPage(type);
+  if (!drill.machine) return databaseAreaPage(type);
+  return databaseMachineDetailPage(type);
+}
+
+function databaseDashboardPage() {
+  if (state.page === "overview") return databaseOverviewPage();
+  if (["jetflow", "calator", "dryer", "kalender", "chemical"].includes(state.page)) return databaseProcessPage(state.page);
+  if (state.page === "utilities") return actualUtilitiesPage();
+  if (state.page === "alarms") return actualAlarmsPage();
+  if (state.page === "trends") return actualTrendsPage();
+  if (state.page === "health") return actualHealthPage();
+  return databaseOverviewPage();
+}
+
 function actualDataPage() {
   if (state.page === "overview") return actualOverviewPage();
   if (["jetflow", "calator", "dryer", "kalender"].includes(state.page)) return actualProcessPage(state.page);
@@ -2365,22 +2510,10 @@ function updateNavigationCounts() {
 function renderPage({ preserveScroll = false } = {}) {
   const previousScroll = Number.isFinite(window.scrollY) ? window.scrollY : 0;
   const content = document.getElementById("page-content");
-  const renderers = {
-    overview: overviewPage,
-    jetflow: jetflowPage,
-    calator: calatorPage,
-    dryer: dryerPage,
-    kalender: kalenderPage,
-    utilities: utilitiesPage,
-    chemical: chemicalPage,
-    alarms: alarmsPage,
-    trends: trendsPage,
-    health: healthPage,
-  };
   const hasActualAssets = actualFleet().length > 0;
   content.innerHTML = (backendConnection.status !== "connected" || !hasActualAssets)
     ? databaseIntegrationPage()
-    : (renderers[state.page] || overviewPage)();
+    : databaseDashboardPage();
   document.getElementById("breadcrumb-page").textContent = pageMeta[state.page][0];
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === state.page));
   bindPageEvents();
