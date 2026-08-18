@@ -4,6 +4,17 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Calator Concept V1.5 — 18 Agustus 2026
+
+**Status:** Detail Calator memakai snapshot aktual
+
+### Diubah
+
+- Overfeed Out, Dancing Roller, Output, Chemical, Critical Process, dan Live Monitoring membaca PostgreSQL.
+- Parameter belum terhubung menampilkan `—` / `No data`, bukan nilai statis.
+
+---
+
 ## Dashboard V1.30 — 18 Agustus 2026
 
 **Status:** Restore layout dashboard

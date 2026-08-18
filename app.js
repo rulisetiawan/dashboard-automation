@@ -1302,36 +1302,41 @@ function calatorDetailPage() {
   const motors = processMotorAssets("calator", machine);
   const selectedMotor = state.motorDrive.source === "calator" ? motors.find((motor) => motor.id === state.motorDrive.selected) : null;
   const isBianco = machine.subtype === "Bianco";
+  const value = (key, decimals = 1) => {
+    const raw = machine.values?.[key];
+    return raw == null || raw === "" ? "—" : Number.isFinite(Number(raw)) ? Number(raw).toFixed(decimals) : String(raw);
+  };
+  const latestChemical = chemicalDispensingLogs.find((item) => item.calator === machine.id);
   const standard = [
-    ["Feeding", 28.4], ["Squeezing 1", 28.1], ["Squeezing 2", 27.9], ["Overfeed Atas", 29.3],
-    ["Overfeed Bawah", 29.0], ["Folder", 27.6], ["Plaiter", 27.4]
+    ["Feeding", "feeding_speed_pv"], ["Squeezing 1", "squeezing_1_speed_pv"], ["Squeezing 2", "squeezing_2_speed_pv"], ["Overfeed Out", "overfeed_out_speed_pv"],
+    ["Overfeed Atas", "overfeed_upper_speed_pv"], ["Overfeed Bawah", "overfeed_lower_speed_pv"], ["Folder", "folder_speed_pv"], ["Plaiter", "plaiter_speed_pv"]
   ];
   const bianco = [
-    ["OF In Bawah 1", 27.8], ["OF In Bawah 2", 27.9], ["OF In Atas 3", 28.1], ["OF In Atas 4", 28.0],
-    ["Feeding", 28.2], ["Squeezing 1", 28.0], ["Squeezing 2", 27.7], ["OF Out Bawah 1", 29.2],
-    ["OF Out Bawah 2", 29.0], ["OF Out Atas 3", 29.4], ["OF Out Atas 4", 29.1], ["Folder", 27.5], ["Plaiter", 27.3]
+    ["OF In Bawah 1", "overfeed_in_lower_1_speed_pv"], ["OF In Bawah 2", "overfeed_in_lower_2_speed_pv"], ["OF In Atas 3", "overfeed_in_upper_3_speed_pv"], ["OF In Atas 4", "overfeed_in_upper_4_speed_pv"],
+    ["Feeding", "feeding_speed_pv"], ["Squeezing 1", "squeezing_1_speed_pv"], ["Squeezing 2", "squeezing_2_speed_pv"], ["OF Out Bawah 1", "overfeed_out_lower_1_speed_pv"],
+    ["OF Out Bawah 2", "overfeed_out_lower_2_speed_pv"], ["OF Out Atas 3", "overfeed_out_upper_3_speed_pv"], ["OF Out Atas 4", "overfeed_out_upper_4_speed_pv"], ["Folder", "folder_speed_pv"], ["Plaiter", "plaiter_speed_pv"]
   ];
   const speeds = isBianco ? bianco : standard;
   return `
     ${processBreadcrumb("calator", machine)}
     ${pageHead("calator", selector(calators.filter((item) => item.area === machine.area), "calator"))}
-    ${machineHero(machine, "CL", `${machine.subtype} · ${machine.recipe} · Jetflow source JF-04`)}
+    ${machineHero(machine, "CL", `${machine.subtype || "—"} · ${machine.recipe || "Recipe belum dimapping"} · Jetflow source belum dimapping`)}
     <section class="kpi-grid">
-      ${kpi("Overfeed Out Avg", liveValue(29.18, "", .08, 2), "m/min", "OF", "<strong>Balance 1.4%</strong>· within range")}
-      ${kpi("Dancing Roller", liveValue(51.6, "", .35, 1), "%", "DR", "<strong>Center ±3%</strong>· stable", "success")}
-      ${kpi("Output Today", "4,860", "m", "OP", "<strong>↑ 3.2%</strong>vs shift plan")}
-      ${kpi("Chemical Usage", "184.6", "kg", "CH", "<strong>98.7%</strong>recipe adherence")}
+      ${kpi("Overfeed Out Avg", value("overfeed_out_speed_pv", 2), "m/min", "OF", "<strong>PV aktual</strong>· snapshot PostgreSQL")}
+      ${kpi("Dancing Roller", value("dancer_position_pv"), "%", "DR", "<strong>PV aktual</strong>· snapshot PostgreSQL", "success")}
+      ${kpi("Output Current", value("output_total_m", 0), "m", "OP", "<strong>Output aktual</strong>· snapshot PostgreSQL")}
+      ${kpi("Chemical Usage", latestChemical?.actual || "—", "", "CH", latestChemical ? `<strong>${latestChemical.status}</strong>· ${latestChemical.request}` : "No data · chemical transaction belum ada")}
     </section>
     <section class="grid-2">
-      ${panel("Critical Process", `Speed ${machine.subtype} dari feeding sampai plaiter`, `<div class="speed-grid">${speeds.map(speedCard).join("")}</div>`)}
+      ${panel("Critical Process", `Speed ${machine.subtype} dari feeding sampai plaiter`, `<div class="speed-grid">${speeds.map((item, index) => speedCard(item, index, machine)).join("")}</div>`)}
       ${panel("Live Monitoring", "Overfeed Out, dancing roller, chemical transfer, dan output saat ini", `
         <div class="metric-grid">
-          ${metricTile("OF Out spread", liveValue(0.42, "m/min", .03, 2), "Limit 0.60")}
-          ${metricTile("Dancing roller", liveValue(51.6, "%", .3, 1), "Center 50.0")}
-          ${metricTile("Folder ratio", liveValue(0.944, "", .002, 3), "vs OF Out")}
-          ${metricTile("Chemical route", "P-04", "CH-02 → CL-B01")}
-          ${metricTile("Transfer status", "DONE", "182.4 / 184.0 kg")}
-          ${metricTile("Good output", "4,738<small>m</small>", "97.5%")}
+          ${metricTile("OF Out spread", value("overfeed_out_spread_pv", 2), "No data · limit belum dimapping")}
+          ${metricTile("Dancing roller", value("dancer_position_pv"), "PV aktual · center belum dimapping")}
+          ${metricTile("Folder ratio", value("folder_ratio_pv", 3), "No data · tag belum dimapping")}
+          ${metricTile("Chemical route", latestChemical ? latestChemical.code : "—", latestChemical ? `${latestChemical.variant} → ${machine.id}` : "No data")}
+          ${metricTile("Transfer status", latestChemical?.status || "—", latestChemical ? `${latestChemical.actual} / ${latestChemical.target}` : "No data")}
+          ${metricTile("Good output", `${value("output_total_m", 0)}<small>m</small>`, "Output aktual snapshot")}
         </div>
       `)}
     </section>
@@ -1349,9 +1354,14 @@ function calatorDetailPage() {
   `;
 }
 
-function speedCard(item, index) {
-  const warn = item[0].includes("Out Atas 4") && index % 3 === 0;
-  return `<div class="speed-card"><div class="speed-card-head"><strong>${item[0]}</strong><i class="equipment-state ${warn ? "warning" : ""}"></i></div><div class="card-reading">${liveValue(item[1], "m/min", .06, 1)}</div><div class="card-caption">SP ${(item[1] + .1).toFixed(1)} · ${warn ? "Check balance" : "Good"}</div><div class="mini-bar"><span style="width:${Math.min(94, item[1] * 2.8)}%"></span></div></div>`;
+function speedCard(item, index, machine) {
+  const [label, key] = item;
+  const raw = machine.values?.[key];
+  const hasValue = raw != null && raw !== "" && Number.isFinite(Number(raw));
+  const value = hasValue ? Number(raw).toFixed(1) : "—";
+  const setpoint = machine.values?.[key.replace(/_pv$/, "_sv")];
+  const progress = hasValue ? Math.min(94, Number(raw) * 2.8) : 0;
+  return `<div class="speed-card"><div class="speed-card-head"><strong>${label}</strong><i class="equipment-state ${hasValue ? "" : "offline"}"></i></div><div class="card-reading">${value}<small>m/min</small></div><div class="card-caption">SV ${setpoint == null ? "—" : setpoint} · ${hasValue ? "PV actual" : "No data"}</div><div class="mini-bar"><span style="width:${progress}%"></span></div></div>`;
 }
 
 function parameterConfigurationRows(rows) {
