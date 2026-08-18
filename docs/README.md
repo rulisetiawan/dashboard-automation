@@ -22,7 +22,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `backend/Database_Design_Concept_v1.0.md` | 1.0 | Aktif | Desain database PostgreSQL + TimescaleDB untuk master, historian, MES, utility, chemical, maintenance, dan audit |
 | `backend/Non_Jetflow_Backend_Integration_v1.0.md` | 1.0 | Aktif | Implementasi awal D1/API read-only untuk Calator, Dryer, Kalender, Dispensing, dan Utilities |
 | `backend/PostgreSQL_Local_Integration_v1.3.md` | 1.3 | Aktif | PostgreSQL service native lokal dengan kredensial terpisah dan API non-Jetflow |
-| `backend/NestJS_PostgreSQL_Integration_v1.6.md` | 1.6 | Aktif | Historian rollup native PostgreSQL untuk query harian hingga bulanan |
+| `backend/NestJS_PostgreSQL_Integration_v1.7.md` | 1.7 | Aktif | Trend motor 3-phase dan versioned Jetflow program execution |
 | `releases/Backend_Architecture_V1.0.md` | 1.0 | Selesai | Baseline arsitektur dan mapping backend |
 | `releases/Database_Design_V1.0.md` | 1.0 | Selesai | Baseline konsep database dan ERD |
 | `releases/Backend_Non_Jetflow_V1.0.md` | 1.0 | Selesai | Fondasi backend non-Jetflow dan API dashboard |

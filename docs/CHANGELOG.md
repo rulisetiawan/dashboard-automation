@@ -4,6 +4,24 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## NestJS PostgreSQL Integration V1.7 — 18 Agustus 2026
+
+**Status:** Motor historian dan Jetflow program versioned
+
+### Ditambahkan
+
+- Historian motor R/S/T, voltage, kW, Hz, runtime, serta counter energy dengan aggregate 1m/15m/daily.
+- Contoh 25 titik trend per motor untuk 37 motor/drive dan contoh trend sensor seluruh proses.
+- Master versi program Jetflow, step program, execution batch, dan audit transition otomatis/manual.
+- Endpoint trend motor serta endpoint program/execution Jetflow.
+
+### Keputusan
+
+- Program `RELEASED` terkunci pada batch yang sedang berjalan; perubahan resep harus memakai versi baru.
+- Pindah step dicatat berdasarkan event PLC/gateway dan tetap read-only pada Dashboard V1.
+
+---
+
 ## NestJS PostgreSQL Integration V1.6 — 18 Agustus 2026
 
 **Status:** Historian query-ready

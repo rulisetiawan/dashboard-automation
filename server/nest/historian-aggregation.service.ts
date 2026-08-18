@@ -29,6 +29,7 @@ export class HistorianAggregationService implements OnModuleInit, OnModuleDestro
       await this.database.query("SELECT refresh_telemetry_rollups($1::timestamptz, $2::timestamptz)", [from.toISOString(), to.toISOString()]);
       await this.database.query("SELECT refresh_utility_rollups($1::timestamptz, $2::timestamptz)", [from.toISOString(), to.toISOString()]);
       await this.database.query("SELECT refresh_machine_state_rollups($1::timestamptz, $2::timestamptz)", [from.toISOString(), to.toISOString()]);
+      await this.database.query("SELECT refresh_equipment_rollups($1::timestamptz, $2::timestamptz)", [from.toISOString(), to.toISOString()]);
     } catch (error) {
       this.logger.error(`Historian rollup gagal: ${error instanceof Error ? error.message : "unknown error"}`);
     } finally {

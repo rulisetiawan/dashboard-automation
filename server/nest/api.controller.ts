@@ -10,6 +10,11 @@ const aggregateTables: Record<string, string> = {
   "15m": "telemetry_aggregate_15m",
   daily: "telemetry_aggregate_daily",
 };
+const equipmentAggregateTables: Record<string, string> = {
+  "1m": "equipment_telemetry_aggregate_1m",
+  "15m": "equipment_telemetry_aggregate_15m",
+  daily: "equipment_telemetry_aggregate_daily",
+};
 
 function queryRange(from?: string, to?: string, defaultHours = 24) {
   const end = to ? new Date(to) : new Date();
@@ -152,12 +157,30 @@ export class ApiController {
     return { data_mode: actualDataMode, equipment: result.rows.map(equipmentRow) };
   }
 
+  @Get("equipment/:equipmentId/trend")
+  async equipmentTrend(@Param("equipmentId") equipmentId: string, @Query("granularity") granularity = "15m", @Query("from") from?: string, @Query("to") to?: string) {
+    const table = equipmentAggregateTables[granularity];
+    if (!table) throw new BadRequestException("granularity harus 1m, 15m, atau daily.");
+    const [rangeFrom, rangeTo] = queryRange(from, to, granularity === "daily" ? 31 * 24 : 24);
+    const result = await this.database.query(`SELECT bucket_start, sample_count, current_r_avg_a, current_s_avg_a, current_t_avg_a, current_r_min_a, current_r_max_a, current_s_min_a, current_s_max_a, current_t_min_a, current_t_max_a, active_power_avg_kw, drive_frequency_avg_hz, energy_delta_kwh, last_source_ts, refreshed_at FROM ${table} WHERE equipment_id = $1 AND bucket_start >= $2 AND bucket_start <= $3 ORDER BY bucket_start`, [equipmentId, rangeFrom, rangeTo]);
+    return { data_mode: actualDataMode, equipment_id: equipmentId, granularity, from: rangeFrom, to: rangeTo, points: result.rows };
+  }
+
   @Get("batch/process-runs")
   async processRuns(@Query("asset_id") assetId?: string) {
     const result = assetId
       ? await this.database.query("SELECT * FROM batch_process_run WHERE asset_id = $1 ORDER BY started_at DESC NULLS LAST LIMIT 100", [assetId])
       : await this.database.query("SELECT * FROM batch_process_run ORDER BY started_at DESC NULLS LAST LIMIT 250");
     return { data_mode: actualDataMode, runs: result.rows };
+  }
+
+  @Get("batch/process-runs/:processRunId/program")
+  async processProgram(@Param("processRunId") processRunId: string) {
+    const run = await this.database.query("SELECT r.*, p.program_code, p.version_no, p.version_status FROM batch_process_run r LEFT JOIN process_program_version p ON p.program_version_id = r.program_version_id WHERE r.process_run_id = $1", [processRunId]);
+    if (!run.rows[0]) throw new NotFoundException("process run not found");
+    const steps = await this.database.query("SELECT e.*, s.sequence_no AS program_sequence_no, s.step_code AS program_step_code, s.completion_rule, s.expected_duration_seconds FROM process_step_execution e LEFT JOIN process_program_step s ON s.program_step_id = e.program_step_id WHERE e.process_run_id = $1 ORDER BY e.step_no", [processRunId]);
+    const transitions = await this.database.query("SELECT * FROM process_transition_event WHERE process_run_id = $1 ORDER BY source_ts", [processRunId]);
+    return { data_mode: actualDataMode, run: run.rows[0], steps: steps.rows, transitions: transitions.rows };
   }
 
   @Get("alarms/recent")
