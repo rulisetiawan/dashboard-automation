@@ -1,3 +1,4 @@
+// Deprecated local prototype. Jalankan `npm run dev:postgres` untuk API NestJS + PostgreSQL.
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, resolve } from "node:path";

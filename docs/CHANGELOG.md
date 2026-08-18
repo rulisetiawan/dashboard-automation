@@ -4,6 +4,28 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## NestJS PostgreSQL Integration V1.0 — 18 Agustus 2026
+
+**Status:** Backend local framework migration selesai
+
+### Diubah
+
+- API lokal berpindah dari Node.js HTTP native ke NestJS 11 + TypeScript.
+- REST endpoint dashboard tetap dipertahankan agar frontend tidak perlu diubah.
+- PostgreSQL pool, migration, dan seed dipindahkan ke `DatabaseService` NestJS.
+- Static dashboard lokal disajikan melalui Express adapter NestJS pada port yang sama.
+
+### Ditambahkan
+
+- Struktur root module, API controller, database service, dan TypeScript build backend.
+- `framework: NESTJS` pada endpoint integration status untuk verifikasi runtime.
+
+### Batasan
+
+- NestJS aktif untuk local development; backend cloud D1 belum dimigrasikan.
+
+---
+
 ## Frontend Dashboard V1.47 / Jetflow Concept V1.9 / Dashboard Concept V1.26 — 18 Agustus 2026
 
 **Status:** SV/PV pada sequence Jetflow ditambahkan
