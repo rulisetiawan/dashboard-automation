@@ -8,15 +8,25 @@ const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const port = Number(process.env.PORT || 8787);
 const migrationFile = resolve(root, "postgres", "migrations", "0001_non_jetflow_local.sql");
 const databaseUrl = process.env.DATABASE_URL;
+const databaseSsl = process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined;
+const requiredDatabaseFields = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"];
 
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL belum diisi. Salin .env.example menjadi .env lalu isi username, password, dan nama database PostgreSQL.");
+if (!databaseUrl && requiredDatabaseFields.some((field) => !process.env[field])) {
+  throw new Error("Isi DATABASE_URL atau seluruh DB_HOST, DB_PORT, DB_NAME, DB_USER, dan DB_PASSWORD pada .env.");
 }
 
 const { Pool } = pg;
 const db = new Pool({
-  connectionString: databaseUrl,
-  ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+  ...(databaseUrl
+    ? { connectionString: databaseUrl }
+    : {
+        host: process.env.DB_HOST,
+        port: Number(process.env.DB_PORT),
+        database: process.env.DB_NAME,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+      }),
+  ssl: databaseSsl,
 });
 
 const processConfig = {

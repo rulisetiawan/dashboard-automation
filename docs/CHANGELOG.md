@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## PostgreSQL Local V1.3 — 18 Agustus 2026
+
+**Status:** Native configuration hardened
+
+### Diubah
+
+- `.env` mendukung `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, dan `DB_PASSWORD` secara terpisah.
+- Driver `pg` membentuk koneksi dari field terpisah bila `DATABASE_URL` tidak digunakan.
+- Password dengan karakter khusus tidak lagi perlu di-URL-encode pada konfigurasi lokal.
+
+---
+
 ## PostgreSQL Local V1.2 — 18 Agustus 2026
 
 **Status:** Native PostgreSQL service enabled
