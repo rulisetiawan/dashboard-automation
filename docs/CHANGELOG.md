@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.29 — 18 Agustus 2026
+
+**Status:** Perbaikan visual live sensor
+
+### Diubah
+
+- Nilai `asset_snapshot.values_json` ditampilkan sebagai card grid responsif, bukan teks berderet.
+- Card memuat asset, parameter, nilai, unit, quality, dan source time aktual.
+- Badge status database diberi style khusus pada page header.
+
+---
+
 ## Dashboard V1.28 / NestJS PostgreSQL Integration V1.4 — 18 Agustus 2026
 
 **Status:** Dashboard actual-data only

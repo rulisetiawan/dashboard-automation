@@ -2247,7 +2247,17 @@ function actualAssetTable(assets) {
 function actualSensorValues(assets) {
   const rows = assets.flatMap((asset) => Object.entries(asset.values || {}).filter(([key]) => !["source", "note"].includes(key)).map(([key, value]) => ({ asset, key, value })));
   if (!rows.length) return actualEmpty("Belum ada nilai sensor pada asset_snapshot.values_json");
-  return `<div class="equipment-grid">${rows.map(({ asset, key, value }) => `<div class="equipment-item"><span>${actualText(asset.id)} · ${actualText(actualLabel(key))}</span><strong>${actualText(value)}</strong></div>`).join("")}</div>`;
+  return `<div class="actual-sensor-grid">${rows.map(({ asset, key, value }) => {
+    const role = key.replace(/_/g, ".").toUpperCase();
+    const tag = backendTelemetry.find((item) => item.asset_id === asset.id && item.signal_role === role);
+    const unit = tag?.engineering_unit || "";
+    return `<article class="actual-sensor-card">
+      <div class="actual-sensor-card-top"><span class="actual-sensor-asset">${actualText(asset.id)}</span><span class="quality-pill ${String(asset.quality).toLowerCase() === "good" ? "good" : "stale"}">${actualText(asset.quality)}</span></div>
+      <span class="actual-sensor-label">${actualText(actualLabel(key))}</span>
+      <strong class="actual-sensor-value">${actualText(value)}<small>${actualText(unit)}</small></strong>
+      <span class="actual-sensor-time">Source ${actualTime(asset.sourceTs)}</span>
+    </article>`;
+  }).join("")}</div>`;
 }
 
 function actualOverviewPage() {
