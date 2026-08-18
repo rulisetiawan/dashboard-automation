@@ -6,7 +6,7 @@ import { PGlite } from "@electric-sql/pglite";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const port = Number(process.env.PORT || 8787);
-const databaseDir = resolve(root, ".data", "pt-smm-postgres");
+const databaseDir = resolve(root, process.env.LOCAL_POSTGRES_DATA_DIR || ".data/pt-smm-postgres");
 const migrationFile = resolve(root, "postgres", "migrations", "0001_non_jetflow_local.sql");
 
 const processConfig = {

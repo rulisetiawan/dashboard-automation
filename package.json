@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "dev:postgres": "node server/local-postgres-api.mjs"
+    "dev:postgres": "node --env-file=.env server/local-postgres-api.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.5"

@@ -4,6 +4,17 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## PostgreSQL Local V1.1 — 18 Agustus 2026
+
+**Status:** Environment configuration ditambahkan
+
+### Ditambahkan
+
+- File `.env` lokal dan `.env.example` untuk port serta lokasi persistent database PostgreSQL lokal.
+- Perintah local API otomatis membaca `.env`.
+
+---
+
 ## PostgreSQL Local V1.0 — 18 Agustus 2026
 
 **Status:** Koneksi database lokal berjalan
