@@ -17,6 +17,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
 | `backend/Backend_Data_Architecture_Concept_v1.0.md` | 1.0 | Aktif | Fondasi edge-to-historian, model database, API, security, dan roadmap integrasi backend |
 | `backend/Tag_Display_Mapping_Register_v1.0.md` | 1.0 | Aktif | Baseline canonical tag ke tampilan proses, utility, chemical, dan motor diagnostic |
+| `backend/Tag_Naming_Governance_v1.0.md` | 1.0 | Aktif | Standar penamaan, ownership, mapping PLC, dan lifecycle Tag Registry |
 | `backend/Backend_Data_Flow_Graph_v1.0.md` | 1.0 | Aktif | Graph transmisi telemetry, traceability batch, dan batas OT–IT |
 | `backend/Database_Design_Concept_v1.0.md` | 1.0 | Aktif | Desain database PostgreSQL + TimescaleDB untuk master, historian, MES, utility, chemical, maintenance, dan audit |
 | `backend/Non_Jetflow_Backend_Integration_v1.0.md` | 1.0 | Aktif | Implementasi awal D1/API read-only untuk Calator, Dryer, Kalender, Dispensing, dan Utilities |

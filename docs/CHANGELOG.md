@@ -4,6 +4,19 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Tag Naming & Governance V1.0 — 18 Agustus 2026
+
+**Status:** Standar baseline Tag Registry
+
+### Ditambahkan
+
+- Ownership dan approval untuk asset, equipment, tag, source PLC, serta alarm.
+- Format asset ID, equipment ID, tag code canonical, dan signal role.
+- Pemisahan tag canonical dari alamat fisik PLC/OPC UA/Modbus.
+- Workflow pendaftaran, quality data, lifecycle, dan aturan perubahan tag.
+
+---
+
 ## Dashboard V1.31 / NestJS PostgreSQL Integration V1.5 — 18 Agustus 2026
 
 **Status:** Dashboard database-driven
