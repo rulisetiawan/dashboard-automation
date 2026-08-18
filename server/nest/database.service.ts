@@ -1,10 +1,10 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Pool, QueryResultRow } from "pg";
 
 const projectRoot = resolve(process.cwd());
-const migrationFile = resolve(projectRoot, "postgres", "migrations", "0001_non_jetflow_local.sql");
+const migrationDirectory = resolve(projectRoot, "postgres", "migrations");
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
@@ -27,7 +27,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     try {
       await this.pool.query("SELECT 1 AS connected");
-      await this.pool.query(await readFile(migrationFile, "utf8"));
+      const migrationFiles = (await readdir(migrationDirectory)).filter((file) => file.endsWith(".sql")).sort();
+      for (const file of migrationFiles) {
+        await this.pool.query(await readFile(resolve(migrationDirectory, file), "utf8"));
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : "unknown database error";
       throw new Error(`Koneksi PostgreSQL native gagal: ${detail}`);

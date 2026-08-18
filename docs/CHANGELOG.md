@@ -4,6 +4,21 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## NestJS PostgreSQL Integration V1.2 — 18 Agustus 2026
+
+**Status:** Struktur tabel operational MES
+
+### Ditambahkan
+
+- Tabel batch, process run, process step execution, alarm event, maintenance plan, dan master utility meter.
+- Runner migration NestJS membaca seluruh migration SQL secara berurutan.
+
+### Catatan
+
+- Seluruh tabel dibuat kosong tanpa record simulasi.
+
+---
+
 ## NestJS PostgreSQL Integration V1.1 — 18 Agustus 2026
 
 **Status:** Mode database aktual lokal
