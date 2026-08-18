@@ -4,6 +4,20 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.44 / Calator Concept V1.3 / Dashboard Concept V1.23 — 18 Agustus 2026
+
+**Status:** Detail Calator disederhanakan
+
+### Dihapus
+
+- Panel Speed Synchronization pada detail per mesin Calator.
+
+### Dipertahankan
+
+- Multi-Speed Profile, Critical Process, motor diagnostic, histori proses, batch investigation, dan abnormality log Calator.
+
+---
+
 ## PostgreSQL Local V1.3 — 18 Agustus 2026
 
 **Status:** Native configuration hardened

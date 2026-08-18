@@ -1326,14 +1326,6 @@ function calatorDetailPage() {
         </div>
       `)}
     </section>
-    <section class="grid-2 abnormal-log-layout">
-      ${panel("Speed Synchronization", "Difference dan ratio antarstage", `
-        ${balanceRows([
-          ["Feeding → SQ-1", 52, "+0.7%"], ["SQ-1 → SQ-2", 48, "+1.1%"], ["OF In → OF Out", 56, "+3.8%"],
-          ["OF Out upper/lower", 51, "1.4%"], ["OF Out → Folder", 45, "-5.6%"], ["Folder → Plaiter", 49, "0.7%"]
-        ])}
-      `)}
-    </section>
     ${motorEquipmentPanel("calator", machine, motors)}
     ${selectedMotor ? motorDriveDetailPanel(selectedMotor) : ""}
     ${panel("Process Run History", "Chemical, speed, slowdown, output, dan quality context", eventTable([
@@ -1351,10 +1343,6 @@ function calatorDetailPage() {
 function speedCard(item, index) {
   const warn = item[0].includes("Out Atas 4") && index % 3 === 0;
   return `<div class="speed-card"><div class="speed-card-head"><strong>${item[0]}</strong><i class="equipment-state ${warn ? "warning" : ""}"></i></div><div class="card-reading">${liveValue(item[1], "m/min", .06, 1)}</div><div class="card-caption">SP ${(item[1] + .1).toFixed(1)} · ${warn ? "Check balance" : "Good"}</div><div class="mini-bar"><span style="width:${Math.min(94, item[1] * 2.8)}%"></span></div></div>`;
-}
-
-function balanceRows(rows) {
-  return `<div>${rows.map((r) => `<div class="balance-row"><span class="balance-label">${r[0]}</span><div class="balance-track"><i class="balance-indicator" style="left:${r[1]}%"></i></div><span class="balance-value">${r[2]}</span></div>`).join("")}</div>`;
 }
 
 function parameterConfigurationRows(rows) {
