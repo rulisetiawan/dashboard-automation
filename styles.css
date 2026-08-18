@@ -5181,6 +5181,39 @@ select:focus-visible {
   font-size: 0.6rem;
 }
 
+.definition-list {
+  display: grid;
+  gap: 10px;
+}
+
+.definition-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.7rem;
+}
+
+.definition-list > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.definition-list span {
+  color: var(--ink-3);
+}
+
+.compact-list {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--ink-2);
+  font-size: 0.68rem;
+  line-height: 1.55;
+}
+
 .toast-root {
   position: fixed;
   right: 18px;

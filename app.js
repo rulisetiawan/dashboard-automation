@@ -89,7 +89,7 @@ const state = {
 
 const backendConnection = {
   status: "connecting",
-  dataMode: "LOCAL_DEMO",
+  dataMode: "ACTUAL_DATABASE",
   storage: null,
   lastSync: null,
 };
@@ -232,62 +232,14 @@ function jetflowProgramForSensor(sensor) {
   };
 }
 
-function simulatedMachineState(index, areaIndex) {
-  const marker = index + areaIndex * 5;
-  if (marker % 19 === 0 && marker > 0) return "fault";
-  if (marker % 11 === 0 && marker > 0) return "warning";
-  if (marker % 7 === 0) return "idle";
-  return "running";
-}
-
-function createFleet(type) {
-  const config = processConfig[type];
-  return processAreas[type].flatMap((area, areaIndex) => Array.from({ length: area.count }, (_, index) => {
-    const number = String(index + 1).padStart(2, "0");
-    const machineState = simulatedMachineState(index, areaIndex);
-    const active = machineState === "running" || machineState === "warning";
-    const base = {
-      id: `${config.code}-${area.code}-${number}`,
-      name: `${config.singular} ${area.label} ${number}`,
-      area: area.code,
-      areaLabel: area.label,
-      state: machineState,
-      batch: active ? `DB-260814-${String(areaIndex * 20 + index + 1).padStart(3, "0")}` : "—",
-      progress: active ? 31 + ((index * 13 + areaIndex * 17) % 63) : 0,
-      connected: machineState !== "offline",
-    };
-    if (type === "jetflow") return { ...base, winches: 2 + ((index + areaIndex) % 7), recipe: active ? ["NAVY-R12", "BLACK-R08", "OLIVE-R03"][index % 3] : "—", step: jetflowProcessSteps[(index + areaIndex * 3) % jetflowProcessSteps.length] };
-    if (type === "calator") return { ...base, subtype: index % 6 === 5 ? "Bianco" : "Standard", recipe: active ? ["WASH-S04", "SOFT-B12", "SOFT-B08"][index % 3] : "—" };
-    if (type === "dryer") return { ...base, chambers: 6 + ((index + areaIndex) % 2) * 2, setup: active ? ["DRY-COT-18", "DRY-POL-22", "DRY-COT-16"][index % 3] : "—" };
-    if (type === "kalender") return { ...base, setup: active ? ["FIN-COT-07", "FIN-POL-05", "FIN-COT-09"][index % 3] : "—" };
-    return { ...base, recipe: active ? "CHEM-TRANSFER-07" : "—", step: active ? "Ready / Transfer" : "Standby" };
-  }));
-}
-
-const jetflows = createFleet("jetflow");
-const calators = createFleet("calator");
-const dryers = createFleet("dryer");
-const kalenders = createFleet("kalender");
-const dispensers = createFleet("chemical");
-
-const alarms = [
-  { id: 1, severity: "critical", title: "Tangle limit aktif", detail: "Limit tangle Winch 3 terdeteksi selama 18 detik.", source: "JF-LB-08 · Winch 3", area: "Jetflow · Lane B", time: "10:38:42", ack: false },
-  { id: 2, severity: "critical", title: "Chamber 05 under-temperature", detail: "Temperatur aktual 134.2°C, target 148.0°C.", source: "DR-BLK-02 · Chamber 05", area: "Dryer · Belakang", time: "10:36:18", ack: false },
-  { id: 3, severity: "warning", title: "Overfeed Out imbalance", detail: "Spread channel atas-bawah melewati tolerance 4.2%.", source: "CL-BLK-02 · Overfeed Out", area: "Calator · Belakang", time: "10:31:09", ack: false },
-  { id: 4, severity: "warning", title: "Steam header pressure low", detail: "Tekanan header berada di bawah baseline heating.", source: "Utility · Steam Header A", area: "Utilities", time: "10:24:51", ack: false },
-  { id: 5, severity: "warning", title: "Fabric width approaching limit", detail: "Lebar aktual 179.1 cm, target 181.0 cm.", source: "KL-TMR-05 · Width Sensor", area: "Kalender · Timur", time: "10:17:33", ack: true },
-];
-
-const downtimeRecords = [
-  { area: "Jetflow · Lane B", process: "jetflow", machineId: "JF-LB-08", equipment: "Main Pump", reason: "Pump overload & tangle recovery", events: 4, minutes: 126, unplanned: 116, last: "10:38" },
-  { area: "Calator · Belakang", process: "calator", machineId: "CL-BLK-02", equipment: "Overfeed Out", reason: "Overfeed imbalance", events: 5, minutes: 94, unplanned: 88, last: "10:31" },
-  { area: "Dryer · Belakang", process: "dryer", machineId: "DR-BLK-02", equipment: "Chamber 05", reason: "Under-temperature", events: 3, minutes: 82, unplanned: 76, last: "10:36" },
-  { area: "Kalender · Timur", process: "kalender", machineId: "KL-TMR-05", equipment: "Upper Felt", reason: "Loadcell deviation", events: 3, minutes: 61, unplanned: 55, last: "10:17" },
-  { area: "Jetflow · Lane D", process: "jetflow", machineId: "JF-LD-11", equipment: "Winch 2", reason: "Drive overcurrent", events: 3, minutes: 54, unplanned: 49, last: "09:54" },
-  { area: "Calator · Timur", process: "calator", machineId: "CL-TMR-04", equipment: "Dancing Roller", reason: "Fabric tension recovery", events: 4, minutes: 47, unplanned: 42, last: "09:12" },
-  { area: "Utilities", process: "utilities", machineId: "STEAM-HDR-A", equipment: "Steam Header A", reason: "Low steam pressure", events: 2, minutes: 39, unplanned: 36, last: "10:24" },
-  { area: "Kalender · Belakang", process: "kalender", machineId: "KL-BLK-03", equipment: "Lower Felt", reason: "Felt tracking correction", events: 2, minutes: 32, unplanned: 24, last: "08:48" },
-];
+// Semua fleet diisi hanya oleh endpoint PostgreSQL. Tidak ada fallback dummy di browser.
+const jetflows = [];
+const calators = [];
+const dryers = [];
+const kalenders = [];
+const dispensers = [];
+const alarms = [];
+const downtimeRecords = [];
 
 const connectors = [
   ["GW-DYE-01", "Jetflow PLC Group A", "OPC UA", "Online", "16 ms", "8,420", "99.98%"],
@@ -307,20 +259,7 @@ const chemicals = [
   ["CH-07", "Special Finish", 325, 600, "#c55f92"],
 ];
 
-const chemicalDispensingLogs = [
-  { hoursAgo: .3, time: "15 Aug · 10:42", request: "REQ-CL-260815-041", calator: "CL-DPN-01", code: "CH-02", variant: "Softener B", target: "126.0 kg", actual: "126.2 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 2 / 2" },
-  { hoursAgo: .8, time: "15 Aug · 10:11", request: "REQ-CL-260815-040", calator: "CL-BLK-04", code: "CH-01", variant: "Softener A", target: "184.0 kg", actual: "183.7 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 1 / 1" },
-  { hoursAgo: 1.2, time: "15 Aug · 09:47", request: "REQ-CL-260815-039", calator: "CL-TMR-03", code: "CH-05", variant: "Fixing Agent", target: "74.0 kg", actual: "74.0 kg", mode: "Manual", status: "Completed", operator: "A. Raka", stage: "Manual verified" },
-  { hoursAgo: 1.8, time: "15 Aug · 09:12", request: "REQ-CL-260815-038", calator: "CL-BLK-02", code: "CH-03", variant: "Washing Agent", target: "112.0 kg", actual: "109.6 kg", mode: "Automatic", status: "Hold", operator: "Auto PLC", stage: "Weighing 2 / 3" },
-  { hoursAgo: 2.4, time: "15 Aug · 08:36", request: "REQ-CL-260815-037", calator: "CL-DPN-02", code: "CH-04", variant: "Anti-static", target: "48.0 kg", actual: "48.1 kg", mode: "Manual", status: "Completed", operator: "S. Deni", stage: "Manual verified" },
-  { hoursAgo: 3.1, time: "15 Aug · 07:54", request: "REQ-CL-260815-036", calator: "CL-TMR-06", code: "CH-06", variant: "Neutralizer", target: "62.0 kg", actual: "—", mode: "Automatic", status: "Weighing", operator: "Auto PLC", stage: "Weighing 1 / 2" },
-  { hoursAgo: 4.3, time: "15 Aug · 06:42", request: "REQ-CL-260815-035", calator: "CL-BLK-07", code: "CH-07", variant: "Special Finish", target: "38.0 kg", actual: "38.2 kg", mode: "Manual", status: "Completed", operator: "N. Ilham", stage: "Manual verified" },
-  { hoursAgo: 6.8, time: "15 Aug · 04:14", request: "REQ-CL-260815-034", calator: "CL-TMR-01", code: "CH-02", variant: "Softener B", target: "118.0 kg", actual: "117.6 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 2 / 2" },
-  { hoursAgo: 9.2, time: "15 Aug · 01:48", request: "REQ-CL-260815-033", calator: "CL-BLK-09", code: "CH-01", variant: "Softener A", target: "168.0 kg", actual: "167.9 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 1 / 1" },
-  { hoursAgo: 13.4, time: "14 Aug · 21:36", request: "REQ-CL-260814-106", calator: "CL-DPN-01", code: "CH-03", variant: "Washing Agent", target: "104.0 kg", actual: "100.4 kg", mode: "Manual", status: "Hold", operator: "A. Raka", stage: "Manual re-weigh" },
-  { hoursAgo: 18.6, time: "14 Aug · 16:24", request: "REQ-CL-260814-105", calator: "CL-TMR-04", code: "CH-05", variant: "Fixing Agent", target: "71.0 kg", actual: "71.3 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 1 / 1" },
-  { hoursAgo: 28.2, time: "14 Aug · 06:47", request: "REQ-CL-260814-097", calator: "CL-BLK-03", code: "CH-06", variant: "Neutralizer", target: "58.0 kg", actual: "57.7 kg", mode: "Automatic", status: "Completed", operator: "Auto PLC", stage: "Weighing 2 / 2" },
-];
+const chemicalDispensingLogs = [];
 
 function backendTimeLabel(value) {
   return new Date(value).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }).replace(",", " ·");
@@ -333,11 +272,11 @@ function updateBackendIndicator() {
   const detail = indicator.querySelector("small");
   if (!title || !detail) return;
   if (backendConnection.status === "connected") {
-    title.textContent = "Backend non-Jetflow online";
-    detail.textContent = `${backendConnection.storage || "D1"} · ${backendConnection.dataMode === "SIMULATED_SEED" ? "DEMO SEED / TAG MAPPING PENDING" : "TELEMETRY CONNECTED"}`;
+    title.textContent = "PostgreSQL lokal terhubung";
+    detail.textContent = `${backendConnection.storage || "POSTGRESQL"} · data aktual`;
   } else if (backendConnection.status === "fallback") {
-    title.textContent = "Demo fallback active";
-    detail.textContent = "Backend tidak tersedia · data simulasi lokal";
+    title.textContent = "PostgreSQL lokal tidak tersedia";
+    detail.textContent = "Tidak ada fallback data simulasi";
   }
 }
 
@@ -368,7 +307,7 @@ async function connectNonJetflowBackend() {
     const statusResponse = await fetch("/api/v1/integration/status", { cache: "no-store" });
     if (!statusResponse.ok) throw new Error("Backend not ready");
     const status = await statusResponse.json();
-    const processes = ["calator", "dryer", "kalender", "chemical"];
+    const processes = ["jetflow", "calator", "dryer", "kalender", "chemical"];
     const responses = await Promise.all(processes.map(async (process) => {
       const response = await fetch(`/api/v1/assets?process=${process}`, { cache: "no-store" });
       if (!response.ok) throw new Error(`Asset API ${process} unavailable`);
@@ -377,7 +316,7 @@ async function connectNonJetflowBackend() {
     const chemicalResponse = await fetch("/api/v1/dispensing/transactions", { cache: "no-store" });
     const utilityResponse = await fetch("/api/v1/utilities/snapshot", { cache: "no-store" });
     if (!chemicalResponse.ok || !utilityResponse.ok) throw new Error("Operational API unavailable");
-    const targetFleet = { calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers };
+    const targetFleet = { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers };
     responses.forEach(([process, payload]) => targetFleet[process].splice(0, targetFleet[process].length, ...payload.assets));
     hydrateChemicalTransactions((await chemicalResponse.json()).transactions);
     backendUtilities = (await utilityResponse.json()).utilities;
@@ -2223,6 +2162,30 @@ function healthPage() {
   `;
 }
 
+function databaseIntegrationPage() {
+  const isLoading = backendConnection.status === "connecting";
+  const unavailable = backendConnection.status === "fallback";
+  const title = isLoading ? "Menghubungkan PostgreSQL lokal" : unavailable ? "Koneksi PostgreSQL belum tersedia" : "Database siap menerima data aktual";
+  const description = isLoading
+    ? "Dashboard menunggu respons API NestJS dan tidak akan menampilkan data contoh."
+    : unavailable
+      ? "Periksa service PostgreSQL, konfigurasi .env, lalu jalankan npm run dev:postgres. Tidak ada fallback simulasi."
+      : "Tidak ada data demo. Tambahkan asset, snapshot mesin, tag, utility, dan transaksi chemical ke database lokal untuk mulai menampilkan operasi pabrik.";
+  return `
+    ${pageHead(state.page)}
+    <section class="card panel">
+      <div class="empty-state">
+        <strong>${title}</strong>
+        <span>${description}</span>
+      </div>
+    </section>
+    <section class="grid-equal">
+      ${panel("Sumber data", "Mode koneksi dashboard", `<div class="definition-list"><div><span>Framework</span><strong>NestJS</strong></div><div><span>Database</span><strong>${backendConnection.storage || "PostgreSQL lokal"}</strong></div><div><span>Mode</span><strong>Actual database only</strong></div></div>`)}
+      ${panel("Urutan aktivasi", "Data ditampilkan setelah tersimpan di database", `<ol class="compact-list"><li>Daftarkan asset pada tabel <span class="mono">asset</span>.</li><li>Masukkan status aktual ke <span class="mono">asset_snapshot</span>.</li><li>Daftarkan tag pada <span class="mono">tag_definition</span> dan historian pada <span class="mono">telemetry_sample</span>.</li><li>Masukkan utility atau transaksi chemical sesuai prosesnya.</li></ol>`)}
+    </section>
+  `;
+}
+
 function renderPage({ preserveScroll = false } = {}) {
   const previousScroll = Number.isFinite(window.scrollY) ? window.scrollY : 0;
   const content = document.getElementById("page-content");
@@ -2238,7 +2201,10 @@ function renderPage({ preserveScroll = false } = {}) {
     trends: trendsPage,
     health: healthPage,
   };
-  content.innerHTML = (renderers[state.page] || overviewPage)();
+  const hasActualAssets = [jetflows, calators, dryers, kalenders, dispensers].some((fleet) => fleet.length > 0);
+  content.innerHTML = (backendConnection.status !== "connected" || !hasActualAssets)
+    ? databaseIntegrationPage()
+    : (renderers[state.page] || overviewPage)();
   document.getElementById("breadcrumb-page").textContent = pageMeta[state.page][0];
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === state.page));
   bindPageEvents();

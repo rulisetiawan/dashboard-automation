@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## NestJS PostgreSQL Integration V1.1 — 18 Agustus 2026
+
+**Status:** Mode database aktual lokal
+
+### Diubah
+
+- Seed otomatis backend dan fallback data simulasi browser dihapus.
+- API membaca langsung PostgreSQL lokal dan mengembalikan `ACTUAL_DATABASE` untuk Jetflow, Calator, Dryer, Kalender, dan Chemical.
+- Asset tanpa snapshot tetap dapat dibaca dengan status `offline` / `NO_DATA`.
+- Dashboard menampilkan state integrasi kosong sampai data aktual tersedia.
+
+### Dihapus
+
+- Dataset demo terverifikasi: 50 asset, 50 snapshot, 284 tag, 6 transaksi chemical, dan 4 snapshot utilitas.
+
+---
+
 ## Frontend Dashboard V1.48 / Calator Concept V1.4 / Dashboard Concept V1.27 — 18 Agustus 2026
 
 **Status:** Hirarki panel Calator diperjelas
