@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## PostgreSQL Local V1.2 — 18 Agustus 2026
+
+**Status:** Native PostgreSQL service enabled
+
+### Diubah
+
+- Backend lokal berpindah dari PGlite embedded ke driver `pg` untuk PostgreSQL service asli.
+- Konfigurasi `.env` memakai `DATABASE_URL` dan opsi `DATABASE_SSL`.
+- Status API membedakan storage `POSTGRESQL_NATIVE_LOCAL`.
+
+### Diperlukan sebelum dijalankan
+
+- Isi username/password PostgreSQL yang benar di `.env`.
+- Buat database `pt_smm_scada` atau sesuaikan nama database pada `DATABASE_URL`.
+
+---
+
 ## PostgreSQL Local V1.1 — 18 Agustus 2026
 
 **Status:** Environment configuration ditambahkan

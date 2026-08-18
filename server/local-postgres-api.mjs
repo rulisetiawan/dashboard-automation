@@ -1,13 +1,23 @@
 import { createServer } from "node:http";
-import { mkdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PGlite } from "@electric-sql/pglite";
+import pg from "pg";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const port = Number(process.env.PORT || 8787);
-const databaseDir = resolve(root, process.env.LOCAL_POSTGRES_DATA_DIR || ".data/pt-smm-postgres");
 const migrationFile = resolve(root, "postgres", "migrations", "0001_non_jetflow_local.sql");
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL belum diisi. Salin .env.example menjadi .env lalu isi username, password, dan nama database PostgreSQL.");
+}
+
+const { Pool } = pg;
+const db = new Pool({
+  connectionString: databaseUrl,
+  ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+});
 
 const processConfig = {
   calator: { code: "CL", label: "Calator", areas: [["DPN", "Depan", 2], ["BLK", "Belakang", 9], ["TMR", "Timur", 7]] },
@@ -73,9 +83,13 @@ function seedChemicalTransactions(now) {
   }));
 }
 
-await mkdir(databaseDir, { recursive: true });
-const db = new PGlite(databaseDir);
-await db.exec(await readFile(migrationFile, "utf8"));
+try {
+  await db.query("SELECT 1 AS connected");
+  await db.query(await readFile(migrationFile, "utf8"));
+} catch (error) {
+  const detail = error instanceof Error ? error.message : "unknown database error";
+  throw new Error(`Koneksi PostgreSQL native gagal: ${detail}`);
+}
 
 async function seedDatabase() {
   const result = await db.query("SELECT COUNT(*)::int AS count FROM asset");
@@ -110,7 +124,7 @@ const assetRow = (row) => ({ id: row.asset_id, name: row.display_name, process: 
 async function handleApi(req, res, url) {
   if (url.pathname === "/api/v1/integration/status") {
     const result = await db.query("SELECT process_type, COUNT(*)::int AS asset_count FROM asset WHERE active = TRUE GROUP BY process_type ORDER BY process_type");
-    return json(res, 200, { data_mode: "SIMULATED_SEED", storage: "PGLITE_POSTGRES_LOCAL", scope: "NON_JETFLOW", processes: result.rows, gateway_ingestion: false, server_time: new Date().toISOString() });
+    return json(res, 200, { data_mode: "SIMULATED_SEED", storage: "POSTGRESQL_NATIVE_LOCAL", scope: "NON_JETFLOW", processes: result.rows, gateway_ingestion: false, server_time: new Date().toISOString() });
   }
   if (url.pathname === "/api/v1/assets") {
     const process = url.searchParams.get("process");
