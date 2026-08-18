@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.30 — 18 Agustus 2026
+
+**Status:** Restore layout dashboard
+
+### Diubah
+
+- Struktur tab, fleet, area drill-down, card, dan panel dashboard awal dipulihkan.
+- State/batch/progress tetap memakai PostgreSQL aktual.
+- KPI historical yang belum memiliki aggregate aktual tidak lagi menampilkan angka generator.
+
+---
+
 ## Dashboard V1.29 — 18 Agustus 2026
 
 **Status:** Perbaikan visual live sensor

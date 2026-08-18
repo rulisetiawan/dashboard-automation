@@ -366,6 +366,9 @@ function statusPill(value) {
 }
 
 function liveValue(value, unit = "", variance = 0.2, decimals = 1) {
+  if (backendConnection.status === "connected" && backendConnection.dataMode === "ACTUAL_DATABASE") {
+    return `<span class="live-number no-data">—</span><small>${unit}</small>`;
+  }
   return `<span class="live-number" data-live data-value="${value}" data-variance="${variance}" data-decimals="${decimals}">${Number(value).toFixed(decimals)}</span><small>${unit}</small>`;
 }
 
@@ -945,11 +948,14 @@ function formatManagementValue(value, unit) {
 }
 
 function managementKpi(scope, label, value, unit, foot, tone = "") {
+  const actualOnly = backendConnection.status === "connected" && backendConnection.dataMode === "ACTUAL_DATABASE";
+  const historicalValue = actualOnly && scope === "historical" ? "—" : value;
+  const actualFoot = actualOnly && scope === "historical" ? "No data · historian aggregate belum dimapping" : foot;
   return `<article class="card management-kpi ${tone}">
-    <div class="management-kpi-top"><span class="kpi-scope ${scope === "live" ? "live" : "historical"}">${scope === "live" ? "LIVE NOW" : "SELECTED RANGE"}</span><span class="quality-pill good">Simulated</span></div>
+    <div class="management-kpi-top"><span class="kpi-scope ${scope === "live" ? "live" : "historical"}">${scope === "live" ? "LIVE NOW" : "SELECTED RANGE"}</span><span class="quality-pill good">${actualOnly ? "ACTUAL" : "Simulated"}</span></div>
     <span class="management-kpi-label">${label}</span>
-    <div class="management-kpi-value">${value}<small>${unit}</small></div>
-    <div class="management-kpi-foot">${foot}</div>
+    <div class="management-kpi-value">${historicalValue}<small>${unit}</small></div>
+    <div class="management-kpi-foot">${actualFoot}</div>
   </article>`;
 }
 
@@ -1033,6 +1039,7 @@ function downtimePareto(type) {
 function processFleetPage(type) {
   const config = processConfig[type];
   const fleet = fleetFor(type);
+  const actualOnly = backendConnection.status === "connected" && backendConnection.dataMode === "ACTUAL_DATABASE";
   const exceptions = statusCount(fleet, "warning") + statusCount(fleet, "fault");
   const running = statusCount(fleet, "running") + statusCount(fleet, "warning");
   const stopped = statusCount(fleet, "idle") + statusCount(fleet, "fault");
@@ -1051,11 +1058,11 @@ function processFleetPage(type) {
       <div class="area-card-head"><div><span class="area-code">${area.code}</span><h2>${type === "jetflow" ? area.label : `Area ${area.label}`}</h2></div>${statusPill(tone)}</div>
       <div class="area-total"><strong>${items.length}</strong><span>${config.singular} registered</span></div>
       <div class="area-state-grid"><span><strong>${running}</strong>Run</span><span><strong>${idle}</strong>Idle</span><span><strong>${warning}</strong>Warn</span><span><strong>${fault}</strong>Fault</span></div>
-      <div class="area-card-foot"><span>${formatManagementValue(metricTotal(type, state.management.metric[type], items), selectedMetric.unit)} ${selectedMetric.unit} ${selectedMetric.short.toLowerCase()}</span><strong>Open ranking →</strong></div>
+      <div class="area-card-foot"><span>${actualOnly ? "No data aggregate" : `${formatManagementValue(metricTotal(type, state.management.metric[type], items), selectedMetric.unit)} ${selectedMetric.unit} ${selectedMetric.short.toLowerCase()}`}</span><strong>Open ranking →</strong></div>
     </article>`;
   }).join("");
   return `
-    ${pageHead(type, `<span class="data-pill neutral">Asset mapping · simulated state</span><button class="button" data-page-target="trends">⌗ Historical</button>`)}
+    ${pageHead(type, `<span class="data-pill good">PostgreSQL actual</span><button class="button" data-page-target="trends">⌗ Historical</button>`)}
     <section class="fleet-summary card">
       <div><span class="eyebrow">${config.process}</span><h2>${config.plural} Fleet Overview</h2><p>Pilih ${type === "jetflow" ? "lane" : "area"} untuk melihat daftar mesin, kemudian masuk ke detail mesin.</p></div>
       <div class="fleet-total"><strong>${fleet.length}</strong><span>Total assets</span></div>
@@ -1084,7 +1091,10 @@ function processFleetPage(type) {
 
 function machineSnapshot(type, machine, index) {
   if (type === "jetflow") return `${machine.step} · ${machine.winches} winches`;
-  if (type === "calator") return `${machine.subtype} · OF Out ${(28.7 + index % 5 * .12).toFixed(1)} m/min`;
+  if (type === "calator") {
+    const overfeed = machine.values?.overfeed_out_speed_pv;
+    return `${machine.subtype || "—"} · OF Out ${overfeed == null ? "—" : `${overfeed} m/min`}`;
+  }
   if (type === "dryer") return `${machine.chambers} chambers · Avg ${(145.2 + index % 4 * .5).toFixed(1)}°C`;
   if (type === "kalender") return `Load balance ${(1.2 + index % 5 * .3).toFixed(1)}% · Width ${(180.8 + index % 4 * .2).toFixed(1)} cm`;
   return `${machine.step} · 7 variants`;
@@ -2345,7 +2355,22 @@ function updateNavigationCounts() {
 function renderPage({ preserveScroll = false } = {}) {
   const previousScroll = Number.isFinite(window.scrollY) ? window.scrollY : 0;
   const content = document.getElementById("page-content");
-  content.innerHTML = backendConnection.status !== "connected" ? databaseIntegrationPage() : actualDataPage();
+  const renderers = {
+    overview: overviewPage,
+    jetflow: jetflowPage,
+    calator: calatorPage,
+    dryer: dryerPage,
+    kalender: kalenderPage,
+    utilities: utilitiesPage,
+    chemical: chemicalPage,
+    alarms: alarmsPage,
+    trends: trendsPage,
+    health: healthPage,
+  };
+  const hasActualAssets = actualFleet().length > 0;
+  content.innerHTML = (backendConnection.status !== "connected" || !hasActualAssets)
+    ? databaseIntegrationPage()
+    : (renderers[state.page] || overviewPage)();
   document.getElementById("breadcrumb-page").textContent = pageMeta[state.page][0];
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === state.page));
   bindPageEvents();
