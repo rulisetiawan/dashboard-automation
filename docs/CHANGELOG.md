@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## PostgreSQL Local V1.0 — 18 Agustus 2026
+
+**Status:** Koneksi database lokal berjalan
+
+### Ditambahkan
+
+- PGlite sebagai PostgreSQL lokal persistent tanpa membutuhkan Docker atau PostgreSQL native.
+- Local API server dan perintah `npm run dev:postgres`.
+- Migration PostgreSQL dan seed data non-Jetflow untuk Calator, Dryer, Kalender, Dispensing, Chemical, dan Utilities.
+
+### Divalidasi
+
+- Dashboard lokal, status API, fleet asset, chemical transaction, dan utility snapshot berhasil dibaca dari PostgreSQL lokal.
+
+### Batasan
+
+- Cloud deployment belum dipindahkan ke PostgreSQL; database production dan credential belum tersedia.
+
+---
+
 ## Backend Non-Jetflow V1.0 — 15 Agustus 2026
 
 **Status:** Fondasi integrasi backend selesai
