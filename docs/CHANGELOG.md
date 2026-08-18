@@ -4,6 +4,21 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.46 / Jetflow Concept V1.8 / Dashboard Concept V1.25 — 18 Agustus 2026
+
+**Status:** Batch context pada kartu mesin ditambahkan
+
+### Ditambahkan
+
+- Nomor batch aktif pada strip process kartu mesin di halaman area/fleet.
+- Tata letak batch ringkas di samping current process agar dapat dibaca tanpa membuka detail mesin.
+
+### Batasan
+
+- Nomor batch masih memakai data simulated hingga process run MES terhubung.
+
+---
+
 ## Frontend Dashboard V1.45 / Dashboard Concept V1.24 — 18 Agustus 2026
 
 **Status:** Alarm downtime analysis diperjelas
