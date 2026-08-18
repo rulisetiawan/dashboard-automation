@@ -2,7 +2,7 @@ import { BadRequestException, Controller, Get, NotFoundException, Param, Query }
 import { DatabaseService } from "./database.service.js";
 
 const validProcesses = new Set(["jetflow", "calator", "dryer", "kalender", "chemical"]);
-const assetProjection = "SELECT a.*, s.machine_state, s.batch_no, s.progress_percent, s.connected, s.source_ts, s.quality FROM asset a LEFT JOIN asset_snapshot s ON s.asset_id = a.asset_id";
+const assetProjection = "SELECT a.*, s.machine_state, s.batch_no, s.progress_percent, s.connected, s.source_ts, s.quality, s.values_json FROM asset a LEFT JOIN asset_snapshot s ON s.asset_id = a.asset_id";
 const actualDataMode = "ACTUAL_DATABASE";
 
 function assetRow(row: Record<string, any>) {
@@ -20,6 +20,7 @@ function assetRow(row: Record<string, any>) {
     connected: row.connected || false,
     sourceTs: row.source_ts || null,
     quality: row.quality || "NO_DATA",
+    values: row.values_json || {},
   };
 }
 
@@ -62,5 +63,25 @@ export class ApiController {
   async utilities() {
     const result = await this.database.query("SELECT * FROM utility_snapshot ORDER BY utility_code");
     return { data_mode: actualDataMode, utilities: result.rows };
+  }
+
+  @Get("telemetry/recent")
+  async recentTelemetry(@Query("limit") rawLimit?: string) {
+    const limit = Math.min(Math.max(Number(rawLimit) || 100, 1), 500);
+    const result = await this.database.query(`
+      SELECT t.asset_id, t.tag_code, d.signal_role, d.engineering_unit, t.source_ts, t.value_number, t.value_text, t.quality
+      FROM telemetry_sample t
+      JOIN tag_definition d ON d.tag_code = t.tag_code
+      ORDER BY t.source_ts DESC
+      LIMIT $1
+    `, [limit]);
+    return { data_mode: actualDataMode, samples: result.rows };
+  }
+
+  @Get("alarms/recent")
+  async recentAlarms(@Query("limit") rawLimit?: string) {
+    const limit = Math.min(Math.max(Number(rawLimit) || 100, 1), 500);
+    const result = await this.database.query("SELECT * FROM alarm_event ORDER BY occurred_at DESC LIMIT $1", [limit]);
+    return { data_mode: actualDataMode, alarms: result.rows };
   }
 }

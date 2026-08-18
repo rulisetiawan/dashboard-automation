@@ -96,6 +96,8 @@ const backendConnection = {
 };
 
 let backendUtilities = [];
+let backendTelemetry = [];
+let backendAlarmEvents = [];
 let realtimeSocket = null;
 let realtimeRefreshTimer = null;
 
@@ -303,7 +305,7 @@ function connectRealtimeChannel() {
 }
 
 function utilityValue(code, fallback) {
-  return backendUtilities.find((item) => item.utility_code === code)?.value ?? fallback;
+  return backendUtilities.find((item) => item.utility_code === code)?.value ?? "—";
 }
 
 function hydrateChemicalTransactions(rows) {
@@ -337,15 +339,20 @@ async function connectNonJetflowBackend() {
     }));
     const chemicalResponse = await fetch("/api/v1/dispensing/transactions", { cache: "no-store" });
     const utilityResponse = await fetch("/api/v1/utilities/snapshot", { cache: "no-store" });
-    if (!chemicalResponse.ok || !utilityResponse.ok) throw new Error("Operational API unavailable");
+    const telemetryResponse = await fetch("/api/v1/telemetry/recent?limit=100", { cache: "no-store" });
+    const alarmResponse = await fetch("/api/v1/alarms/recent?limit=100", { cache: "no-store" });
+    if (!chemicalResponse.ok || !utilityResponse.ok || !telemetryResponse.ok || !alarmResponse.ok) throw new Error("Operational API unavailable");
     const targetFleet = { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers };
     responses.forEach(([process, payload]) => targetFleet[process].splice(0, targetFleet[process].length, ...payload.assets));
     hydrateChemicalTransactions((await chemicalResponse.json()).transactions);
     backendUtilities = (await utilityResponse.json()).utilities;
+    backendTelemetry = (await telemetryResponse.json()).samples;
+    backendAlarmEvents = (await alarmResponse.json()).alarms;
     backendConnection.status = "connected";
     backendConnection.storage = status.storage;
     backendConnection.dataMode = status.data_mode;
     backendConnection.lastSync = status.server_time;
+    updateNavigationCounts();
   } catch {
     backendConnection.status = "fallback";
   }
@@ -2208,25 +2215,127 @@ function databaseIntegrationPage() {
   `;
 }
 
+function actualText(value) {
+  return String(value ?? "—").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", "\"": "&quot;" }[character]));
+}
+
+function actualLabel(key) {
+  return String(key).replace(/[_\.]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function actualTime(value) {
+  return value ? new Date(value).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
+}
+
+function actualMetric(label, value, unit = "", foot = "Data aktual") {
+  return `<article class="card kpi-card"><div class="kpi-top"><span class="kpi-label">${actualText(label)}</span><span class="quality-pill good">ACTUAL</span></div><div class="kpi-value">${actualText(value)}<small>${actualText(unit)}</small></div><div class="kpi-foot">${actualText(foot)}</div></article>`;
+}
+
+function actualFleet() {
+  return [...jetflows, ...calators, ...dryers, ...kalenders, ...dispensers];
+}
+
+function actualEmpty(label = "Belum ada data aktual") {
+  return `<div class="empty-state"><strong>${actualText(label)}</strong><span>Collector atau proses input database belum mengirim data untuk tampilan ini.</span></div>`;
+}
+
+function actualAssetTable(assets) {
+  if (!assets.length) return actualEmpty("Belum ada asset terdaftar");
+  return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Asset</th><th>Area</th><th>Status</th><th>Batch</th><th>Progress</th><th>Source time</th><th>Quality</th></tr></thead><tbody>${assets.map((asset) => `<tr><td><strong>${actualText(asset.id)}</strong><br><small>${actualText(asset.name)}</small></td><td>${actualText(asset.areaLabel || asset.area)}</td><td>${statusPill(asset.state)}</td><td class="mono">${actualText(asset.batch)}</td><td>${actualText(asset.progress)}%</td><td class="mono">${actualTime(asset.sourceTs)}</td><td><span class="quality-pill ${String(asset.quality).toLowerCase() === "good" ? "good" : "stale"}">${actualText(asset.quality)}</span></td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function actualSensorValues(assets) {
+  const rows = assets.flatMap((asset) => Object.entries(asset.values || {}).filter(([key]) => !["source", "note"].includes(key)).map(([key, value]) => ({ asset, key, value })));
+  if (!rows.length) return actualEmpty("Belum ada nilai sensor pada asset_snapshot.values_json");
+  return `<div class="equipment-grid">${rows.map(({ asset, key, value }) => `<div class="equipment-item"><span>${actualText(asset.id)} · ${actualText(actualLabel(key))}</span><strong>${actualText(value)}</strong></div>`).join("")}</div>`;
+}
+
+function actualOverviewPage() {
+  const assets = actualFleet();
+  const running = assets.filter((asset) => asset.state === "running").length;
+  const stopped = assets.filter((asset) => ["idle", "fault", "offline"].includes(asset.state)).length;
+  const batches = new Set(assets.map((asset) => asset.batch).filter((batch) => batch && batch !== "—")).size;
+  const faults = assets.filter((asset) => asset.state === "fault").length;
+  const utilities = backendUtilities.length
+    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Utility</th><th>Value</th><th>Source time</th><th>Quality</th></tr></thead><tbody>${backendUtilities.map((item) => `<tr><td>${actualText(item.label)}</td><td><strong>${actualText(item.value)} ${actualText(item.unit)}</strong></td><td class="mono">${actualTime(item.source_ts)}</td><td>${actualText(item.quality)}</td></tr>`).join("")}</tbody></table></div>`
+    : actualEmpty("Belum ada snapshot utilitas");
+  return `${pageHead("overview", `<span class="range-badge">ACTUAL DATABASE</span>`)}
+    <section class="kpi-grid">
+      ${actualMetric("Registered machines", assets.length, "asset", "asset + snapshot aktual")}
+      ${actualMetric("Machine running", running, "asset", "machine_state = running")}
+      ${actualMetric("Stop / fault / offline", stopped, "asset", `${faults} fault`) }
+      ${actualMetric("Active batches", batches, "batch", "batch pada snapshot mesin")}
+    </section>
+    ${panel("Machine status", "Status aktual dari asset_snapshot", actualAssetTable(assets))}
+    ${panel("Current utility usage", "Nilai terbaru dari utility_snapshot", utilities)}
+  `;
+}
+
+function actualProcessPage(type) {
+  const assets = { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers }[type] || [];
+  return `${pageHead(type, `<span class="range-badge">POSTGRESQL ACTUAL</span>`)}
+    ${panel(`${processConfig[type].plural} registered`, "Master asset dan status terbaru dari PostgreSQL", actualAssetTable(assets))}
+    ${panel("Live sensor measurements", "Nilai aktual dari asset_snapshot.values_json", actualSensorValues(assets))}
+  `;
+}
+
+function actualUtilitiesPage() {
+  const content = backendUtilities.length
+    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Code</th><th>Meter / Utility</th><th>Value</th><th>Source timestamp</th><th>Quality</th></tr></thead><tbody>${backendUtilities.map((item) => `<tr><td class="mono">${actualText(item.utility_code)}</td><td>${actualText(item.label)}</td><td><strong>${actualText(item.value)} ${actualText(item.unit)}</strong></td><td class="mono">${actualTime(item.source_ts)}</td><td>${actualText(item.quality)}</td></tr>`).join("")}</tbody></table></div>`
+    : actualEmpty("Belum ada meter atau utility snapshot");
+  return `${pageHead("utilities", `<span class="range-badge">ACTUAL DATABASE</span>`)}${panel("Utility snapshot", "Hanya membaca utility_snapshot PostgreSQL", content)}`;
+}
+
+function actualChemicalPage() {
+  const content = chemicalDispensingLogs.length
+    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Request</th><th>Calator</th><th>Chemical</th><th>Target</th><th>Actual</th><th>Mode</th><th>Status</th></tr></thead><tbody>${chemicalDispensingLogs.map((item) => `<tr><td class="mono">${actualText(item.time)}</td><td class="mono">${actualText(item.request)}</td><td>${actualText(item.calator)}</td><td>${actualText(item.code)} · ${actualText(item.variant)}</td><td>${actualText(item.target)}</td><td>${actualText(item.actual)}</td><td>${actualText(item.mode)}</td><td>${actualText(item.status)}</td></tr>`).join("")}</tbody></table></div>`
+    : actualEmpty("Belum ada transaksi chemical aktual");
+  return `${pageHead("chemical", `<span class="range-badge">ACTUAL DATABASE</span>`)}${panel("Chemical dispensing transaction log", "Data dari chemical_transaction", content)}`;
+}
+
+function actualAlarmsPage() {
+  const content = backendAlarmEvents.length
+    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Severity</th><th>Asset</th><th>Batch</th><th>Alarm</th><th>State</th></tr></thead><tbody>${backendAlarmEvents.map((item) => `<tr><td class="mono">${actualTime(item.occurred_at)}</td><td>${actualText(item.severity)}</td><td>${actualText(item.asset_id)}</td><td>${actualText(item.batch_no)}</td><td><strong>${actualText(item.title)}</strong><br><small>${actualText(item.detail)}</small></td><td>${actualText(item.event_state)}</td></tr>`).join("")}</tbody></table></div>`
+    : actualEmpty("Belum ada event alarm aktual");
+  return `${pageHead("alarms", `<span class="range-badge">ACTUAL DATABASE</span>`)}${panel("Alarm & event log", "Data dari alarm_event", content)}`;
+}
+
+function actualTrendsPage() {
+  const content = backendTelemetry.length
+    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Source time</th><th>Asset</th><th>Tag</th><th>Role</th><th>Value</th><th>Quality</th></tr></thead><tbody>${backendTelemetry.map((item) => `<tr><td class="mono">${actualTime(item.source_ts)}</td><td>${actualText(item.asset_id)}</td><td class="mono">${actualText(item.tag_code)}</td><td>${actualText(item.signal_role)}</td><td><strong>${actualText(item.value_number ?? item.value_text ?? "—")} ${actualText(item.engineering_unit || "")}</strong></td><td>${actualText(item.quality)}</td></tr>`).join("")}</tbody></table></div>`
+    : actualEmpty("Belum ada telemetry historian");
+  return `${pageHead("trends", `<span class="range-badge">ACTUAL DATABASE</span>`)}${panel("Recent telemetry", "100 sample terbaru dari telemetry_sample", content)}`;
+}
+
+function actualHealthPage() {
+  const assets = actualFleet();
+  return `${pageHead("health", `<span class="range-badge">ACTUAL DATABASE</span>`)}<section class="grid-equal">${panel("Integration health", "Koneksi aktual", `<div class="definition-list"><div><span>Database</span><strong>${actualText(backendConnection.storage || "—")}</strong></div><div><span>REST API</span><strong>${actualText(backendConnection.status)}</strong></div><div><span>WebSocket</span><strong>${actualText(backendConnection.realtime)}</strong></div><div><span>Last sync</span><strong>${actualTime(backendConnection.lastSync)}</strong></div></div>`)}${panel("Actual record coverage", "Record yang sudah tersedia", `<div class="definition-list"><div><span>Assets</span><strong>${assets.length}</strong></div><div><span>Telemetry samples loaded</span><strong>${backendTelemetry.length}</strong></div><div><span>Alarm events loaded</span><strong>${backendAlarmEvents.length}</strong></div><div><span>Chemical transactions loaded</span><strong>${chemicalDispensingLogs.length}</strong></div></div>`)}</section>`;
+}
+
+function actualDataPage() {
+  if (state.page === "overview") return actualOverviewPage();
+  if (["jetflow", "calator", "dryer", "kalender"].includes(state.page)) return actualProcessPage(state.page);
+  if (state.page === "utilities") return actualUtilitiesPage();
+  if (state.page === "chemical") return actualChemicalPage();
+  if (state.page === "alarms") return actualAlarmsPage();
+  if (state.page === "trends") return actualTrendsPage();
+  if (state.page === "health") return actualHealthPage();
+  return actualOverviewPage();
+}
+
+function updateNavigationCounts() {
+  const fleets = { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers };
+  Object.entries(fleets).forEach(([page, fleet]) => {
+    const count = document.querySelector(`.nav-item[data-page="${page}"] .nav-count`);
+    if (count) count.textContent = fleet.length;
+  });
+  document.getElementById("nav-alarm-count").textContent = backendAlarmEvents.filter((item) => !item.acknowledged_at && item.event_state !== "CLEARED").length;
+}
+
 function renderPage({ preserveScroll = false } = {}) {
   const previousScroll = Number.isFinite(window.scrollY) ? window.scrollY : 0;
   const content = document.getElementById("page-content");
-  const renderers = {
-    overview: overviewPage,
-    jetflow: jetflowPage,
-    calator: calatorPage,
-    dryer: dryerPage,
-    kalender: kalenderPage,
-    utilities: utilitiesPage,
-    chemical: chemicalPage,
-    alarms: alarmsPage,
-    trends: trendsPage,
-    health: healthPage,
-  };
-  const hasActualAssets = [jetflows, calators, dryers, kalenders, dispensers].some((fleet) => fleet.length > 0);
-  content.innerHTML = (backendConnection.status !== "connected" || !hasActualAssets)
-    ? databaseIntegrationPage()
-    : (renderers[state.page] || overviewPage)();
+  content.innerHTML = backendConnection.status !== "connected" ? databaseIntegrationPage() : actualDataPage();
   document.getElementById("breadcrumb-page").textContent = pageMeta[state.page][0];
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === state.page));
   bindPageEvents();

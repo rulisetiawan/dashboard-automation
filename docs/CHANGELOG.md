@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.28 / NestJS PostgreSQL Integration V1.4 — 18 Agustus 2026
+
+**Status:** Dashboard actual-data only
+
+### Diubah
+
+- Renderer seluruh halaman dashboard memakai endpoint PostgreSQL aktual.
+- Nilai yang belum tersedia ditampilkan sebagai `No data` atau `—`, tidak lagi menggunakan generator prototype.
+- Endpoint asset mengembalikan `asset_snapshot.values_json`.
+
+### Ditambahkan
+
+- Endpoint historian terbaru dan alarm event aktual.
+- Dataset terisolasi `TEST_SAMPLE`: asset, batch, process step, tag/historian, chemical, utilitas, dan alarm.
+
+---
+
 ## NestJS PostgreSQL Integration V1.3 — 18 Agustus 2026
 
 **Status:** Kanal real-time Socket.IO aktif
