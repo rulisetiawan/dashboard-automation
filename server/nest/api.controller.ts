@@ -5,6 +5,18 @@ const validProcesses = new Set(["jetflow", "calator", "dryer", "kalender", "chem
 const assetProjection = "SELECT a.*, s.machine_state, s.batch_no, s.progress_percent, s.connected, s.source_ts, s.quality, s.values_json FROM asset a LEFT JOIN asset_snapshot s ON s.asset_id = a.asset_id";
 const equipmentProjection = "SELECT e.*, s.equipment_state, s.current_r_a, s.current_s_a, s.current_t_a, s.voltage_rs_v, s.voltage_st_v, s.voltage_tr_v, s.active_power_kw, s.drive_frequency_hz, s.runtime_hours, s.energy_kwh, s.maintenance_due_at, s.source_ts, s.quality, s.values_json FROM equipment e LEFT JOIN equipment_snapshot s ON s.equipment_id = e.equipment_id";
 const actualDataMode = "ACTUAL_DATABASE";
+const aggregateTables: Record<string, string> = {
+  "1m": "telemetry_aggregate_1m",
+  "15m": "telemetry_aggregate_15m",
+  daily: "telemetry_aggregate_daily",
+};
+
+function queryRange(from?: string, to?: string, defaultHours = 24) {
+  const end = to ? new Date(to) : new Date();
+  const start = from ? new Date(from) : new Date(end.getTime() - defaultHours * 60 * 60_000);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) throw new BadRequestException("from dan to harus berupa ISO date yang valid.");
+  return [start.toISOString(), end.toISOString()];
+}
 
 function assetRow(row: Record<string, any>) {
   return {
@@ -104,6 +116,32 @@ export class ApiController {
       LIMIT $1
     `, [limit]);
     return { data_mode: actualDataMode, samples: result.rows };
+  }
+
+  @Get("telemetry/aggregate")
+  async telemetryAggregate(@Query("asset_id") assetId?: string, @Query("tag_code") tagCode?: string, @Query("granularity") granularity = "15m", @Query("from") from?: string, @Query("to") to?: string) {
+    if (!assetId || !tagCode) throw new BadRequestException("asset_id dan tag_code wajib diisi.");
+    const table = aggregateTables[granularity];
+    if (!table) throw new BadRequestException("granularity harus 1m, 15m, atau daily.");
+    const [rangeFrom, rangeTo] = queryRange(from, to, granularity === "daily" ? 31 * 24 : 24);
+    const result = await this.database.query(`SELECT bucket_start, sample_count, good_sample_count, bad_sample_count, min_value, max_value, avg_value, first_value, last_value, delta_value, last_source_ts, refreshed_at FROM ${table} WHERE asset_id = $1 AND tag_code = $2 AND bucket_start >= $3 AND bucket_start <= $4 ORDER BY bucket_start`, [assetId, tagCode, rangeFrom, rangeTo]);
+    return { data_mode: actualDataMode, granularity, from: rangeFrom, to: rangeTo, points: result.rows };
+  }
+
+  @Get("utilities/aggregate")
+  async utilitiesAggregate(@Query("utility_code") utilityCode?: string, @Query("from") from?: string, @Query("to") to?: string) {
+    if (!utilityCode) throw new BadRequestException("utility_code wajib diisi.");
+    const [rangeFrom, rangeTo] = queryRange(from, to, 31 * 24);
+    const result = await this.database.query("SELECT * FROM utility_aggregate_daily WHERE utility_code = $1 AND bucket_start >= $2 AND bucket_start <= $3 ORDER BY bucket_start", [utilityCode, rangeFrom, rangeTo]);
+    return { data_mode: actualDataMode, from: rangeFrom, to: rangeTo, points: result.rows };
+  }
+
+  @Get("machine-states/aggregate")
+  async machineStatesAggregate(@Query("asset_id") assetId?: string, @Query("from") from?: string, @Query("to") to?: string) {
+    if (!assetId) throw new BadRequestException("asset_id wajib diisi.");
+    const [rangeFrom, rangeTo] = queryRange(from, to, 31 * 24);
+    const result = await this.database.query("SELECT * FROM machine_state_aggregate_daily WHERE asset_id = $1 AND bucket_start >= $2 AND bucket_start <= $3 ORDER BY bucket_start, machine_state", [assetId, rangeFrom, rangeTo]);
+    return { data_mode: actualDataMode, from: rangeFrom, to: rangeTo, points: result.rows };
   }
 
   @Get("equipment")

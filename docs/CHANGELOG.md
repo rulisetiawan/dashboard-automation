@@ -4,6 +4,25 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## NestJS PostgreSQL Integration V1.6 — 18 Agustus 2026
+
+**Status:** Historian query-ready
+
+### Ditambahkan
+
+- Raw telemetry immutable serta rollup 1 menit, 15 menit, dan harian pada PostgreSQL native.
+- Aggregate counter utility harian dan aggregate durasi state mesin harian.
+- Refresh historian rolling 48 jam saat startup dan setiap lima menit.
+- Endpoint historical aggregate untuk sensor, utility, dan state mesin.
+- Contoh totalizer utility dan state event berpenanda `TEST_SAMPLE`.
+
+### Keputusan
+
+- Query 1–24 jam memakai bucket 1 menit; multi-hari memakai 15 menit; range panjang memakai daily aggregate.
+- Dashboard tidak boleh memuat seluruh raw telemetry untuk trend bulanan.
+
+---
+
 ## Tag Naming & Governance V1.0 — 18 Agustus 2026
 
 **Status:** Standar baseline Tag Registry

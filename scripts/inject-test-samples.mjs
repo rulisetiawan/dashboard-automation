@@ -70,6 +70,15 @@ async function run() {
     for (const [code, label, value, unit] of [["TEST_ELECTRICAL_DEMAND", "Electrical demand · TEST SAMPLE", 14.8, "kW"], ["TEST_WATER_CONSUMPTION", "Water consumption · TEST SAMPLE", 12.4, "m³"], ["TEST_STEAM_CONSUMPTION", "Steam consumption · TEST SAMPLE", 0.42, "t"], ["TEST_THERMAL_OIL", "Thermal oil supply · TEST SAMPLE", 218.1, "°C"]]) {
       await pool.query("INSERT INTO utility_snapshot (utility_code,label,value,unit,quality,source_ts,updated_at) VALUES ($1,$2,$3,$4,'TEST_SAMPLE',$5,$5) ON CONFLICT (utility_code) DO UPDATE SET label=EXCLUDED.label,value=EXCLUDED.value,unit=EXCLUDED.unit,quality=EXCLUDED.quality,source_ts=EXCLUDED.source_ts,updated_at=EXCLUDED.updated_at", [code, label, value, unit, iso]);
     }
+    for (const [sampleIndex, [code, value, unit]] of [["TEST_ELECTRICAL_ENERGY", 12450.2, "kWh"], ["TEST_WATER_TOTAL", 8210.6, "m³"], ["TEST_STEAM_TOTAL", 418.3, "t"]].entries()) {
+      for (let offset = 2; offset >= 0; offset--) {
+        await pool.query("INSERT INTO utility_sample (utility_code,source_ts,value_number,engineering_unit,quality,gateway_id,message_id,ingested_at) VALUES ($1,$2,$3,$4,'GOOD','LOCAL-TEST',$5,$6)", [code, new Date(now.getTime() - offset * 60 * 60_000).toISOString(), value - offset * (sampleIndex + 1) * 0.8, unit, randomUUID(), iso]);
+      }
+    }
+    for (const [assetIndex, asset] of assets.entries()) {
+      const startedAt = new Date(now.getTime() - (assetIndex + 1) * 45 * 60_000).toISOString();
+      await pool.query("INSERT INTO machine_state_event (state_event_id,asset_id,machine_state,started_at,ended_at,reason_code,source_ts,quality,created_at) VALUES ($1,$2,'running',$3,$4,'TEST_SAMPLE',$5,'GOOD',$5) ON CONFLICT (state_event_id) DO UPDATE SET started_at=EXCLUDED.started_at,ended_at=EXCLUDED.ended_at,source_ts=EXCLUDED.source_ts", [uuid(6001 + assetIndex), asset.id, startedAt, iso, iso]);
+    }
     await pool.query("COMMIT");
     console.log(JSON.stringify({ source: "TEST_SAMPLE", assets: assets.length, equipment: assets.reduce((total, asset) => total + asset.motors.length, 0) }));
   } catch (error) {
