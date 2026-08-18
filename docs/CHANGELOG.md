@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## NestJS PostgreSQL Integration V1.3 — 18 Agustus 2026
+
+**Status:** Kanal real-time Socket.IO aktif
+
+### Ditambahkan
+
+- Gateway Socket.IO namespace `/realtime` pada NestJS.
+- Event `dashboard:refresh` untuk perubahan asset, snapshot, utility, chemical, alarm, dan batch process.
+- Dashboard otomatis memuat ulang data API aktual tanpa browser refresh.
+
+### Validasi
+
+- Update snapshot `CL-DPN-01` berhasil diterima oleh Socket.IO lokal.
+
+---
+
 ## NestJS PostgreSQL Integration V1.2 — 18 Agustus 2026
 
 **Status:** Struktur tabel operational MES

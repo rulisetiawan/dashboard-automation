@@ -92,9 +92,12 @@ const backendConnection = {
   dataMode: "ACTUAL_DATABASE",
   storage: null,
   lastSync: null,
+  realtime: "connecting",
 };
 
 let backendUtilities = [];
+let realtimeSocket = null;
+let realtimeRefreshTimer = null;
 
 const pageMeta = {
   overview: ["Plant Overview", "Live Operations", "Seluruh proses, mesin, utilitas, dan exception dalam satu tampilan."],
@@ -273,11 +276,30 @@ function updateBackendIndicator() {
   if (!title || !detail) return;
   if (backendConnection.status === "connected") {
     title.textContent = "PostgreSQL lokal terhubung";
-    detail.textContent = `${backendConnection.storage || "POSTGRESQL"} · data aktual`;
+    const realtimeLabel = backendConnection.realtime === "connected" ? "WebSocket live" : "WebSocket reconnecting";
+    detail.textContent = `${backendConnection.storage || "POSTGRESQL"} · data aktual · ${realtimeLabel}`;
   } else if (backendConnection.status === "fallback") {
     title.textContent = "PostgreSQL lokal tidak tersedia";
     detail.textContent = "Tidak ada fallback data simulasi";
   }
+}
+
+function connectRealtimeChannel() {
+  if (typeof window.io !== "function" || realtimeSocket) return;
+  realtimeSocket = window.io("/realtime", { transports: ["websocket", "polling"] });
+  realtimeSocket.on("connect", () => {
+    backendConnection.realtime = "connected";
+    realtimeSocket.emit("dashboard:subscribe");
+    updateBackendIndicator();
+  });
+  realtimeSocket.on("disconnect", () => {
+    backendConnection.realtime = "reconnecting";
+    updateBackendIndicator();
+  });
+  realtimeSocket.on("dashboard:refresh", () => {
+    if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
+    realtimeRefreshTimer = setTimeout(() => connectNonJetflowBackend(), 180);
+  });
 }
 
 function utilityValue(code, fallback) {
@@ -3382,5 +3404,6 @@ updateAlarmCounts();
 updateClock();
 renderPage();
 connectNonJetflowBackend();
+connectRealtimeChannel();
 window.setInterval(updateClock, 1000);
 window.setInterval(updateLiveNumbers, 1800);
