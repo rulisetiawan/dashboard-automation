@@ -993,7 +993,7 @@ select:focus-visible {
 
 .jetflow-sequence-table {
   width: 100%;
-  min-width: 680px;
+  min-width: 920px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -1027,6 +1027,13 @@ select:focus-visible {
 .jetflow-sequence-table td:nth-child(3),
 .jetflow-sequence-table th:nth-child(4),
 .jetflow-sequence-table td:nth-child(4) {
+  width: 132px;
+}
+
+.jetflow-sequence-table th:nth-child(5),
+.jetflow-sequence-table td:nth-child(5),
+.jetflow-sequence-table th:nth-child(6),
+.jetflow-sequence-table td:nth-child(6) {
   width: 112px;
 }
 
@@ -1061,6 +1068,32 @@ select:focus-visible {
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.sequence-measurement {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.sequence-measurement small {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: 0.42rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sequence-measurement strong {
+  color: var(--ink-2);
+  font-family: var(--font-data);
+  font-size: 0.52rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sequence-measurement.tracking strong {
+  color: var(--primary);
 }
 
 .sequence-time.in-progress {

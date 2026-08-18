@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.47 / Jetflow Concept V1.9 / Dashboard Concept V1.26 — 18 Agustus 2026
+
+**Status:** SV/PV pada sequence Jetflow ditambahkan
+
+### Ditambahkan
+
+- Kolom SV dan PV pada setiap langkah Jetflow Process Sequence.
+- Label parameter dan satuan pada nilai SV/PV.
+- PV pending tetap kosong sampai langkah proses dimulai; PV step aktif diberi aksen live.
+
+### Batasan
+
+- Nilai recipe serta actual masih simulated sampai tag PLC dan historian batch diintegrasikan.
+
+---
+
 ## Frontend Dashboard V1.46 / Jetflow Concept V1.8 / Dashboard Concept V1.25 — 18 Agustus 2026
 
 **Status:** Batch context pada kartu mesin ditambahkan

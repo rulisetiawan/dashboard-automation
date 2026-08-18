@@ -150,6 +150,21 @@ state.jetflowProgram.enabled = [...jetflowProcessSteps];
 // nilai ini akan diganti dengan timestamp aktual setiap process step pada batch.
 const jetflowProcessDurations = [12, 8, 16, 7, 24, 9, 9, 14, 14, 18, 12, 11];
 
+const jetflowSequenceMeasurements = {
+  "Filling": { parameter: "Main tank level", sv: "72.0 %", pv: "71.8 %" },
+  "Drain": { parameter: "Main tank level", sv: "12.0 %", pv: "12.6 %" },
+  "Rinse Cooling": { parameter: "Main tank temp", sv: "40.0 °C", pv: "40.8 °C" },
+  "Check PH": { parameter: "pH", sv: "6.80", pv: "6.86" },
+  "Temperature Control": { parameter: "Main tank temp", sv: "93.0 °C", pv: "92.6 °C" },
+  "Inject DT 1": { parameter: "DT 1 weight", sv: "24.0 kg", pv: "24.0 kg" },
+  "Inject DT 2": { parameter: "DT 2 weight", sv: "18.0 kg", pv: "17.8 kg" },
+  "Dosing DT 1": { parameter: "DT 1 flow", sv: "9.0 L/min", pv: "8.9 L/min" },
+  "Dosing DT 2": { parameter: "DT 2 flow", sv: "7.5 L/min", pv: "7.4 L/min" },
+  "Load": { parameter: "Fabric load", sv: "320.0 kg", pv: "318.6 kg" },
+  "Unload": { parameter: "Fabric load", sv: "0.0 kg", pv: "0.0 kg" },
+  "ST To MT Filling": { parameter: "Dosing tank 1 level", sv: "65.0 %", pv: "64.8 %" },
+};
+
 function jetflowProgramSchedule() {
   const total = jetflowProcessDurations.reduce((sum, duration) => sum + duration, 0);
   let cursor = 0;
@@ -1171,11 +1186,13 @@ function jetflowDetailPage() {
       ${kpi("Total Water Consumption", totalWaterConsumption, "m³", "WA", "<strong>Current batch</strong>· accumulated total")}
       ${kpi("Steam Header", liveValue(7.8, "", .07, 1), "bar", "ST", "<strong class='danger'>Low baseline</strong>· 8.1 bar", "warning")}
     </section>
-    ${panel("Jetflow Process Sequence", `Current process · ${machine.step} · step ${processPosition} of ${jetflowProcessSteps.length}`, `<div class="jetflow-sequence-table-wrap" tabindex="0" aria-label="Jetflow process sequence ${machine.id}"><table class="jetflow-sequence-table"><thead><tr><th scope="col">Step</th><th scope="col">Process</th><th scope="col">Start Time</th><th scope="col">End Time</th><th scope="col">Status</th></tr></thead><tbody>${jetflowProcessSteps.map((process, index) => {
+    ${panel("Jetflow Process Sequence", `Current process · ${machine.step} · step ${processPosition} of ${jetflowProcessSteps.length}`, `<div class="jetflow-sequence-table-wrap" tabindex="0" aria-label="Jetflow process sequence ${machine.id}"><table class="jetflow-sequence-table"><thead><tr><th scope="col">Step</th><th scope="col">Process</th><th scope="col">SV</th><th scope="col">PV</th><th scope="col">Start Time</th><th scope="col">End Time</th><th scope="col">Status</th></tr></thead><tbody>${jetflowProcessSteps.map((process, index) => {
       const processState = index === processPosition - 1 ? "active" : index < processPosition - 1 ? "completed" : "upcoming";
       const processLabel = processState === "active" ? "Current" : processState === "completed" ? "Complete" : "Pending";
       const timeline = processTimeline[index];
-      return `<tr class="${processState}"><td class="sequence-step-number">${String(index + 1).padStart(2, "0")}</td><td><strong>${process}</strong></td><td class="sequence-time">${timeline.start}</td><td class="sequence-time ${processState === "active" ? "in-progress" : ""}">${timeline.end}</td><td><span class="sequence-state ${processState}">${processLabel}</span></td></tr>`;
+      const measurement = jetflowSequenceMeasurements[process];
+      const actual = processState === "upcoming" ? "—" : measurement.pv;
+      return `<tr class="${processState}"><td class="sequence-step-number">${String(index + 1).padStart(2, "0")}</td><td><strong>${process}</strong></td><td><span class="sequence-measurement"><small>${measurement.parameter}</small><strong>${measurement.sv}</strong></span></td><td><span class="sequence-measurement ${processState === "active" ? "tracking" : ""}"><small>${measurement.parameter}</small><strong>${actual}</strong></span></td><td class="sequence-time">${timeline.start}</td><td class="sequence-time ${processState === "active" ? "in-progress" : ""}">${timeline.end}</td><td><span class="sequence-state ${processState}">${processLabel}</span></td></tr>`;
     }).join("")}</tbody></table></div>`, `<span class="data-pill neutral">${jetflowProcessSteps.length} STEPS</span>`)}
     <section class="grid-2 abnormal-log-layout">
       ${panel("Tank & Dosing", "Live tank condition and data quality", `
