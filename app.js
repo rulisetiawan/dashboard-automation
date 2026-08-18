@@ -82,6 +82,9 @@ const state = {
     kalender: { machineId: null, batch: null },
     chemical: { machineId: null, batch: null },
   },
+  alarms: {
+    area: "all",
+  },
 };
 
 const backendConnection = {
@@ -253,11 +256,22 @@ const kalenders = createFleet("kalender");
 const dispensers = createFleet("chemical");
 
 const alarms = [
-  { id: 1, severity: "critical", title: "Tangle limit aktif", detail: "Limit tangle Winch 3 terdeteksi selama 18 detik.", source: "JF-03 · Winch 3", time: "10:38:42", ack: false },
-  { id: 2, severity: "critical", title: "Chamber 05 under-temperature", detail: "Temperatur aktual 134.2°C, target 148.0°C.", source: "DR-03 · Chamber 05", time: "10:36:18", ack: false },
-  { id: 3, severity: "warning", title: "Overfeed Out imbalance", detail: "Spread channel atas-bawah melewati tolerance 4.2%.", source: "CL-B02 · Overfeed Out", time: "10:31:09", ack: false },
-  { id: 4, severity: "warning", title: "Steam header pressure low", detail: "Tekanan header berada di bawah baseline heating.", source: "Utility · Steam Header A", time: "10:24:51", ack: false },
-  { id: 5, severity: "warning", title: "Fabric width approaching limit", detail: "Lebar aktual 179.1 cm, target 181.0 cm.", source: "KL-03 · Width Sensor", time: "10:17:33", ack: true },
+  { id: 1, severity: "critical", title: "Tangle limit aktif", detail: "Limit tangle Winch 3 terdeteksi selama 18 detik.", source: "JF-LB-08 · Winch 3", area: "Jetflow · Lane B", time: "10:38:42", ack: false },
+  { id: 2, severity: "critical", title: "Chamber 05 under-temperature", detail: "Temperatur aktual 134.2°C, target 148.0°C.", source: "DR-BLK-02 · Chamber 05", area: "Dryer · Belakang", time: "10:36:18", ack: false },
+  { id: 3, severity: "warning", title: "Overfeed Out imbalance", detail: "Spread channel atas-bawah melewati tolerance 4.2%.", source: "CL-BLK-02 · Overfeed Out", area: "Calator · Belakang", time: "10:31:09", ack: false },
+  { id: 4, severity: "warning", title: "Steam header pressure low", detail: "Tekanan header berada di bawah baseline heating.", source: "Utility · Steam Header A", area: "Utilities", time: "10:24:51", ack: false },
+  { id: 5, severity: "warning", title: "Fabric width approaching limit", detail: "Lebar aktual 179.1 cm, target 181.0 cm.", source: "KL-TMR-05 · Width Sensor", area: "Kalender · Timur", time: "10:17:33", ack: true },
+];
+
+const downtimeRecords = [
+  { area: "Jetflow · Lane B", process: "jetflow", machineId: "JF-LB-08", equipment: "Main Pump", reason: "Pump overload & tangle recovery", events: 4, minutes: 126, unplanned: 116, last: "10:38" },
+  { area: "Calator · Belakang", process: "calator", machineId: "CL-BLK-02", equipment: "Overfeed Out", reason: "Overfeed imbalance", events: 5, minutes: 94, unplanned: 88, last: "10:31" },
+  { area: "Dryer · Belakang", process: "dryer", machineId: "DR-BLK-02", equipment: "Chamber 05", reason: "Under-temperature", events: 3, minutes: 82, unplanned: 76, last: "10:36" },
+  { area: "Kalender · Timur", process: "kalender", machineId: "KL-TMR-05", equipment: "Upper Felt", reason: "Loadcell deviation", events: 3, minutes: 61, unplanned: 55, last: "10:17" },
+  { area: "Jetflow · Lane D", process: "jetflow", machineId: "JF-LD-11", equipment: "Winch 2", reason: "Drive overcurrent", events: 3, minutes: 54, unplanned: 49, last: "09:54" },
+  { area: "Calator · Timur", process: "calator", machineId: "CL-TMR-04", equipment: "Dancing Roller", reason: "Fabric tension recovery", events: 4, minutes: 47, unplanned: 42, last: "09:12" },
+  { area: "Utilities", process: "utilities", machineId: "STEAM-HDR-A", equipment: "Steam Header A", reason: "Low steam pressure", events: 2, minutes: 39, unplanned: 36, last: "10:24" },
+  { area: "Kalender · Belakang", process: "kalender", machineId: "KL-BLK-03", equipment: "Lower Felt", reason: "Felt tracking correction", events: 2, minutes: 32, unplanned: 24, last: "08:48" },
 ];
 
 const connectors = [
@@ -2024,18 +2038,26 @@ function chemicalDetailPage() {
 }
 
 function alarmsPage() {
+  const areas = alarmDowntimeAreas();
+  const totalDowntime = downtimeRecords.reduce((sum, record) => sum + record.unplanned, 0);
+  const worstArea = areas[0];
+  const scopeLabel = state.alarms.area === "all" ? "All Areas" : state.alarms.area;
   return `
     ${pageHead("alarms", `<button class="button" id="ack-all">Acknowledge visible</button><button class="button primary" data-page-target="trends">Open event timeline</button>`)}
     <section class="kpi-grid">
       ${kpi("Critical Active", "2", "alarms", "CR", "<strong class='danger'>Oldest 08:14</strong>", "danger")}
       ${kpi("Warning Active", "3", "alarms", "WR", "<strong>2 unacknowledged</strong>", "warning")}
-      ${kpi("Avg Response", "01:42", "min", "RT", "<strong>↓ 18 sec</strong>vs previous shift", "success")}
-      ${kpi("Communication", "1", "event", "CM", "<strong>Utility GW degraded</strong>", "warning")}
+      ${kpi("Unplanned Downtime", formatDowntime(totalDowntime), "", "DT", `<strong>${downtimeRecords.length} machines / assets</strong>· selected range`, "warning")}
+      ${kpi("Highest Impact Area", worstArea.label, "", "HI", `<strong>${formatDowntime(worstArea.minutes)}</strong>· ${worstArea.events} events`, "danger")}
     </section>
     <section class="card filter-bar">
       <input class="search-control" id="alarm-search" placeholder="Cari alarm, machine, atau equipment..." />
       <select class="select-control" id="alarm-severity"><option value="all">All severity</option><option value="critical">Critical</option><option value="warning">Warning</option></select>
-      <select class="select-control"><option>All areas</option><option>Dyeing</option><option>Finishing</option><option>Utilities</option></select>
+      <select class="select-control" id="alarm-area-filter"><option value="all">All areas</option>${areas.map((area) => `<option value="${area.label}" ${state.alarms.area === area.label ? "selected" : ""}>${area.label}</option>`).join("")}</select>
+    </section>
+    <section class="management-analysis-grid alarm-impact-grid">
+      ${alarmDowntimeAreaPanel(areas)}
+      ${alarmDowntimeMachinePanel(scopeLabel)}
     </section>
     <section class="grid-2">
       ${panel("Active Alarms", "Live alarm list · sorted by severity", `<div id="alarm-page-list" class="alarm-list">${alarms.map(alarmRow).join("")}</div>`)}
@@ -2049,6 +2071,41 @@ function alarmsPage() {
     </section>
     ${panel("Alarm Frequency · Current Shift", "Recurring alarm groups dan total duration", `<div class="chart-container compact"><canvas id="alarm-chart" class="chart-canvas"></canvas></div>`)}
   `;
+}
+
+function formatDowntime(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const remaining = Math.round(minutes % 60);
+  return hours ? `${hours}h ${String(remaining).padStart(2, "0")}m` : `${remaining}m`;
+}
+
+function alarmDowntimeAreas() {
+  const areaMap = new Map();
+  downtimeRecords.forEach((record) => {
+    const current = areaMap.get(record.area) || { label: record.area, minutes: 0, events: 0, machines: 0 };
+    current.minutes += record.unplanned;
+    current.events += record.events;
+    current.machines += 1;
+    areaMap.set(record.area, current);
+  });
+  return [...areaMap.values()].sort((a, b) => b.minutes - a.minutes);
+}
+
+function alarmDowntimeAreaPanel(areas) {
+  const max = Math.max(...areas.map((area) => area.minutes));
+  return panel("Downtime by Area", "Klik area untuk membandingkan mesin penyumbang downtime terbesar.", `<div class="downtime-area-list">${areas.map((area, index) => `
+    <button class="downtime-area-row ${state.alarms.area === area.label ? "active" : ""}" data-alarm-downtime-area="${area.label}">
+      <span class="downtime-area-rank">${index + 1}</span>
+      <span class="downtime-area-copy"><strong>${area.label}</strong><small>${area.machines} machine / asset · ${area.events} alarm events</small><i><b style="width:${(area.minutes / max) * 100}%"></b></i></span>
+      <span class="downtime-area-value"><strong>${formatDowntime(area.minutes)}</strong><small>unplanned</small></span>
+    </button>`).join("")}</div>`, state.alarms.area !== "all" ? `<button class="button ghost small" data-alarm-downtime-area="all">Reset area</button>` : "");
+}
+
+function alarmDowntimeMachinePanel(scopeLabel) {
+  const rows = downtimeRecords
+    .filter((record) => state.alarms.area === "all" || record.area === state.alarms.area)
+    .sort((a, b) => b.unplanned - a.unplanned);
+  return panel(`Top Downtime Machines · ${scopeLabel}`, "Urutan berdasarkan unplanned downtime dalam selected range. Klik mesin untuk investigasi.", `<div class="table-wrap downtime-machine-table"><table class="data-table"><thead><tr><th>Rank</th><th>Machine / Equipment</th><th>Issue</th><th>Events</th><th>Unplanned</th><th>Last Event</th></tr></thead><tbody>${rows.map((record, index) => `<tr class="${record.process !== "utilities" ? "downtime-machine-row" : ""}" ${record.process !== "utilities" ? `data-alarm-machine="${record.process}|${record.machineId}" tabindex="0"` : ""}><td><span class="ranking-number">${index + 1}</span></td><td><strong>${record.machineId}</strong><small>${record.equipment} · ${record.area}</small></td><td>${record.reason}</td><td class="mono">${record.events}</td><td class="mono"><strong>${formatDowntime(record.unplanned)}</strong></td><td class="mono">${record.last}</td></tr>`).join("")}</tbody></table></div>`);
 }
 
 function trendsPage() {
@@ -2466,8 +2523,30 @@ function bindPageEvents() {
   if (ackAll) ackAll.addEventListener("click", acknowledgeAll);
   const alarmSearch = document.getElementById("alarm-search");
   const alarmSeverity = document.getElementById("alarm-severity");
+  const alarmArea = document.getElementById("alarm-area-filter");
   if (alarmSearch) alarmSearch.addEventListener("input", filterAlarms);
   if (alarmSeverity) alarmSeverity.addEventListener("change", filterAlarms);
+  if (alarmArea) alarmArea.addEventListener("change", (event) => {
+    state.alarms.area = event.target.value;
+    renderPage({ preserveScroll: true });
+  });
+  document.querySelectorAll("[data-alarm-downtime-area]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.alarms.area = button.dataset.alarmDowntimeArea;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-alarm-machine]").forEach((row) => {
+    const openMachine = () => {
+      const [type, machineId] = row.dataset.alarmMachine.split("|");
+      state.selected[type] = machineId;
+      navigate(type);
+    };
+    row.addEventListener("click", openMachine);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openMachine(); }
+    });
+  });
   const fleetSearch = document.getElementById("fleet-search");
   const fleetState = document.getElementById("fleet-state-filter");
   if (fleetSearch) fleetSearch.addEventListener("input", filterFleetMachines);
@@ -2571,12 +2650,14 @@ function acknowledgeAll() {
 function filterAlarms() {
   const query = (document.getElementById("alarm-search")?.value || "").toLowerCase();
   const severity = document.getElementById("alarm-severity")?.value || "all";
+  const area = state.alarms.area;
   const list = document.getElementById("alarm-page-list");
   if (!list) return;
   const filtered = alarms.filter((a) => {
     const matchQuery = [a.title, a.detail, a.source].join(" ").toLowerCase().includes(query);
     const matchSeverity = severity === "all" || a.severity === severity;
-    return matchQuery && matchSeverity;
+    const matchArea = area === "all" || a.area === area;
+    return matchQuery && matchSeverity && matchArea;
   });
   list.innerHTML = filtered.length ? filtered.map(alarmRow).join("") : `<div class="empty-state"><strong>Tidak ada alarm</strong><span>Ubah filter atau kata pencarian.</span></div>`;
   list.querySelectorAll("[data-ack-id]").forEach((button) => button.addEventListener("click", () => acknowledgeAlarm(Number(button.dataset.ackId))));

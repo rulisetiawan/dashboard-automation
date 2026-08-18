@@ -5670,6 +5670,110 @@ select:focus-visible {
   text-align: right;
 }
 
+.alarm-impact-grid {
+  margin-top: 0;
+}
+
+.downtime-area-list {
+  display: grid;
+  gap: 7px;
+}
+
+.downtime-area-row {
+  display: grid;
+  grid-template-columns: 27px minmax(0, 1fr) 78px;
+  align-items: center;
+  width: 100%;
+  gap: 9px;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.downtime-area-row:hover,
+.downtime-area-row.active {
+  border-color: rgba(7, 142, 170, 0.42);
+  background: #f4fafb;
+}
+
+.downtime-area-rank {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-family: var(--font-data);
+  font-size: 0.5rem;
+}
+
+.downtime-area-copy,
+.downtime-area-value {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.downtime-area-copy strong,
+.downtime-area-value strong {
+  font-size: 0.55rem;
+}
+
+.downtime-area-copy small,
+.downtime-area-value small {
+  color: var(--ink-3);
+  font-size: 0.45rem;
+}
+
+.downtime-area-copy i {
+  display: block;
+  height: 3px;
+  margin-top: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+
+.downtime-area-copy b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--danger);
+}
+
+.downtime-area-value {
+  text-align: right;
+}
+
+.downtime-area-value strong,
+.downtime-machine-table .mono {
+  font-family: var(--font-data);
+}
+
+.downtime-machine-row {
+  cursor: pointer;
+}
+
+.downtime-machine-row:hover,
+.downtime-machine-row:focus-visible {
+  background: #f5fbfc;
+  outline: 1px solid rgba(7, 142, 170, 0.34);
+  outline-offset: -1px;
+}
+
+.downtime-machine-table td small {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-size: 0.45rem;
+}
+
 .management-note {
   display: grid;
   align-content: center;

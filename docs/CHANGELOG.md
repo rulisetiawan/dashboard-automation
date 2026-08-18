@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Frontend Dashboard V1.45 / Dashboard Concept V1.24 — 18 Agustus 2026
+
+**Status:** Alarm downtime analysis diperjelas
+
+### Ditambahkan
+
+- Ranking unplanned downtime per area/lane pada halaman Alarm & Events.
+- Filter area yang memperbarui ranking downtime mesin dan active alarm.
+- Tabel Top Downtime Machines berisi equipment, issue, event count, downtime, serta event terakhir.
+- Drill-down dari ranking mesin ke detail mesin terkait.
+
+### Batasan
+
+- Data downtime dan event masih simulated hingga historian event dan reason code aktual tersedia.
+
+---
+
 ## Frontend Dashboard V1.44 / Calator Concept V1.3 / Dashboard Concept V1.23 — 18 Agustus 2026
 
 **Status:** Detail Calator disederhanakan
