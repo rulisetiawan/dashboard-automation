@@ -4,6 +4,19 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Section & Parameter Dictionary V1.0 — 19 Agustus 2026
+
+**Status:** Standar baseline semantic tag
+
+### Ditambahkan
+
+- Struktur canonical `SMM.{ASSET_ID}.{SECTION}.{PARAMETER}`.
+- Kamus section Jetflow, Calator, Dryer, Kalender, Chemical Dispensing, Utilities, serta motor 3-phase.
+- Kamus parameter global dan suffix `PV`, `SV`, `FB`, `CMD`, `TOTAL`, `STATUS`, `SPREAD`, dan `ALARM`.
+- Aturan ownership dan perubahan semantic tag.
+
+---
+
 ## NestJS PostgreSQL Integration V1.7 — 18 Agustus 2026
 
 **Status:** Motor historian dan Jetflow program versioned
