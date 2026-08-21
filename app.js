@@ -361,7 +361,7 @@ function chemicalAnalyticsQuery() {
   return { key: params.toString(), url: `/api/v1/chemical/analytics?${params.toString()}` };
 }
 
-function requestChemicalAnalytics() {
+function requestChemicalAnalytics({ preserveAnchor = null } = {}) {
   const query = chemicalAnalyticsQuery();
   if (chemicalAnalytics.key === query.key && (chemicalAnalytics.loading || chemicalAnalytics.dataKey === query.key || chemicalAnalytics.error)) return;
   const requestId = chemicalAnalytics.requestId + 1;
@@ -379,13 +379,13 @@ function requestChemicalAnalytics() {
       chemicalAnalytics.data = payload;
       chemicalAnalytics.dataKey = query.key;
       chemicalAnalytics.loading = false;
-      if (state.page === "chemical") renderPage({ preserveScroll: true });
+      if (state.page === "chemical") renderPage({ preserveScroll: true, preserveAnchor });
     })
     .catch((error) => {
       if (chemicalAnalytics.requestId !== requestId) return;
       chemicalAnalytics.loading = false;
       chemicalAnalytics.error = error instanceof Error ? error.message : "Chemical analytics unavailable";
-      if (state.page === "chemical") renderPage({ preserveScroll: true });
+      if (state.page === "chemical") renderPage({ preserveScroll: true, preserveAnchor });
     });
 }
 
@@ -3543,8 +3543,9 @@ function updateNavigationCounts() {
   document.getElementById("nav-alarm-count").textContent = backendAlarmEvents.filter((item) => !item.acknowledged_at && item.event_state !== "CLEARED").length;
 }
 
-function renderPage({ preserveScroll = false } = {}) {
+function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
   const previousScroll = Number.isFinite(window.scrollY) ? window.scrollY : 0;
+  const anchorViewportTop = preserveAnchor ? document.querySelector(preserveAnchor)?.getBoundingClientRect().top : null;
   const content = document.getElementById("page-content");
   const hasActualAssets = actualFleet().length > 0;
   content.innerHTML = (backendConnection.status !== "connected" || !hasActualAssets)
@@ -3555,8 +3556,23 @@ function renderPage({ preserveScroll = false } = {}) {
   bindPageEvents();
   requestAnimationFrame(() => {
     initPageCharts();
+    const nextAnchor = preserveAnchor ? document.querySelector(preserveAnchor) : null;
+    if (nextAnchor && Number.isFinite(anchorViewportTop)) {
+      const anchorDocumentTop = nextAnchor.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top: Math.max(0, anchorDocumentTop - anchorViewportTop), behavior: "auto" });
+      return;
+    }
     window.scrollTo({ top: preserveScroll ? previousScroll : 0, behavior: preserveScroll ? "auto" : "smooth" });
   });
+}
+
+function loadChemicalTransactionPage() {
+  const transactionPanel = document.querySelector(".chemical-transaction-panel");
+  transactionPanel?.setAttribute("aria-busy", "true");
+  transactionPanel?.querySelectorAll("[data-chemical-page], [data-chemical-page-size]").forEach((control) => {
+    control.disabled = true;
+  });
+  requestChemicalAnalytics({ preserveAnchor: ".chemical-transaction-panel" });
 }
 
 function normalizeBatchNumber(value) {
@@ -3645,7 +3661,7 @@ function bindPageEvents() {
     state.chemicalLog.pageSize = Number(event.target.value) || 25;
     state.chemicalLog.page = 1;
     invalidateChemicalAnalytics();
-    renderPage({ preserveScroll: true });
+    loadChemicalTransactionPage();
   });
   document.querySelectorAll("[data-chemical-page]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -3653,7 +3669,7 @@ function bindPageEvents() {
       const totalPages = chemicalAnalytics.data?.pagination?.total_pages || 1;
       state.chemicalLog.page = button.dataset.chemicalPage === "prev" ? Math.max(1, state.chemicalLog.page - 1) : Math.min(totalPages, state.chemicalLog.page + 1);
       invalidateChemicalAnalytics();
-      renderPage({ preserveScroll: true });
+      loadChemicalTransactionPage();
     });
   });
   document.querySelectorAll("[data-actual-trend-range]").forEach((button) => {

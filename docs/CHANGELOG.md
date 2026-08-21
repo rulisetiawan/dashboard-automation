@@ -4,6 +4,19 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.41 — 21 Agustus 2026
+
+**Status:** Chemical table pagination scroll stability
+
+### Diperbaiki
+
+- Tombol Previous dan Next pada Chemical Transaction Log mempertahankan posisi tabel di viewport.
+- Isi tabel lama tetap tersedia selama halaman berikutnya dimuat dari PostgreSQL sehingga tinggi halaman tidak menyusut sementara.
+- Kontrol pagination dinonaktifkan selama request untuk mencegah perpindahan halaman ganda.
+- Perubahan jumlah baris per halaman menggunakan perilaku posisi yang sama.
+
+---
+
 ## Dashboard V1.40 — 21 Agustus 2026
 
 **Status:** Historian time-range theme consistency
