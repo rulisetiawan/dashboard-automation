@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.38 — 21 Agustus 2026
+
+**Status:** Chemical consumption analytics
+
+### Diubah
+
+- Chemical Dispensing dipisahkan dari renderer halaman mesin produksi.
+- Historian SV/PV, motor diagnostic, maintenance, dan process run generik tidak lagi tampil pada Chemical.
+- Overview lima dispenser dan detail unit memakai transaksi aktual PostgreSQL.
+
+### Ditambahkan
+
+- Filter 24 jam, 7 hari, 30 hari, bulan berjalan, dan custom range.
+- KPI konsumsi, breakdown chemical dinamis, stacked bar per interval, serta checklist series.
+- Ringkasan Automatic, Manual, dan Emergency termasuk detail `emergency_state` serta `auto_state`.
+- Pagination server-side 25, 50, atau 100 baris dengan Previous dan Next.
+- Endpoint agregasi `GET /api/v1/chemical/analytics` dan index PostgreSQL untuk filter waktu.
+
+---
+
 ## Dashboard V1.37 — 21 Agustus 2026
 
 **Status:** Card spacing consistency

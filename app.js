@@ -59,13 +59,17 @@ const state = {
     enabled: [],
   },
   chemicalLog: {
-    range: "24H",
-    customStart: Date.now() - 24 * 60 * 60 * 1000,
+    range: "30D",
+    anchorEnd: Date.now(),
+    customStart: Date.now() - 30 * 24 * 60 * 60 * 1000,
     customEnd: Date.now(),
     variant: "all",
     mode: "all",
     status: "all",
     calator: "all",
+    page: 1,
+    pageSize: 25,
+    chartHidden: [],
   },
   motorDrive: {
     selected: null,
@@ -139,7 +143,7 @@ const pageMeta = {
   dryer: ["Dryer", "Drying Process", "Speed, multi-chamber temperature, thermal oil, dan output."],
   kalender: ["Kalender", "Finishing Process", "Upper-lower balance, overfeed, width, motor, dan quality context."],
   utilities: ["Plant Utilities", "Resource Monitoring", "Electrical, water, steam, dan thermal oil supply-to-consumer."],
-  chemical: ["Chemical Processing", "Dispensing & Transfer", "Tujuh varian chemical, transfer queue, route, dan daily usage."],
+  chemical: ["Chemical Processing", "Dispensing Consumption", "Konsumsi per chemical, transaksi Automatic/Manual/Emergency, dan analisis per unit."],
   alarms: ["Alarms & Events", "Exception Center", "Alarm aktif, acknowledgement, equipment event, dan impact context."],
   trends: ["Historical Trends", "Investigation Workspace", "Bandingkan actual, setpoint, machine state, dan alarm dalam satu timeline."],
   health: ["Data Health", "Collector & Tag Quality", "Koneksi PLC, gateway, meter, stale tag, dan historian health."],
@@ -296,6 +300,76 @@ const chemicals = [
 ];
 
 const chemicalDispensingLogs = [];
+const chemicalAnalytics = {
+  key: "",
+  dataKey: "",
+  loading: false,
+  error: null,
+  data: null,
+  requestId: 0,
+};
+
+const chemicalChartColors = ["#078eaa", "#d97706", "#119b70", "#8267c7", "#d9485c", "#2563eb", "#c55f92", "#64748b", "#0f766e", "#b45309", "#7c3aed", "#be123c"];
+
+function chemicalRangeWindow() {
+  const end = state.chemicalLog.range === "CUSTOM" ? new Date(state.chemicalLog.customEnd) : new Date(state.chemicalLog.anchorEnd);
+  let start;
+  if (state.chemicalLog.range === "CUSTOM") start = new Date(state.chemicalLog.customStart);
+  else if (state.chemicalLog.range === "THIS_MONTH") start = new Date(end.getFullYear(), end.getMonth(), 1);
+  else {
+    const hours = { "24H": 24, "7D": 24 * 7, "30D": 24 * 30 }[state.chemicalLog.range] || 24 * 30;
+    start = new Date(end.getTime() - hours * 60 * 60_000);
+  }
+  return { start, end };
+}
+
+function chemicalAnalyticsQuery() {
+  const range = chemicalRangeWindow();
+  const dispenser = state.drill.chemical.machine || "all";
+  const params = new URLSearchParams({
+    from: range.start.toISOString(),
+    to: range.end.toISOString(),
+    dispenser_id: dispenser,
+    chemical_code: state.chemicalLog.variant,
+    mode: state.chemicalLog.mode,
+    page: String(state.chemicalLog.page),
+    page_size: String(state.chemicalLog.pageSize),
+  });
+  return { key: params.toString(), url: `/api/v1/chemical/analytics?${params.toString()}` };
+}
+
+function requestChemicalAnalytics() {
+  const query = chemicalAnalyticsQuery();
+  if (chemicalAnalytics.key === query.key && (chemicalAnalytics.loading || chemicalAnalytics.dataKey === query.key || chemicalAnalytics.error)) return;
+  const requestId = chemicalAnalytics.requestId + 1;
+  chemicalAnalytics.requestId = requestId;
+  chemicalAnalytics.key = query.key;
+  chemicalAnalytics.loading = true;
+  chemicalAnalytics.error = null;
+  fetch(query.url, { cache: "no-store" })
+    .then((response) => {
+      if (!response.ok) throw new Error(`Chemical analytics unavailable (${response.status})`);
+      return response.json();
+    })
+    .then((payload) => {
+      if (chemicalAnalytics.requestId !== requestId) return;
+      chemicalAnalytics.data = payload;
+      chemicalAnalytics.dataKey = query.key;
+      chemicalAnalytics.loading = false;
+      if (state.page === "chemical") renderPage({ preserveScroll: true });
+    })
+    .catch((error) => {
+      if (chemicalAnalytics.requestId !== requestId) return;
+      chemicalAnalytics.loading = false;
+      chemicalAnalytics.error = error instanceof Error ? error.message : "Chemical analytics unavailable";
+      if (state.page === "chemical") renderPage({ preserveScroll: true });
+    });
+}
+
+function invalidateChemicalAnalytics() {
+  chemicalAnalytics.key = "";
+  chemicalAnalytics.error = null;
+}
 
 function backendTimeLabel(value) {
   return new Date(value).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }).replace(",", " ·");
@@ -2747,11 +2821,123 @@ function actualUtilitiesPage() {
   `;
 }
 
+function chemicalNumber(value, maximumFractionDigits = 1) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("id-ID", { maximumFractionDigits }) : "—";
+}
+
+function chemicalDuration(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value)) return "—";
+  if (value < 60) return `${value} sec`;
+  return `${Math.floor(value / 60)}m ${value % 60}s`;
+}
+
+function chemicalRangeLabel(data) {
+  if (!data?.range) return "Selected range";
+  return `${actualTime(data.range.from)} — ${actualTime(data.range.to)} · ${actualText(data.range.granularity)} interval`;
+}
+
+function chemicalColorFor(data, code) {
+  const index = Math.max(0, (data?.available_chemicals || []).findIndex((item) => item.chemical_code === code));
+  return chemicalChartColors[index % chemicalChartColors.length];
+}
+
+function chemicalFilterPanel(data, machine) {
+  const option = (value, label, selected) => `<option value="${actualText(value)}" ${selected === value ? "selected" : ""}>${actualText(label)}</option>`;
+  const available = data?.available_chemicals || [];
+  const customActive = state.chemicalLog.range === "CUSTOM";
+  return `<section class="card chemical-filter-card">
+    <div class="chemical-filter-copy"><span class="eyebrow">CONSUMPTION RANGE</span><h2>${machine ? actualText(machine.name) : "All Chemical Dispensing Units"}</h2><p>${chemicalRangeLabel(data)}</p></div>
+    <div class="chemical-filter-controls">
+      <label>Time range<select class="select-control" data-chemical-analytics-filter="range">${option("24H", "Last 24 hours", state.chemicalLog.range)}${option("7D", "Last 7 days", state.chemicalLog.range)}${option("30D", "Last 30 days", state.chemicalLog.range)}${option("THIS_MONTH", "This month", state.chemicalLog.range)}${option("CUSTOM", "Custom range", state.chemicalLog.range)}</select></label>
+      <label>Chemical<select class="select-control" data-chemical-analytics-filter="variant">${option("all", "All chemicals", state.chemicalLog.variant)}${available.map((item) => option(item.chemical_code, `${item.chemical_code} · ${item.chemical_name}`, state.chemicalLog.variant)).join("")}</select></label>
+      <label>Transaction mode<select class="select-control" data-chemical-analytics-filter="mode">${option("all", "Automatic + Manual + Emergency", state.chemicalLog.mode)}${option("Automatic", "Automatic", state.chemicalLog.mode)}${option("Manual", "Manual", state.chemicalLog.mode)}${option("Emergency", "Emergency", state.chemicalLog.mode)}</select></label>
+    </div>
+    ${customActive ? `<div class="chemical-custom-range chemical-analytics-custom"><label class="date-field"><span>Start date & time</span><input type="datetime-local" data-chemical-analytics-date="start" value="${toDateTimeLocal(state.chemicalLog.customStart)}" /></label><label class="date-field"><span>End date & time</span><input type="datetime-local" data-chemical-analytics-date="end" value="${toDateTimeLocal(state.chemicalLog.customEnd)}" /></label><button class="button primary small" data-chemical-analytics-apply>Apply range</button></div>` : ""}
+  </section>`;
+}
+
+function chemicalUnitOverview(data) {
+  const units = new Map((data.units || []).map((item) => [item.dispenser_id, item]));
+  const cards = dispensers.map((machine) => {
+    const item = units.get(machine.id) || {};
+    return `<article class="card chemical-unit-card" data-chemical-unit="${actualText(machine.id)}" role="button" tabindex="0">
+      <div class="chemical-unit-head"><div><span class="area-code">${actualText(machine.area)}</span><h2>${actualText(machine.name)}</h2><p>${actualText(machine.id)} · ${actualText(machine.areaLabel)}</p></div>${statusPill(machine.state || "offline")}</div>
+      <div class="chemical-unit-total"><strong>${chemicalNumber(item.total_kg || 0)}</strong><span>kg consumed</span></div>
+      <div class="chemical-unit-modes"><span><strong>${chemicalNumber(item.automatic_count || 0, 0)}</strong>Automatic</span><span><strong>${chemicalNumber(item.manual_count || 0, 0)}</strong>Manual</span><span class="${Number(item.emergency_count) ? "warning" : ""}"><strong>${chemicalNumber(item.emergency_count || 0, 0)}</strong>Emergency</span></div>
+      <div class="chemical-unit-top"><span>Top chemical</span><strong>${actualText(item.top_chemical_code || "—")} · ${actualText(item.top_chemical_name || "No consumption")}</strong><small>${item.last_transaction_at ? `Last transaction ${actualTime(item.last_transaction_at)}` : "No transaction in selected range"}</small></div>
+      <div class="area-card-foot"><span>${dispensingSupportedCalators(machine).length} supported Calators</span><strong>Open unit detail →</strong></div>
+    </article>`;
+  }).join("");
+  return `<section class="chemical-unit-grid">${cards}</section>`;
+}
+
+function chemicalVariantSummaryPanel(data) {
+  const variants = data.variants || [];
+  const total = variants.reduce((sum, item) => sum + Number(item.total_kg || 0), 0) || 1;
+  const rows = variants.map((item) => {
+    const share = Number(item.total_kg || 0) / total * 100;
+    const color = chemicalColorFor(data, item.chemical_code);
+    return `<tr><td><span class="chemical-rank-dot" style="background:${color}"></span><strong>${actualText(item.chemical_code)}</strong></td><td>${actualText(item.chemical_name)}</td><td class="mono"><strong>${chemicalNumber(item.total_kg, 2)} kg</strong></td><td class="mono">${chemicalNumber(item.transaction_count, 0)}</td><td class="mono">${chemicalNumber(item.average_kg, 2)} kg</td><td class="mono">${chemicalNumber(item.minimum_kg, 2)} / ${chemicalNumber(item.maximum_kg, 2)} kg</td><td><div class="chemical-share"><i><b style="width:${Math.min(100, share)}%;background:${color}"></b></i><span>${chemicalNumber(share, 1)}%</span></div></td></tr>`;
+  }).join("");
+  const content = rows ? `<div class="chemical-summary-wrap"><table class="data-table chemical-summary-table"><thead><tr><th>Code</th><th>Chemical</th><th>Total</th><th>Transactions</th><th>Average</th><th>Min / Max</th><th>Share</th></tr></thead><tbody>${rows}</tbody></table></div>` : actualEmpty("Tidak ada konsumsi chemical pada range terpilih");
+  return panel("Chemical Consumption Detail", "Total, frekuensi, rata-rata, minimum, maksimum, dan kontribusi masing-masing chemical", content, `<span class="data-pill neutral">${variants.length} CHEMICALS</span>`);
+}
+
+function chemicalConsumptionChartPanel(data) {
+  const available = data.available_chemicals || [];
+  const hidden = new Set(state.chemicalLog.chartHidden);
+  const legend = available.map((item) => `<label class="chemical-chart-toggle"><input type="checkbox" data-chemical-chart-code="${actualText(item.chemical_code)}" ${hidden.has(item.chemical_code) ? "" : "checked"} /><i style="background:${chemicalColorFor(data, item.chemical_code)}"></i><span><strong>${actualText(item.chemical_code)}</strong>${actualText(item.chemical_name)}</span></label>`).join("");
+  const content = data.time_series?.length ? `<div class="chemical-chart-toolbar"><span>Select chemical untuk menampilkan atau menyembunyikan series.</span><div class="chemical-chart-actions"><button class="button ghost small" data-chemical-chart-bulk="show">Show all</button><button class="button ghost small" data-chemical-chart-bulk="hide">Hide all</button></div></div><div class="chemical-chart-layout"><div class="chart-container chemical-consumption-chart"><canvas id="chemical-consumption-chart" class="chart-canvas" aria-label="Chemical consumption by time range"></canvas></div><div class="chemical-chart-legend">${legend}</div></div>` : actualEmpty("Belum ada time-series konsumsi pada range terpilih");
+  return panel("Chemical Consumption Trend", `${chemicalRangeLabel(data)} · stacked consumption per interval`, content, `<span class="data-pill good">POSTGRESQL AGGREGATE</span>`);
+}
+
+function chemicalModeSummary(data) {
+  const summary = data.summary || {};
+  const items = [["Automatic", summary.automatic_count, "Proses penimbangan otomatis", "good"], ["Manual", summary.manual_count, "Pengambilan atau penimbangan manual", "neutral"], ["Emergency", summary.emergency_count, "Event emergency tercatat", Number(summary.emergency_count) ? "warning" : "good"]];
+  return `<section class="chemical-mode-grid">${items.map(([label, value, detail, tone]) => `<article class="card chemical-mode-card ${tone}"><span>${label}</span><strong>${chemicalNumber(value || 0, 0)}</strong><small>${detail}</small></article>`).join("")}</section>`;
+}
+
+function chemicalTransactionPanel(data) {
+  const rows = (data.transactions || []).map((item) => {
+    const modeTone = item.mode === "Automatic" ? "good" : item.mode === "Emergency" ? "warning" : "neutral";
+    const detail = item.mode === "Emergency" ? `<strong>${actualText(item.emergency_state || item.chemical_name)}</strong><small>Auto state: ${actualText(item.auto_state || "—")}</small>` : `<span>${actualText(item.stage || "Weighing completed")}</span>`;
+    return `<tr><td class="chemical-time-cell"><strong>${actualTime(item.started_at || item.occurred_at)}</strong><small>End ${actualTime(item.ended_at)}</small><small>${chemicalDuration(item.duration_seconds)}</small></td><td><strong class="mono">${actualText(item.source_row_id || item.request_code)}</strong><small>${actualText(item.source_file || item.source_system)}</small></td><td><strong>${actualText(item.chemical_code)}</strong><small>${actualText(item.chemical_name)}</small></td><td class="mono"><strong>${item.actual_kg == null ? "—" : `${chemicalNumber(item.actual_kg, 3)} kg`}</strong></td><td><span class="data-pill ${modeTone}">${actualText(item.mode)}</span></td><td class="chemical-emergency-cell">${detail}</td><td>${actualText(item.calator_id || "Belum teridentifikasi")}</td><td><span class="data-pill ${item.status === "Completed" ? "good" : "warning"}">${actualText(item.status)}</span></td></tr>`;
+  }).join("");
+  const pagination = data.pagination || { page: 1, total_pages: 1, total_rows: 0, page_size: state.chemicalLog.pageSize };
+  const first = pagination.total_rows ? (pagination.page - 1) * pagination.page_size + 1 : 0;
+  const last = Math.min(pagination.total_rows, pagination.page * pagination.page_size);
+  const content = `<div class="chemical-log-table-wrap"><table class="data-table chemical-transaction-table"><thead><tr><th>Time</th><th>Source ID</th><th>Chemical</th><th>Actual</th><th>Mode</th><th>Process / Emergency Detail</th><th>Calator Destination</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="8" class="dispensing-empty-row">Tidak ada transaksi sesuai filter.</td></tr>`}</tbody></table></div><div class="chemical-pagination"><div><strong>${chemicalNumber(first, 0)}–${chemicalNumber(last, 0)}</strong><span>dari ${chemicalNumber(pagination.total_rows, 0)} transaksi</span></div><label>Rows<select class="select-control" data-chemical-page-size><option value="25" ${pagination.page_size === 25 ? "selected" : ""}>25</option><option value="50" ${pagination.page_size === 50 ? "selected" : ""}>50</option><option value="100" ${pagination.page_size === 100 ? "selected" : ""}>100</option></select></label><div class="chemical-page-actions"><button class="button small" data-chemical-page="prev" ${pagination.page <= 1 ? "disabled" : ""}>← Previous</button><span>Page <strong>${pagination.page}</strong> / ${pagination.total_pages}</span><button class="button small" data-chemical-page="next" ${pagination.page >= pagination.total_pages ? "disabled" : ""}>Next →</button></div></div>`;
+  return panel("Chemical Transaction Log", "Automatic, Manual, dan Emergency · data dimuat per halaman dari PostgreSQL", content, `<span class="data-pill neutral">SERVER PAGINATION</span>`, "chemical-transaction-panel");
+}
+
+function chemicalUnitHeader(machine, data) {
+  const supported = dispensingSupportedCalators(machine);
+  return `<section class="card chemical-unit-hero"><div><span class="eyebrow">CHEMICAL DISPENSING UNIT</span><h1>${actualText(machine.name)}</h1><p>${actualText(machine.id)} · Area ${actualText(machine.areaLabel)} · mendukung ${supported.length} Calator</p></div><div class="chemical-supported-list"><span>Supported Calators</span><strong>${supported.map((item) => actualText(item.id)).join(" · ") || "Belum dimapping"}</strong><small>Destination transaksi tetap “Belum teridentifikasi” sampai calator_id tersedia dari sumber.</small></div><div class="chemical-unit-live">${statusPill(machine.state || "offline")}<span>Last transaction</span><strong>${actualTime(data.summary?.last_transaction_at)}</strong></div></section>`;
+}
+
 function actualChemicalPage() {
-  const content = chemicalDispensingLogs.length
-    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Request</th><th>Calator</th><th>Chemical</th><th>Target</th><th>Actual</th><th>Mode</th><th>Status</th></tr></thead><tbody>${chemicalDispensingLogs.map((item) => `<tr><td class="mono">${actualText(item.time)}</td><td class="mono">${actualText(item.request)}</td><td>${actualText(item.calator)}</td><td>${actualText(item.code)} · ${actualText(item.variant)}</td><td>${actualText(item.target)}</td><td>${actualText(item.actual)}</td><td>${actualText(item.mode)}</td><td>${actualText(item.status)}</td></tr>`).join("")}</tbody></table></div>`
-    : actualEmpty("Belum ada transaksi chemical aktual");
-  return `${pageHead("chemical", `<span class="range-badge">ACTUAL DATABASE</span>`)}${panel("Chemical dispensing transaction log", "Data dari chemical_transaction", content)}`;
+  requestChemicalAnalytics();
+  const query = chemicalAnalyticsQuery();
+  const fresh = chemicalAnalytics.dataKey === query.key;
+  const machine = dispensers.find((item) => item.id === state.drill.chemical.machine) || null;
+  const actions = machine ? `<button class="button" data-chemical-view="overview">← All dispensing units</button><span class="range-badge">ACTUAL DATABASE</span>` : `<span class="range-badge">ACTUAL DATABASE</span>`;
+  const header = `${machine ? `<div class="process-breadcrumb"><button data-chemical-view="overview">Chemical Processing</button><span>›</span><strong>${actualText(machine.id)}</strong></div>` : ""}${pageHead("chemical", actions)}`;
+  if (chemicalAnalytics.error) return `${header}${chemicalFilterPanel(chemicalAnalytics.data, machine)}${panel("Chemical analytics unavailable", "Data transaksi tetap aman di PostgreSQL", actualEmpty(chemicalAnalytics.error))}`;
+  if (!fresh) return `${header}${chemicalFilterPanel(chemicalAnalytics.data, machine)}${panel("Loading Chemical Consumption", "Menghitung agregasi dan transaksi sesuai filter", `<div class="actual-historian-loading">Loading consumption, mode, emergency, dan transaction page…</div>`)}`;
+  const data = chemicalAnalytics.data;
+  const summary = data.summary || {};
+  return `${header}
+    ${machine ? chemicalUnitHeader(machine, data) : ""}
+    ${chemicalFilterPanel(data, machine)}
+    <section class="chemical-kpi-grid">${actualMetric("Total Consumption", chemicalNumber(summary.total_kg, 2), "kg", "actual_kg · selected range")}${actualMetric("Transactions", chemicalNumber(summary.transaction_count, 0), "rows", "Automatic + Manual + Emergency")}${actualMetric("Average Weight", chemicalNumber(summary.average_kg, 2), "kg", "average completed weighing")}${actualMetric("Maximum Weight", chemicalNumber(summary.maximum_kg, 2), "kg", "highest weighing in range")}${actualMetric("Emergency Events", chemicalNumber(summary.emergency_count, 0), "events", "emergency source records")}</section>
+    ${machine ? chemicalDispensingPidPanel(machine) : chemicalUnitOverview(data)}
+    ${chemicalModeSummary(data)}
+    ${chemicalConsumptionChartPanel(data)}
+    ${chemicalVariantSummaryPanel(data)}
+    ${chemicalTransactionPanel(data)}
+  `;
 }
 
 function actualAlarmsPage() {
@@ -3305,7 +3491,8 @@ function databaseProcessPage(type) {
 
 function databaseDashboardPage() {
   if (state.page === "overview") return databaseOverviewPage();
-  if (["jetflow", "calator", "dryer", "kalender", "chemical"].includes(state.page)) return databaseProcessPage(state.page);
+  if (state.page === "chemical") return actualChemicalPage();
+  if (["jetflow", "calator", "dryer", "kalender"].includes(state.page)) return databaseProcessPage(state.page);
   if (state.page === "utilities") return actualUtilitiesPage();
   if (state.page === "alarms") return actualAlarmsPage();
   if (state.page === "trends") return actualTrendsPage();
@@ -3366,6 +3553,86 @@ function loadBatchInvestigation(type, machineId, rawBatch) {
 }
 
 function bindPageEvents() {
+  document.querySelectorAll("[data-chemical-unit]").forEach((card) => {
+    const openUnit = () => {
+      const machine = dispensers.find((item) => item.id === card.dataset.chemicalUnit);
+      if (!machine) return;
+      state.selected.chemical = machine.id;
+      state.drill.chemical = { area: machine.area, machine: machine.id };
+      state.chemicalLog.page = 1;
+      invalidateChemicalAnalytics();
+      renderPage();
+    };
+    card.addEventListener("click", openUnit);
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openUnit();
+      }
+    });
+  });
+  document.querySelectorAll("[data-chemical-view='overview']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.drill.chemical = { area: null, machine: null };
+      state.chemicalLog.page = 1;
+      invalidateChemicalAnalytics();
+      renderPage();
+    });
+  });
+  document.querySelectorAll("[data-chemical-analytics-filter]").forEach((select) => {
+    select.addEventListener("change", () => {
+      const key = select.dataset.chemicalAnalyticsFilter;
+      state.chemicalLog[key] = select.value;
+      if (key === "range" && select.value !== "CUSTOM") state.chemicalLog.anchorEnd = Date.now();
+      state.chemicalLog.page = 1;
+      invalidateChemicalAnalytics();
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-chemical-analytics-date]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const value = new Date(input.value).getTime();
+      if (Number.isFinite(value)) state.chemicalLog[input.dataset.chemicalAnalyticsDate === "start" ? "customStart" : "customEnd"] = value;
+    });
+  });
+  document.querySelector("[data-chemical-analytics-apply]")?.addEventListener("click", () => {
+    if (state.chemicalLog.customEnd < state.chemicalLog.customStart) [state.chemicalLog.customStart, state.chemicalLog.customEnd] = [state.chemicalLog.customEnd, state.chemicalLog.customStart];
+    state.chemicalLog.page = 1;
+    invalidateChemicalAnalytics();
+    renderPage({ preserveScroll: true });
+  });
+  document.querySelectorAll("[data-chemical-chart-code]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const code = checkbox.dataset.chemicalChartCode;
+      const hidden = new Set(state.chemicalLog.chartHidden);
+      if (checkbox.checked) hidden.delete(code);
+      else hidden.add(code);
+      state.chemicalLog.chartHidden = [...hidden];
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-chemical-chart-bulk]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const codes = chemicalAnalytics.data?.available_chemicals?.map((item) => item.chemical_code) || [];
+      state.chemicalLog.chartHidden = button.dataset.chemicalChartBulk === "hide" ? codes : [];
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelector("[data-chemical-page-size]")?.addEventListener("change", (event) => {
+    state.chemicalLog.pageSize = Number(event.target.value) || 25;
+    state.chemicalLog.page = 1;
+    invalidateChemicalAnalytics();
+    renderPage({ preserveScroll: true });
+  });
+  document.querySelectorAll("[data-chemical-page]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.disabled) return;
+      const totalPages = chemicalAnalytics.data?.pagination?.total_pages || 1;
+      state.chemicalLog.page = button.dataset.chemicalPage === "prev" ? Math.max(1, state.chemicalLog.page - 1) : Math.min(totalPages, state.chemicalLog.page + 1);
+      invalidateChemicalAnalytics();
+      renderPage({ preserveScroll: true });
+    });
+  });
   document.querySelectorAll("[data-actual-trend-range]").forEach((button) => {
     button.addEventListener("click", () => {
       actualHistorian.range = button.dataset.actualTrendRange;
@@ -4068,13 +4335,7 @@ function initPageCharts() {
       drawElectricalDistributionChart();
       drawMachinePowerAreaChart();
     },
-    chemical: () => drawBarChart(
-      "chemical-chart",
-      chemicals.map((chemical) => chemical[2]),
-      chemicals.map((chemical) => chemical[0]),
-      chemicals.map((chemical) => chemical[4]),
-      { showValues: true, standard: true, unit: "kg" }
-    ),
+    chemical: drawChemicalConsumptionTrend,
     alarms: () => drawBarChart("alarm-chart", [18, 12, 9, 7, 5, 4], ["Tangle", "Temp", "Speed", "Steam", "Data", "Drive"], ["#d9485c", "#d68b05", "#d68b05", "#d68b05", "#8b999f", "#8b999f"]),
     trends: drawHistoricalTrend,
     health: () => drawLineChart("health-chart", [
@@ -4355,6 +4616,80 @@ function drawLineChart(id, series, labels, options = {}) {
     const label = options.labelFormatter ? options.labelFormatter(labels[idx], idx, labels) : timeLabel(idx, labels.length);
     ctx.fillText(label, x, height - 5);
   }
+  ctx.textAlign = "left";
+}
+
+function drawChemicalConsumptionTrend() {
+  const canvas = document.getElementById("chemical-consumption-chart");
+  const data = chemicalAnalytics.data;
+  if (!canvas || !data?.time_series?.length) return;
+  const hidden = new Set(state.chemicalLog.chartHidden);
+  const available = data.available_chemicals || [];
+  const visibleCodes = available.map((item) => item.chemical_code).filter((code) => !hidden.has(code));
+  const buckets = [...new Set(data.time_series.map((item) => item.bucket))].sort();
+  const values = new Map(data.time_series.map((item) => [`${item.bucket}|${item.chemical_code}`, Number(item.total_kg || 0)]));
+  const totals = buckets.map((bucket) => visibleCodes.reduce((sum, code) => sum + (values.get(`${bucket}|${code}`) || 0), 0));
+  const rawMax = Math.max(0, ...totals);
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, rect.width * ratio);
+  canvas.height = Math.max(1, rect.height * ratio);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(ratio, ratio);
+  const width = rect.width;
+  const height = rect.height;
+  const pad = { top: 22, right: 16, bottom: 38, left: 62 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  ctx.clearRect(0, 0, width, height);
+  ctx.font = "9px DM Mono, monospace";
+  if (!visibleCodes.length || !rawMax) {
+    ctx.fillStyle = "#8b999f";
+    ctx.textAlign = "center";
+    ctx.fillText(visibleCodes.length ? "No consumption in selected range" : "Select at least one chemical", width / 2, height / 2);
+    return;
+  }
+  const magnitude = 10 ** Math.floor(Math.log10(Math.max(1, rawMax)));
+  const max = Math.ceil(rawMax / magnitude) * magnitude;
+  const gridLines = 5;
+  for (let index = 0; index < gridLines; index += 1) {
+    const y = pad.top + plotHeight / (gridLines - 1) * index;
+    ctx.strokeStyle = "rgba(19,46,57,.08)";
+    ctx.setLineDash(index === gridLines - 1 ? [] : [3, 5]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(width - pad.right, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#8b999f";
+    ctx.textAlign = "right";
+    ctx.fillText(formatAxis(max - max / (gridLines - 1) * index), pad.left - 8, y + 3);
+  }
+  ctx.textAlign = "left";
+  ctx.fillText("kg", 5, 12);
+  const gap = plotWidth / buckets.length;
+  const barWidth = Math.max(2, Math.min(34, gap * .68));
+  buckets.forEach((bucket, bucketIndex) => {
+    const x = pad.left + gap * bucketIndex + (gap - barWidth) / 2;
+    let stackBottom = pad.top + plotHeight;
+    visibleCodes.forEach((code) => {
+      const value = values.get(`${bucket}|${code}`) || 0;
+      if (!value) return;
+      const segmentHeight = value / max * plotHeight;
+      ctx.fillStyle = chemicalColorFor(data, code);
+      ctx.fillRect(x, stackBottom - segmentHeight, barWidth, segmentHeight);
+      stackBottom -= segmentHeight;
+    });
+  });
+  const labelCount = Math.min(6, buckets.length);
+  const labelIndexes = new Set(Array.from({ length: labelCount }, (_, index) => Math.round((buckets.length - 1) * index / Math.max(1, labelCount - 1))));
+  labelIndexes.forEach((bucketIndex) => {
+    const bucket = buckets[bucketIndex];
+    const label = data.range.granularity === "hour" ? bucket.slice(11, 16) : data.range.granularity === "month" ? bucket.slice(0, 7) : bucket.slice(5, 10);
+    ctx.fillStyle = "#8b999f";
+    ctx.textAlign = bucketIndex === 0 ? "left" : bucketIndex === buckets.length - 1 ? "right" : "center";
+    ctx.fillText(label, pad.left + gap * bucketIndex + gap / 2, height - 8);
+  });
   ctx.textAlign = "left";
 }
 
