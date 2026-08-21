@@ -3398,7 +3398,7 @@ function actualSummaryNumber(value, decimals = 1) {
 }
 
 function actualPeakLabel(role) {
-  return actualSignalLabel(String(role || "Temperature").replace(/_PV$/i, "").replace(/^TEMPERATURE_/, ""));
+  return actualSignalLabel(String(role || "Parameter").replace(/_PV$/i, "").replace(/\.PV$/i, "").replace(/\./g, "_"));
 }
 
 function machinePerformanceSummary(machine, runs) {
@@ -3412,7 +3412,7 @@ function machinePerformanceSummary(machine, runs) {
   if (!data) {
     const error = actualMachineSummaryErrors.get(key);
     const foot = error || "Loading calculated machine summary…";
-    return `<section class="performance-summary-section">${header}<div class="kpi-grid performance-summary-grid">${kpi("Total Runtime", "—", "", "RT", foot)}${kpi("Estimated Output", "—", "", "OUT", foot)}${kpi("Peak Temperature", "—", "", "PK", foot)}${kpi("Process Stability", "—", "", "STB", foot)}</div></section>`;
+    return `<section class="performance-summary-section">${header}<div class="kpi-grid performance-summary-grid">${kpi("Total Runtime", "—", "", "RT", foot)}${kpi("Estimated Output", "—", "", "OUT", foot)}${kpi("Peak Parameter", "—", "", "PK", foot)}${kpi("Process Stability", "—", "", "STB", foot)}</div></section>`;
   }
 
   const availability = data.runtime.availability_percent == null ? "No complete state coverage" : `${actualSummaryNumber(data.runtime.availability_percent, 1)}% availability`;
@@ -3426,13 +3426,14 @@ function machinePerformanceSummary(machine, runs) {
   const highestPeak = peaks.reduce((current, item) => !current || Number(item.peak_value) > Number(current.peak_value) ? item : current, null);
   const peakValue = highestPeak ? actualSummaryNumber(highestPeak.peak_value, 1) : "—";
   const peakUnit = highestPeak?.engineering_unit || "";
-  const peakFoot = peaks.length ? `${peaks.map((item) => `${actualPeakLabel(item.signal_role)} ${actualSummaryNumber(item.peak_value, 1)} ${item.engineering_unit || ""}`).join(" · ")} · highest at ${actualTime(highestPeak?.peak_at)}` : "Critical temperature historian belum tersedia";
+  const peakTitle = data.peak_metric?.title || "Peak Parameter";
+  const peakFoot = peaks.length ? `${peaks.map((item) => `${actualPeakLabel(item.signal_role)} ${actualSummaryNumber(item.peak_value, 1)} ${item.engineering_unit || ""}`).join(" · ")} · highest at ${actualTime(highestPeak?.peak_at)}` : "Belum ada parameter snapshot/tag dengan historian pada scope ini";
   const stabilityTitle = data.stability ? "Process Stability" : "Completed Batches";
   const stabilityValue = data.stability ? actualSummaryNumber(data.stability.average_spread, 2) : actualSummaryNumber(data.completed_batches, 0);
   const stabilityUnit = data.stability?.unit || "batch";
   const stabilityFoot = data.stability ? `Avg temperature spread · peak ${actualSummaryNumber(data.stability.maximum_spread, 2)} ${data.stability.unit} · ${data.stability.sensor_count} sensors` : "Completed process run in selected scope";
 
-  return `<section class="performance-summary-section">${header}<div class="kpi-grid performance-summary-grid">${kpi("Total Runtime", actualDuration(data.runtime.seconds), "", "RT", runtimeFoot)}${kpi(outputTitle, outputValue, outputUnit, "OUT", outputFoot)}${kpi("Peak Temperature", peakValue, peakUnit, "PK", peakFoot)}${kpi(stabilityTitle, stabilityValue, stabilityUnit, "STB", stabilityFoot)}</div></section>`;
+  return `<section class="performance-summary-section">${header}<div class="kpi-grid performance-summary-grid">${kpi("Total Runtime", actualDuration(data.runtime.seconds), "", "RT", runtimeFoot)}${kpi(outputTitle, outputValue, outputUnit, "OUT", outputFoot)}${kpi(peakTitle, peakValue, peakUnit, "PK", peakFoot)}${kpi(stabilityTitle, stabilityValue, stabilityUnit, "STB", stabilityFoot)}</div></section>`;
 }
 
 function databaseMachineReading(machine) {

@@ -4,6 +4,24 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.48 — 21 Agustus 2026
+
+**Status:** Dynamic peak parameter
+
+### Diubah
+
+- Peak Temperature diganti menjadi peak parameter yang relevan per asset.
+- Calator tidak lagi menampilkan temperatur jika tidak memiliki tag temperatur.
+- Judul card, unit, nilai peak, detail, dan timestamp mengikuti parameter aktual yang dipilih.
+
+### Ditambahkan
+
+- Prioritas exact match antara `asset_snapshot.values_json` dan `tag_definition.signal_role`.
+- Fallback ke tag aktif yang memiliki historian pada selected scope.
+- Pengelompokan peak berdasarkan family dan unit agar parameter berbeda satuan tidak dibandingkan.
+
+---
+
 ## Dashboard V1.47 — 21 Agustus 2026
 
 **Status:** Machine performance summary

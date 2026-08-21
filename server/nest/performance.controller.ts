@@ -40,6 +40,22 @@ function shiftRange(now: Date) {
   return { from, to, label: `Current shift · ${String(shiftHour).padStart(2, "0")}.00–${String(endLocalHour).padStart(2, "0")}.00` };
 }
 
+function peakFamily(signalRole: string) {
+  const role = signalRole.toUpperCase();
+  if (role.includes("TEMPERATURE") || role.includes("TEMP")) return "temperature";
+  if (role.includes("SPEED")) return "speed";
+  if (role.includes("DANCER") || role.includes("POSITION")) return "position";
+  if (role.includes("LOADCELL") || role.includes("LOAD")) return "loadcell";
+  if (role.includes("LEVEL")) return "level";
+  if (role.includes("FLOW")) return "flow";
+  if (role.includes("WIDTH")) return "width";
+  return "parameter";
+}
+
+function peakTitle(family: string) {
+  return ({ temperature: "Peak Temperature", speed: "Peak Speed", position: "Peak Position", loadcell: "Peak Loadcell", level: "Peak Level", flow: "Peak Flow", width: "Peak Fabric Width", parameter: "Peak Parameter" } as Record<string, string>)[family] || "Peak Parameter";
+}
+
 @Controller("api/v1/assets")
 export class PerformanceController {
   constructor(private readonly database: DatabaseService) {}
@@ -133,17 +149,51 @@ export class PerformanceController {
         LIMIT 1
       `, [assetId, range.from, range.to]),
       this.database.query(`
-        SELECT DISTINCT ON (d.tag_code)
-          d.tag_code, d.signal_role, d.engineering_unit,
-          s.value_number AS peak_value, s.source_ts AS peak_at
-        FROM tag_definition d
-        JOIN telemetry_sample s ON s.tag_code = d.tag_code AND s.asset_id = d.asset_id
-        WHERE d.asset_id = $1
-          AND d.active = TRUE
-          AND UPPER(d.signal_role) LIKE '%TEMPERATURE%PV%'
-          AND s.source_ts >= $2 AND s.source_ts <= $3
-          AND s.value_number IS NOT NULL
-        ORDER BY d.tag_code, s.value_number DESC, s.source_ts
+        WITH snapshot_keys AS (
+          SELECT regexp_replace(UPPER(key), '[^A-Z0-9]+', '_', 'g') AS normalized_key
+          FROM asset_snapshot snapshot,
+          LATERAL jsonb_object_keys(snapshot.values_json) AS keys(key)
+          WHERE snapshot.asset_id = $1
+        ), ranked AS (
+          SELECT
+            d.tag_code,
+            d.signal_role,
+            d.engineering_unit,
+            s.value_number AS peak_value,
+            s.source_ts AS peak_at,
+            COUNT(*) OVER (PARTITION BY d.tag_code)::int AS sample_count,
+            EXISTS (
+              SELECT 1 FROM snapshot_keys k
+              WHERE k.normalized_key = regexp_replace(UPPER(d.signal_role), '[^A-Z0-9]+', '_', 'g')
+            ) AS snapshot_match,
+            ROW_NUMBER() OVER (PARTITION BY d.tag_code ORDER BY s.value_number DESC, s.source_ts) AS peak_rank
+          FROM tag_definition d
+          JOIN telemetry_sample s ON s.tag_code = d.tag_code AND s.asset_id = d.asset_id
+          WHERE d.asset_id = $1
+            AND d.active = TRUE
+            AND UPPER(d.signal_role) LIKE '%PV%'
+            AND d.engineering_unit IS NOT NULL
+            AND s.source_ts >= $2 AND s.source_ts <= $3
+            AND s.value_number IS NOT NULL
+        )
+        SELECT tag_code, signal_role, engineering_unit, peak_value, peak_at, sample_count, snapshot_match
+        FROM ranked
+        WHERE peak_rank = 1
+        ORDER BY
+          snapshot_match DESC,
+          CASE
+            WHEN UPPER(signal_role) LIKE '%TEMPERATURE%PV%' OR UPPER(signal_role) LIKE '%TEMP%PV%' THEN 1
+            WHEN UPPER(signal_role) LIKE '%OVERFEED%PV%' THEN 2
+            WHEN UPPER(signal_role) LIKE '%DANCER%PV%' OR UPPER(signal_role) LIKE '%POSITION%PV%' THEN 3
+            WHEN UPPER(signal_role) LIKE '%SPEED%PV%' THEN 4
+            WHEN UPPER(signal_role) LIKE '%LOADCELL%PV%' THEN 5
+            WHEN UPPER(signal_role) LIKE '%LEVEL%PV%' THEN 6
+            WHEN UPPER(signal_role) LIKE '%FLOW%PV%' THEN 7
+            ELSE 8
+          END,
+          sample_count DESC,
+          signal_role
+        LIMIT 16
       `, [assetId, range.from, range.to]),
       this.database.query(`
         WITH temperature_by_bucket AS (
@@ -185,6 +235,12 @@ export class PerformanceController {
       value: Number(speedEstimate.output_value), unit: "m", source: speedEstimate.tag_code, estimated: true,
     } : null);
 
+    const primaryPeak = peakSensors.rows[0] || null;
+    const selectedPeakFamily = primaryPeak ? peakFamily(primaryPeak.signal_role) : null;
+    const selectedPeaks = primaryPeak
+      ? peakSensors.rows.filter((item) => peakFamily(item.signal_role) === selectedPeakFamily && item.engineering_unit === primaryPeak.engineering_unit).slice(0, 6)
+      : [];
+
     return {
       data_mode: "ACTUAL_DATABASE",
       asset_id: assetId,
@@ -200,7 +256,13 @@ export class PerformanceController {
         state_coverage_percent: stateCoveragePercent,
       },
       output,
-      peaks: peakSensors.rows,
+      peak_metric: primaryPeak ? {
+        family: selectedPeakFamily,
+        title: peakTitle(selectedPeakFamily || "parameter"),
+        source: primaryPeak.snapshot_match ? "snapshot_tag" : "registered_tag",
+        items: selectedPeaks,
+      } : null,
+      peaks: selectedPeaks,
       stability: temperatureSpread.rows[0]?.bucket_count ? {
         metric: "temperature_spread",
         average_spread: Number(temperatureSpread.rows[0].average_spread),
