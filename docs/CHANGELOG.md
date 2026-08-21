@@ -4,6 +4,20 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.45 — 21 Agustus 2026
+
+**Status:** Kalender batch tracking example
+
+### Ditambahkan
+
+- Satu batch contoh `BATCH-KL5-20260821-001` pada `KL-DPN-05` untuk interval 10.00–12.00 WIB.
+- Production batch, process run, tiga process step, machine state event, dan 1.573 telemetry sample pada 13 tag Kalender.
+- Tombol Track batch pada Process run history untuk menerapkan interval batch langsung ke historian PV/SV.
+- Kolom end time pada tabel process run serta label batch aktif pada panel historian.
+- Script seed idempotent `npm run seed:kalender-batch`.
+
+---
+
 ## Dashboard V1.44 — 21 Agustus 2026
 
 **Status:** Digital Automation Dashboard identity

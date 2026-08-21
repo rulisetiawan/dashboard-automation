@@ -7,7 +7,8 @@
     "build": "node build.mjs",
     "build:backend": "tsc -p tsconfig.backend.json",
     "dev:postgres": "npm run build:backend && npm run start:postgres",
-    "start:postgres": "node --env-file=.env dist-backend/server/nest/main.js"
+    "start:postgres": "node --env-file=.env dist-backend/server/nest/main.js",
+    "seed:kalender-batch": "node --env-file=.env scripts/inject-kalender-batch-tracking.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.1",

@@ -13,7 +13,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Kalender_v1.12.md` | 1.12 | Aktif | Perbaikan alignment historical log Motor & Drive |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
 | `chemicals/Chemical_Dispensing_Calator_Concept_v1.6.md` | 1.6 | Aktif | Halaman konsumsi khusus, chart per chemical, mode audit, dan pagination PostgreSQL |
-| `dashboard/Dashboard_V1_Concept_v1.44.md` | 1.44 | Aktif | Identitas antarmuka diperbarui menjadi PT.SMM Digital Automation Dashboard |
+| `dashboard/Dashboard_V1_Concept_v1.45.md` | 1.45 | Aktif | Contoh batch Kalender Depan 05 dapat ditrack langsung ke historian PV/SV |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
 | `backend/Backend_Data_Architecture_Concept_v1.0.md` | 1.0 | Aktif | Fondasi edge-to-historian, model database, API, security, dan roadmap integrasi backend |
 | `backend/Tag_Display_Mapping_Register_v1.0.md` | 1.0 | Aktif | Baseline canonical tag ke tampilan proses, utility, chemical, dan motor diagnostic |
@@ -24,6 +24,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `backend/Non_Jetflow_Backend_Integration_v1.0.md` | 1.0 | Aktif | Implementasi awal D1/API read-only untuk Calator, Dryer, Kalender, Dispensing, dan Utilities |
 | `backend/PostgreSQL_Local_Integration_v1.3.md` | 1.3 | Aktif | PostgreSQL service native lokal dengan kredensial terpisah dan API non-Jetflow |
 | `backend/NestJS_PostgreSQL_Integration_v1.7.md` | 1.7 | Aktif | Trend motor 3-phase dan versioned Jetflow program execution |
+| `backend/Kalender_Batch_Tracking_Example_v1.0.md` | 1.0 | Aktif | Contoh end-to-end batch KL-DPN-05 pukul 10.00–12.00 WIB |
 | `backend/Chemical_CSV_Import_v1.0.md` | 1.0 | Aktif | Import 112.856 weighing dan emergency records ke chemical_transaction secara idempotent |
 | `releases/Backend_Architecture_V1.0.md` | 1.0 | Selesai | Baseline arsitektur dan mapping backend |
 | `releases/Database_Design_V1.0.md` | 1.0 | Selesai | Baseline konsep database dan ERD |

@@ -2713,11 +2713,13 @@ async function loadActualSensorSeries(machine, tagCode) {
 function databaseActualHistorianPanel(machine) {
   const key = actualHistorianKey(machine.id);
   const data = actualHistorian.cache.get(key);
+  const trackedBatch = selectedBatchFor(machine.process, machine);
+  const trackingLabel = trackedBatch ? `Batch ${actualText(trackedBatch)} · ` : "";
   if (!data && !actualHistorian.loading.has(key)) void loadActualHistorian(machine);
   const rangeButtons = ["1H", "8H", "24H", "7D", "CUSTOM"].map((range) => `<button class="${actualHistorian.range === range ? "active" : ""}" data-actual-trend-range="${range}">${range === "CUSTOM" ? "Custom" : range}</button>`).join("");
   const customRange = actualHistorian.range === "CUSTOM" ? `<div class="chemical-custom-range actual-history-custom"><label class="date-field"><span>Start date & time</span><input type="datetime-local" data-actual-history-date="start" value="${toDateTimeLocal(state.history.start)}" /></label><label class="date-field"><span>End date & time</span><input type="datetime-local" data-actual-history-date="end" value="${toDateTimeLocal(state.history.end)}" /></label><button class="button primary small" data-actual-history-apply="${actualText(machine.id)}">Apply range</button></div>` : "";
-  if (!data) return panel("Historical Trends", "Memuat aggregate historian PostgreSQL untuk sensor dan motor.", `${customRange}<div class="actual-historian-loading">Loading ${actualText(actualHistorian.range)} trend data…</div>`, `<div class="segmented">${rangeButtons}</div>`);
-  if (data.error) return panel("Historical Trends", "Historian PostgreSQL", actualEmpty(data.error), `<div class="segmented">${rangeButtons}</div>`);
+  if (!data) return panel("Historical Trends", `${trackingLabel}Memuat aggregate historian PostgreSQL untuk sensor dan motor.`, `${customRange}<div class="actual-historian-loading">Loading ${actualText(actualHistorian.range)} trend data…</div>`, `<div class="segmented">${rangeButtons}</div>`, "actual-historian-panel");
+  if (data.error) return panel("Historical Trends", `${trackingLabel}Historian PostgreSQL`, actualEmpty(data.error), `<div class="segmented">${rangeButtons}</div>`, "actual-historian-panel");
   const sensors = data.sensors;
   const motors = data.motors;
   const { parameters, parameter: selectedParameter } = selectedActualParameter(machine, data);
@@ -2745,7 +2747,7 @@ function databaseActualHistorianPanel(machine) {
   const motorContent = selectedMotor ? `
     <div class="actual-historian-toolbar"><label>Motor<select class="history-select-control" data-actual-motor-select="${machine.id}">${motors.map((item) => `<option value="${actualText(item.id)}" ${item.id === selectedMotor.id ? "selected" : ""}>${actualText(item.name)} · ${actualText(item.code)}</option>`).join("")}</select></label><span class="data-pill neutral">${selectedMotor.points.length} POINTS</span></div>
     ${selectedMotor.points.length ? `<div class="chart-container compact"><canvas class="chart-canvas" id="actual-motor-trend-${machine.id}" aria-label="Trend motor ${actualText(selectedMotor.name)}"></canvas></div><div class="actual-trend-legend"><span><i class="phase-r"></i>Phase R</span><span><i class="phase-s"></i>Phase S</span><span><i class="phase-t"></i>Phase T</span></div><div class="actual-historian-summary"><span>Power avg <b>${actualHistorianDisplayValue(selectedMotor.points.at(-1)?.active_power_avg_kw, "kW")}</b></span><span>Frequency <b>${actualHistorianDisplayValue(selectedMotor.points.at(-1)?.drive_frequency_avg_hz, "Hz")}</b></span><span>Energy delta <b>${actualHistorianDisplayValue(selectedMotor.points.at(-1)?.energy_delta_kwh, "kWh")}</b></span></div>` : actualEmpty("Equipment terdaftar, tetapi belum memiliki historian motor pada range ini.")}` : actualEmpty("Belum ada master equipment untuk asset ini.");
-  return panel("Historical Trends", `${actualText(rangeText)} · aggregate ${actualText(data.range?.granularity || "")} · satu parameter dengan pasangan PV/SV`, `${customRange}<div class="actual-historian-grid"><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">PROCESS SENSOR</span><h3>PV / SV Parameter Trend</h3></div>${sensorContent}</article><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">MOTOR & DRIVE</span><h3>3-Phase Trend</h3></div>${motorContent}</article></div>`, `<div class="segmented">${rangeButtons}</div>`);
+  return panel("Historical Trends", `${trackingLabel}${actualText(rangeText)} · aggregate ${actualText(data.range?.granularity || "")} · satu parameter dengan pasangan PV/SV`, `${customRange}<div class="actual-historian-grid"><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">PROCESS SENSOR</span><h3>PV / SV Parameter Trend</h3></div>${sensorContent}</article><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">MOTOR & DRIVE</span><h3>3-Phase Trend</h3></div>${motorContent}</article></div>`, `<div class="segmented">${rangeButtons}</div>`, "actual-historian-panel");
 }
 
 function alignedActualParameterTrend(parameter) {
@@ -3491,7 +3493,7 @@ function databaseMachineDetailPage(type) {
   const metrics = databaseSnapshotMetrics(machine, 4);
   const runs = backendProcessRuns.filter((run) => run.asset_id === machine.id);
   const chemicalTransactions = type === "chemical" ? chemicalDispensingLogs.filter((item) => item.dispenser === machine.id) : [];
-  const runContent = runs.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Batch</th><th>Recipe</th><th>Status</th><th>Output</th><th>Start</th></tr></thead><tbody>${runs.map((run) => `<tr><td class="mono">${actualText(run.batch_no)}</td><td class="mono">${actualText(run.recipe_code)}</td><td>${actualText(run.run_status)}</td><td>${actualText(run.output_quantity ?? "—")} ${actualText(run.output_unit || "")}</td><td class="mono">${actualTime(run.started_at)}</td></tr>`).join("")}</tbody></table></div>` : actualEmpty("No process run data");
+  const runContent = runs.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Batch</th><th>Recipe</th><th>Status</th><th>Output</th><th>Start</th><th>End</th><th>Action</th></tr></thead><tbody>${runs.map((run) => `<tr><td class="mono"><strong>${actualText(run.batch_no)}</strong></td><td class="mono">${actualText(run.recipe_code)}</td><td>${actualText(run.run_status)}</td><td>${actualText(run.output_quantity ?? "—")} ${actualText(run.output_unit || "")}</td><td class="mono">${actualTime(run.started_at)}</td><td class="mono">${actualTime(run.ended_at)}</td><td><button class="button ghost small" data-track-process-run="${actualText(run.process_run_id)}">Track batch</button></td></tr>`).join("")}</tbody></table></div>` : actualEmpty("No process run data");
   return `
     ${processBreadcrumb(type, machine)}
     ${pageHead(type, `<button class="button" data-process-level="area" data-process-type="${type}">← ${actualText(machine.areaLabel || machine.area)}</button><span class="range-badge">ACTUAL</span>`)}
@@ -3589,6 +3591,28 @@ function loadBatchInvestigation(type, machineId, rawBatch) {
   state.batchInvestigation[type] = { machineId, batch };
   showToast("Batch historian loaded", `${machineId} · ${batch}`);
   renderPage({ preserveScroll: true });
+}
+
+function trackDatabaseProcessRun(processRunId) {
+  const run = backendProcessRuns.find((item) => item.process_run_id === processRunId);
+  if (!run) return;
+  const startedAt = new Date(run.started_at).getTime();
+  const endedAt = new Date(run.ended_at || Date.now()).getTime();
+  if (!Number.isFinite(startedAt) || !Number.isFinite(endedAt) || startedAt >= endedAt) {
+    showToast("Batch range unavailable", `${run.batch_no} belum memiliki start/end time yang valid.`);
+    return;
+  }
+  state.batchInvestigation[run.process_type] = { machineId: run.asset_id, batch: run.batch_no };
+  state.history.preset = "CUSTOM";
+  state.history.start = startedAt;
+  state.history.end = endedAt;
+  actualHistorian.range = "CUSTOM";
+  actualHistorian.viewStart = 0;
+  actualHistorian.viewFraction = 1;
+  actualHistorian.cache.delete(actualHistorianKey(run.asset_id));
+  showToast("Batch tracking loaded", `${run.batch_no} · ${formatDateTime(startedAt, true)} — ${formatDateTime(endedAt, true)}`);
+  renderPage({ preserveScroll: true });
+  requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(".actual-historian-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })));
 }
 
 function bindPageEvents() {
@@ -3843,6 +3867,9 @@ function bindPageEvents() {
         openMachine();
       }
     });
+  });
+  document.querySelectorAll("[data-track-process-run]").forEach((button) => {
+    button.addEventListener("click", () => trackDatabaseProcessRun(button.dataset.trackProcessRun));
   });
 
   // Historical Telemetry Table Controls
