@@ -1741,10 +1741,10 @@ select:focus-visible {
 }
 .actual-trend-legend .muted { color: var(--ink-3); opacity: .72; }
 .actual-trend-legend .max { background: var(--warning); }
-.actual-trend-legend .min,
-.actual-trend-legend .phase-t { background: var(--success); }
-.actual-trend-legend .phase-s { background: #4d8fd0; }
-.actual-trend-legend .phase-r { background: var(--primary); }
+.actual-trend-legend .min { background: var(--success); }
+.actual-trend-legend .phase-r { background: #0072b2; }
+.actual-trend-legend .phase-s { background: #d55e00; }
+.actual-trend-legend .phase-t { background: #009e73; }
 
 .actual-historian-summary {
   justify-content: flex-start;

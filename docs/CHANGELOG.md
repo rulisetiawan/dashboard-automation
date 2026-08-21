@@ -4,6 +4,19 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.36 — 21 Agustus 2026
+
+**Status:** Motor trend readability
+
+### Diubah
+
+- Phase R, S, dan T memakai warna biru, oranye, dan hijau yang lebih kontras.
+- Fill trend dihapus dan ketebalan ketiga garis disamakan.
+- Legend mengikuti warna garis trend secara konsisten.
+- Sumbu Y serta ringkasan Power, Frequency, dan Energy dibatasi maksimal dua desimal.
+
+---
+
 ## Dashboard V1.35 — 21 Agustus 2026
 
 **Status:** Visual analytics PostgreSQL aktual

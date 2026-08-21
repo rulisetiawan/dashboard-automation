@@ -2647,7 +2647,7 @@ function databaseActualHistorianPanel(machine) {
     ${!svSensor ? `<p class="actual-trend-note">Tag SV untuk parameter ini belum terdaftar. Grafik tetap menampilkan PV atau nilai aktual yang tersedia.</p>` : ""}` : actualEmpty("Belum ada tag aktif untuk asset ini.");
   const motorContent = selectedMotor ? `
     <div class="actual-historian-toolbar"><label>Motor<select class="history-select-control" data-actual-motor-select="${machine.id}">${motors.map((item) => `<option value="${actualText(item.id)}" ${item.id === selectedMotor.id ? "selected" : ""}>${actualText(item.name)} · ${actualText(item.code)}</option>`).join("")}</select></label><span class="data-pill neutral">${selectedMotor.points.length} POINTS</span></div>
-    ${selectedMotor.points.length ? `<div class="chart-container compact"><canvas class="chart-canvas" id="actual-motor-trend-${machine.id}" aria-label="Trend motor ${actualText(selectedMotor.name)}"></canvas></div><div class="actual-trend-legend"><span><i class="phase-r"></i>Phase R</span><span><i class="phase-s"></i>Phase S</span><span><i class="phase-t"></i>Phase T</span></div><div class="actual-historian-summary"><span>Power avg <b>${actualText(selectedMotor.points.at(-1)?.active_power_avg_kw ?? "—")} kW</b></span><span>Frequency <b>${actualText(selectedMotor.points.at(-1)?.drive_frequency_avg_hz ?? "—")} Hz</b></span><span>Energy delta <b>${actualText(selectedMotor.points.at(-1)?.energy_delta_kwh ?? "—")} kWh</b></span></div>` : actualEmpty("Equipment terdaftar, tetapi belum memiliki historian motor pada range ini.")}` : actualEmpty("Belum ada master equipment untuk asset ini.");
+    ${selectedMotor.points.length ? `<div class="chart-container compact"><canvas class="chart-canvas" id="actual-motor-trend-${machine.id}" aria-label="Trend motor ${actualText(selectedMotor.name)}"></canvas></div><div class="actual-trend-legend"><span><i class="phase-r"></i>Phase R</span><span><i class="phase-s"></i>Phase S</span><span><i class="phase-t"></i>Phase T</span></div><div class="actual-historian-summary"><span>Power avg <b>${actualHistorianDisplayValue(selectedMotor.points.at(-1)?.active_power_avg_kw, "kW")}</b></span><span>Frequency <b>${actualHistorianDisplayValue(selectedMotor.points.at(-1)?.drive_frequency_avg_hz, "Hz")}</b></span><span>Energy delta <b>${actualHistorianDisplayValue(selectedMotor.points.at(-1)?.energy_delta_kwh, "kWh")}</b></span></div>` : actualEmpty("Equipment terdaftar, tetapi belum memiliki historian motor pada range ini.")}` : actualEmpty("Belum ada master equipment untuk asset ini.");
   return panel("Historical Trends", `${actualText(rangeText)} · aggregate ${actualText(data.range?.granularity || "")} · satu parameter dengan pasangan PV/SV`, `${customRange}<div class="actual-historian-grid"><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">PROCESS SENSOR</span><h3>PV / SV Parameter Trend</h3></div>${sensorContent}</article><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">MOTOR & DRIVE</span><h3>3-Phase Trend</h3></div>${motorContent}</article></div>`, `<div class="segmented">${rangeButtons}</div>`);
 }
 
@@ -2687,7 +2687,7 @@ function drawActualMachineHistorian() {
   const parameterTrend = alignedActualParameterTrend(parameter);
   if (parameterTrend.timestamps.length) drawLineChart(`actual-sensor-trend-${machine.id}`, parameterTrend.series.map((series) => ({ data: series.data, color: series.kind === "SV" ? "#d68b05" : "#078eaa", dash: series.kind === "SV", fill: series.kind === "PV" })), parameterTrend.timestamps, { labelFormatter: historicalAxisLabel });
   const selectedMotor = data.motors.find((item) => item.id === (actualHistorian.selectedEquipment.get(machine.id) || data.motors.find((candidate) => candidate.points.length)?.id));
-  if (selectedMotor?.points.length) drawLineChart(`actual-motor-trend-${machine.id}`, [{ data: selectedMotor.points.map((point) => Number(point.current_r_avg_a)), color: "#078eaa", fill: true }, { data: selectedMotor.points.map((point) => Number(point.current_s_avg_a)), color: "#4d8fd0" }, { data: selectedMotor.points.map((point) => Number(point.current_t_avg_a)), color: "#119b70" }], selectedMotor.points.map((point) => new Date(point.bucket_start).getTime()), { labelFormatter: historicalAxisLabel });
+  if (selectedMotor?.points.length) drawLineChart(`actual-motor-trend-${machine.id}`, [{ data: selectedMotor.points.map((point) => Number(point.current_r_avg_a)), color: "#0072b2", width: 2.4 }, { data: selectedMotor.points.map((point) => Number(point.current_s_avg_a)), color: "#d55e00", width: 2.4 }, { data: selectedMotor.points.map((point) => Number(point.current_t_avg_a)), color: "#009e73", width: 2.4 }], selectedMotor.points.map((point) => new Date(point.bucket_start).getTime()), { labelFormatter: historicalAxisLabel, axisDecimals: 2 });
 }
 
 function actualOverviewPage() {
@@ -4297,11 +4297,11 @@ function drawLineChart(id, series, labels, options = {}) {
     ctx.stroke();
     ctx.setLineDash([]);
     const value = max - ((max - min) / 4) * i;
-    ctx.fillText(formatAxis(value), 2, y + 3);
+    ctx.fillText(formatAxis(value, options.axisDecimals), 2, y + 3);
   }
   series.forEach((line) => {
     ctx.beginPath();
-    ctx.lineWidth = line.dash ? 1.4 : 2;
+    ctx.lineWidth = line.width || (line.dash ? 1.4 : 2);
     ctx.strokeStyle = line.color;
     ctx.setLineDash(line.dash ? [6, 6] : []);
     line.data.forEach((value, i) => {
@@ -4554,7 +4554,8 @@ function roundedRect(ctx, x, y, width, height, radius) {
   ctx.closePath();
 }
 
-function formatAxis(value) {
+function formatAxis(value, maximumFractionDigits) {
+  if (Number.isFinite(maximumFractionDigits)) return Number(value).toLocaleString("id-ID", { maximumFractionDigits, minimumFractionDigits: 0 });
   if (Math.abs(value) >= 1000) return (value / 1000).toFixed(1) + "K";
   if (Math.abs(value) < 10) return value.toFixed(1);
   return Math.round(value).toString();
