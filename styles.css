@@ -657,7 +657,7 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 13px;
+  margin-bottom: 18px;
   padding: 20px;
   background: linear-gradient(120deg, #fff, #f4f9fa);
 }
@@ -702,12 +702,14 @@ select:focus-visible {
 .area-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 13px;
+  gap: 18px;
 }
 
 .area-card {
-  min-height: 210px;
-  padding: 17px;
+  display: flex;
+  min-height: 228px;
+  flex-direction: column;
+  padding: 20px 22px;
   cursor: pointer;
   transition: 160ms ease;
 }
@@ -759,7 +761,7 @@ select:focus-visible {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin: 22px 0 16px;
+  margin: 24px 0 18px;
 }
 
 .area-total strong {
@@ -776,13 +778,13 @@ select:focus-visible {
 .area-state-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
+  gap: 8px;
 }
 
 .area-state-grid span {
   display: grid;
   gap: 3px;
-  padding: 7px 4px;
+  padding: 9px 5px;
   border-radius: 6px;
   background: var(--surface-2);
   color: var(--ink-3);
@@ -797,8 +799,8 @@ select:focus-visible {
 }
 
 .area-card-foot {
-  margin-top: 15px;
-  padding-top: 12px;
+  margin-top: auto;
+  padding-top: 16px;
   border-top: 1px solid var(--line-soft);
   color: var(--ink-3);
   font-size: 0.52rem;
@@ -819,14 +821,14 @@ select:focus-visible {
 .fleet-filter {
   display: flex;
   gap: 8px;
-  margin-bottom: 13px;
+  margin-bottom: 18px;
   padding: 11px;
 }
 
 .fleet-machine-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 11px;
+  gap: 18px;
 }
 
 .fleet-machine-card {
@@ -945,8 +947,8 @@ select:focus-visible {
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 13px;
-  margin-bottom: 13px;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 .kpi-card {
@@ -1217,27 +1219,31 @@ select:focus-visible {
 .grid-2 {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(310px, 0.75fr);
-  gap: 13px;
-  margin-bottom: 13px;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 .grid-equal {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 13px;
-  margin-bottom: 13px;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 .grid-3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 13px;
-  margin-bottom: 13px;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 .panel {
   min-width: 0;
-  padding: 17px;
+  padding: 20px 22px;
+}
+
+.page-content > .panel:not(:last-child) {
+  margin-bottom: 18px;
 }
 
 .panel-head {
@@ -1245,7 +1251,7 @@ select:focus-visible {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 17px;
+  margin-bottom: 20px;
 }
 
 .panel-title {
@@ -5577,8 +5583,8 @@ select:focus-visible {
 
 .management-kpi-grid {
   display: grid;
-  gap: 13px;
-  margin-bottom: 13px;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 .management-kpi-grid.live-grid {
@@ -5665,8 +5671,9 @@ select:focus-visible {
 .management-analysis-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
-  gap: 13px;
-  margin-top: 13px;
+  gap: 18px;
+  margin-top: 18px;
+  margin-bottom: 18px;
 }
 
 .management-analysis-grid .panel {
@@ -5898,7 +5905,7 @@ select:focus-visible {
 
 .ranking-list {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .ranking-row {
@@ -5907,7 +5914,7 @@ select:focus-visible {
   align-items: center;
   gap: 9px;
   width: 100%;
-  padding: 9px;
+  padding: 11px;
   border: 1px solid var(--line-soft);
   border-radius: 7px;
   background: var(--surface);
@@ -6733,7 +6740,16 @@ select:focus-visible {
   }
 
   .panel {
-    padding: 14px;
+    padding: 17px;
+  }
+
+  .area-card {
+    min-height: auto;
+    padding: 18px;
+  }
+
+  .area-card-foot {
+    margin-top: 18px;
   }
 
   .panel-head {

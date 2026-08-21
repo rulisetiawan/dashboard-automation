@@ -4,6 +4,19 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.37 — 21 Agustus 2026
+
+**Status:** Card spacing consistency
+
+### Diubah
+
+- Padding vertikal dan horizontal panel dibakukan agar header, konten, dan tepi card tidak terlalu rapat.
+- Jarak antarpanel, grid analisis, KPI, ranking, dan card area ditingkatkan secara konsisten.
+- Card overview area memakai susunan vertikal yang seimbang dengan footer tetap memiliki ruang yang cukup.
+- Spacing responsif pada layar kecil disesuaikan agar tetap lega tanpa membuang terlalu banyak ruang.
+
+---
+
 ## Chemical CSV Import V1.0 — 21 Agustus 2026
 
 **Status:** Data aktual weighing tersimpan di PostgreSQL
