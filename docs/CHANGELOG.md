@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.33 — 21 Agustus 2026
+
+**Status:** Full Tag Registry historian selector
+
+### Diubah
+
+- Batas delapan tag pada Historical Trends dihapus; seluruh tag aktif asset tersedia pada dropdown.
+- Query aggregate sensor dilakukan hanya untuk tag yang dipilih.
+- Tampilan historian memakai panel, segmented range, select, badge, spacing, dan color token dashboard utama.
+
+---
+
 ## Dashboard V1.32 — 21 Agustus 2026
 
 **Status:** Trend aktual detail mesin

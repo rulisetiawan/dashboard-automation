@@ -2505,18 +2505,7 @@ async function loadActualHistorian(machine) {
     const snapshotResponse = await fetch(`/api/v1/assets/${encodeURIComponent(machine.id)}/snapshot`, { cache: "no-store" });
     if (!snapshotResponse.ok) throw new Error("Tag registry unavailable");
     const snapshot = await snapshotResponse.json();
-    const tags = (snapshot.tags || []).filter((tag) => /(_PV|_SV|_TOTAL)$/i.test(String(tag.signal_role || ""))).slice(0, 8);
-    const sensorResults = await Promise.all(tags.map(async (tag) => {
-      const url = new URL("/api/v1/telemetry/aggregate", window.location.origin);
-      url.searchParams.set("asset_id", machine.id);
-      url.searchParams.set("tag_code", tag.tag_code);
-      url.searchParams.set("granularity", range.granularity);
-      url.searchParams.set("from", range.from.toISOString());
-      url.searchParams.set("to", range.to.toISOString());
-      const response = await fetch(url, { cache: "no-store" });
-      const payload = response.ok ? await response.json() : { points: [] };
-      return { ...tag, points: payload.points || [] };
-    }));
+    const sensorResults = (snapshot.tags || []).map((tag) => ({ ...tag, points: null }));
     const equipment = backendEquipment.filter((item) => item.assetId === machine.id).slice(0, 12);
     const motorResults = await Promise.all(equipment.map(async (item) => {
       const url = new URL(`/api/v1/equipment/${encodeURIComponent(item.id)}/trend`, window.location.origin);
@@ -2536,6 +2525,29 @@ async function loadActualHistorian(machine) {
   }
 }
 
+async function loadActualSensorSeries(machine, tagCode) {
+  const key = actualHistorianKey(machine.id);
+  const requestKey = `${key}:${tagCode}`;
+  const data = actualHistorian.cache.get(key);
+  const sensor = data?.sensors.find((item) => item.tag_code === tagCode);
+  if (!data || !sensor || Array.isArray(sensor.points) || actualHistorian.loading.has(requestKey)) return;
+  actualHistorian.loading.add(requestKey);
+  try {
+    const url = new URL("/api/v1/telemetry/aggregate", window.location.origin);
+    url.searchParams.set("asset_id", machine.id);
+    url.searchParams.set("tag_code", tagCode);
+    url.searchParams.set("granularity", data.range.granularity);
+    url.searchParams.set("from", data.range.from.toISOString());
+    url.searchParams.set("to", data.range.to.toISOString());
+    const response = await fetch(url, { cache: "no-store" });
+    const payload = response.ok ? await response.json() : { points: [] };
+    sensor.points = payload.points || [];
+  } finally {
+    actualHistorian.loading.delete(requestKey);
+    renderPage({ preserveScroll: true });
+  }
+}
+
 function databaseActualHistorianPanel(machine) {
   const key = actualHistorianKey(machine.id);
   const data = actualHistorian.cache.get(key);
@@ -2543,22 +2555,22 @@ function databaseActualHistorianPanel(machine) {
   const rangeButtons = ["1H", "8H", "24H", "7D"].map((range) => `<button class="${actualHistorian.range === range ? "active" : ""}" data-actual-trend-range="${range}">${range}</button>`).join("");
   if (!data) return panel("Historical Trends", "Memuat aggregate historian PostgreSQL untuk sensor dan motor.", `<div class="actual-historian-loading">Loading ${actualText(actualHistorian.range)} trend data…</div>`, `<div class="segmented">${rangeButtons}</div>`);
   if (data.error) return panel("Historical Trends", "Historian PostgreSQL", actualEmpty(data.error), `<div class="segmented">${rangeButtons}</div>`);
-  const sensors = data.sensors.filter((item) => item.points.length);
-  const motors = data.motors.filter((item) => item.points.length);
-  const selectedTagCode = actualHistorian.selectedTag.get(machine.id) || sensors[0]?.tag_code;
+  const sensors = data.sensors;
+  const motors = data.motors;
+  const defaultSensor = sensors.find((item) => /(_PV|_SV|_TOTAL)$/i.test(String(item.signal_role || ""))) || sensors[0];
+  const selectedTagCode = actualHistorian.selectedTag.get(machine.id) || defaultSensor?.tag_code;
   const selectedSensor = sensors.find((item) => item.tag_code === selectedTagCode) || sensors[0];
-  const selectedEquipmentId = actualHistorian.selectedEquipment.get(machine.id) || motors[0]?.id;
+  if (selectedSensor && !Array.isArray(selectedSensor.points)) void loadActualSensorSeries(machine, selectedSensor.tag_code);
+  const selectedEquipmentId = actualHistorian.selectedEquipment.get(machine.id) || motors.find((item) => item.points.length)?.id || motors[0]?.id;
   const selectedMotor = motors.find((item) => item.id === selectedEquipmentId) || motors[0];
   const rangeText = data.range ? `${formatDateTime(data.range.from.getTime(), true)} — ${formatDateTime(data.range.to.getTime(), true)}` : actualHistorian.range;
   const sensorContent = selectedSensor ? `
-    <div class="actual-historian-toolbar"><label>Sensor <select data-actual-trend-tag="${machine.id}">${sensors.map((item) => `<option value="${actualText(item.tag_code)}" ${item.tag_code === selectedSensor.tag_code ? "selected" : ""}>${actualText(actualSignalLabel(item.signal_role))}</option>`).join("")}</select></label><span>${selectedSensor.points.length} points · ${actualText(selectedSensor.engineering_unit || "")}</span></div>
-    <div class="chart-container compact"><canvas class="chart-canvas" id="actual-sensor-trend-${machine.id}" aria-label="Trend ${actualText(selectedSensor.signal_role)}"></canvas></div>
-    <div class="actual-historian-summary"><span>Min <b>${actualText(selectedSensor.points.at(-1)?.min_value ?? "—")}</b></span><span>Avg <b>${actualText(selectedSensor.points.at(-1)?.avg_value ?? "—")}</b></span><span>Max <b>${actualText(selectedSensor.points.at(-1)?.max_value ?? "—")}</b></span><span>Last <b>${actualText(selectedSensor.points.at(-1)?.last_value ?? "—")}</b></span></div>` : actualEmpty("Belum ada aggregate sensor pada range ini.");
+    <div class="actual-historian-toolbar"><label>Tag<select class="history-select-control" data-actual-trend-tag="${machine.id}">${sensors.map((item) => `<option value="${actualText(item.tag_code)}" ${item.tag_code === selectedSensor.tag_code ? "selected" : ""}>${actualText(actualSignalLabel(item.signal_role) || item.tag_code)}</option>`).join("")}</select></label><span class="data-pill neutral">${Array.isArray(selectedSensor.points) ? selectedSensor.points.length : "…"} POINTS</span></div>
+    ${!Array.isArray(selectedSensor.points) ? `<div class="actual-historian-loading">Memuat ${actualText(selectedSensor.tag_code)}…</div>` : selectedSensor.points.length ? `<div class="chart-container compact"><canvas class="chart-canvas" id="actual-sensor-trend-${machine.id}" aria-label="Trend ${actualText(selectedSensor.signal_role)}"></canvas></div><div class="actual-trend-legend"><span><i class="avg"></i>Average</span><span><i class="max"></i>Maximum</span><span><i class="min"></i>Minimum</span></div><div class="actual-historian-summary"><span>Min <b>${actualText(selectedSensor.points.at(-1)?.min_value ?? "—")}</b></span><span>Avg <b>${actualText(selectedSensor.points.at(-1)?.avg_value ?? "—")}</b></span><span>Max <b>${actualText(selectedSensor.points.at(-1)?.max_value ?? "—")}</b></span><span>Last <b>${actualText(selectedSensor.points.at(-1)?.last_value ?? "—")}</b></span></div>` : actualEmpty("Tag terdaftar, tetapi belum memiliki data numerik pada range ini.")}` : actualEmpty("Belum ada tag aktif untuk asset ini.");
   const motorContent = selectedMotor ? `
-    <div class="actual-historian-toolbar"><label>Motor <select data-actual-motor-select="${machine.id}">${motors.map((item) => `<option value="${actualText(item.id)}" ${item.id === selectedMotor.id ? "selected" : ""}>${actualText(item.name)} · ${actualText(item.code)}</option>`).join("")}</select></label><span>${selectedMotor.points.length} points · R/S/T Ampere</span></div>
-    <div class="chart-container compact"><canvas class="chart-canvas" id="actual-motor-trend-${machine.id}" aria-label="Trend motor ${actualText(selectedMotor.name)}"></canvas></div>
-    <div class="actual-historian-summary"><span>Power avg <b>${actualText(selectedMotor.points.at(-1)?.active_power_avg_kw ?? "—")} kW</b></span><span>Frequency <b>${actualText(selectedMotor.points.at(-1)?.drive_frequency_avg_hz ?? "—")} Hz</b></span><span>Energy delta <b>${actualText(selectedMotor.points.at(-1)?.energy_delta_kwh ?? "—")} kWh</b></span></div>` : actualEmpty("Belum ada aggregate motor pada range ini.");
-  return `<section class="actual-historian-section"><div class="actual-historian-head"><div><span class="eyebrow">POSTGRESQL HISTORIAN</span><h2>Historical Trends</h2><p>${actualText(rangeText)} · aggregate ${actualText(data.range?.granularity || "")}</p></div><div class="segmented">${rangeButtons}</div></div><div class="actual-historian-grid">${panel("Sensor trend", "PV/TOTAL aktual dari telemetry historian", sensorContent)}${panel("Motor 3-phase trend", "Current R/S/T dan load motor dari equipment historian", motorContent)}</div></section>`;
+    <div class="actual-historian-toolbar"><label>Motor<select class="history-select-control" data-actual-motor-select="${machine.id}">${motors.map((item) => `<option value="${actualText(item.id)}" ${item.id === selectedMotor.id ? "selected" : ""}>${actualText(item.name)} · ${actualText(item.code)}</option>`).join("")}</select></label><span class="data-pill neutral">${selectedMotor.points.length} POINTS</span></div>
+    ${selectedMotor.points.length ? `<div class="chart-container compact"><canvas class="chart-canvas" id="actual-motor-trend-${machine.id}" aria-label="Trend motor ${actualText(selectedMotor.name)}"></canvas></div><div class="actual-trend-legend"><span><i class="phase-r"></i>Phase R</span><span><i class="phase-s"></i>Phase S</span><span><i class="phase-t"></i>Phase T</span></div><div class="actual-historian-summary"><span>Power avg <b>${actualText(selectedMotor.points.at(-1)?.active_power_avg_kw ?? "—")} kW</b></span><span>Frequency <b>${actualText(selectedMotor.points.at(-1)?.drive_frequency_avg_hz ?? "—")} Hz</b></span><span>Energy delta <b>${actualText(selectedMotor.points.at(-1)?.energy_delta_kwh ?? "—")} kWh</b></span></div>` : actualEmpty("Equipment terdaftar, tetapi belum memiliki historian motor pada range ini.")}` : actualEmpty("Belum ada master equipment untuk asset ini.");
+  return panel("Historical Trends", `${actualText(rangeText)} · aggregate ${actualText(data.range?.granularity || "")} · seluruh tag aktif tersedia pada pilihan`, `<div class="actual-historian-grid"><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">PROCESS SENSOR</span><h3>Sensor Trend</h3></div>${sensorContent}</article><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">MOTOR & DRIVE</span><h3>3-Phase Trend</h3></div>${motorContent}</article></div>`, `<div class="segmented">${rangeButtons}</div>`);
 }
 
 function drawActualMachineHistorian() {
@@ -2568,7 +2580,7 @@ function drawActualMachineHistorian() {
   if (!machine) return;
   const data = actualHistorian.cache.get(actualHistorianKey(machine.id));
   if (!data || data.error) return;
-  const selectedSensor = data.sensors.find((item) => item.tag_code === (actualHistorian.selectedTag.get(machine.id) || data.sensors.find((candidate) => candidate.points.length)?.tag_code));
+  const selectedSensor = data.sensors.find((item) => item.tag_code === (actualHistorian.selectedTag.get(machine.id) || data.sensors.find((candidate) => Array.isArray(candidate.points) && candidate.points.length)?.tag_code));
   if (selectedSensor?.points.length) drawLineChart(`actual-sensor-trend-${machine.id}`, [{ data: selectedSensor.points.map((point) => Number(point.avg_value)), color: "#078eaa", fill: true }, { data: selectedSensor.points.map((point) => Number(point.max_value)), color: "#d68b05", dash: true }, { data: selectedSensor.points.map((point) => Number(point.min_value)), color: "#119b70", dash: true }], selectedSensor.points.map((point) => new Date(point.bucket_start).getTime()), { labelFormatter: historicalAxisLabel });
   const selectedMotor = data.motors.find((item) => item.id === (actualHistorian.selectedEquipment.get(machine.id) || data.motors.find((candidate) => candidate.points.length)?.id));
   if (selectedMotor?.points.length) drawLineChart(`actual-motor-trend-${machine.id}`, [{ data: selectedMotor.points.map((point) => Number(point.current_r_avg_a)), color: "#078eaa", fill: true }, { data: selectedMotor.points.map((point) => Number(point.current_s_avg_a)), color: "#4d8fd0" }, { data: selectedMotor.points.map((point) => Number(point.current_t_avg_a)), color: "#119b70" }], selectedMotor.points.map((point) => new Date(point.bucket_start).getTime()), { labelFormatter: historicalAxisLabel });

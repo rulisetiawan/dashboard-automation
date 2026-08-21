@@ -1651,12 +1651,6 @@ select:focus-visible {
   height: 100%;
 }
 
-.actual-historian-section {
-  display: grid;
-  gap: 14px;
-}
-
-.actual-historian-head,
 .actual-historian-toolbar,
 .actual-historian-summary {
   display: flex;
@@ -1665,50 +1659,94 @@ select:focus-visible {
   gap: 10px;
 }
 
-.actual-historian-head h2 {
-  margin: 3px 0;
-}
-
-.actual-historian-head p,
-.actual-historian-toolbar,
-.actual-historian-summary,
-.actual-historian-loading {
-  color: var(--ink-3);
-  font-size: .72rem;
-}
-
 .actual-historian-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
+.actual-historian-block {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.actual-historian-block-head {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.actual-historian-block-head h3 {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: .92rem;
+}
+
 .actual-historian-toolbar {
   margin-bottom: 8px;
+  color: var(--ink-3);
+  font-size: .72rem;
 }
 
 .actual-historian-toolbar label {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
   color: var(--ink-2);
   font-weight: 700;
 }
 
-.actual-historian-toolbar select {
+.actual-historian-toolbar .history-select-control {
+  width: min(100%, 310px);
   max-width: 245px;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
 }
+
+.actual-historian-loading {
+  display: grid;
+  min-height: 210px;
+  place-items: center;
+  color: var(--ink-3);
+  font-size: .72rem;
+}
+
+.actual-trend-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--ink-3);
+  font-size: .65rem;
+}
+
+.actual-trend-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.actual-trend-legend i {
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+
+.actual-trend-legend .max { background: var(--warning); }
+.actual-trend-legend .min,
+.actual-trend-legend .phase-t { background: var(--success); }
+.actual-trend-legend .phase-s { background: #4d8fd0; }
+.actual-trend-legend .phase-r { background: var(--primary); }
 
 .actual-historian-summary {
   justify-content: flex-start;
   flex-wrap: wrap;
   margin-top: 9px;
+  color: var(--ink-3);
+  font-size: .68rem;
 }
 
 .actual-historian-summary span {
@@ -1726,9 +1764,9 @@ select:focus-visible {
 }
 
 @media (max-width: 620px) {
-  .actual-historian-head,
   .actual-historian-toolbar { align-items: flex-start; flex-direction: column; }
-  .actual-historian-toolbar select { max-width: 100%; }
+  .actual-historian-toolbar label { align-items: flex-start; flex-direction: column; width: 100%; }
+  .actual-historian-toolbar .history-select-control { width: 100%; max-width: 100%; }
 }
 
 .interactive-chart {
