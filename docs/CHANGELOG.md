@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.42 — 21 Agustus 2026
+
+**Status:** Custom historian date input stability
+
+### Diperbaiki
+
+- Nilai start dan end date historian langsung disimpan ketika operator memilih tanggal atau waktu.
+- Refresh realtime tidak lagi mengembalikan field custom range ke tanggal hari ini.
+- Perubahan input tetap belum menjalankan query sampai operator menekan Apply range.
+
+---
+
 ## Dashboard V1.41 — 21 Agustus 2026
 
 **Status:** Chemical table pagination scroll stability

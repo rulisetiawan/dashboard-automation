@@ -3731,6 +3731,16 @@ function bindPageEvents() {
   });
   const explorerParameterSelect = document.querySelector("[data-history-explorer-parameter]");
   if (explorerParameterSelect) releaseDeferredHistorianRender(explorerParameterSelect);
+  document.querySelectorAll("[data-actual-history-date]").forEach((input) => {
+    const rememberDateValue = () => {
+      const value = new Date(input.value).getTime();
+      if (!Number.isFinite(value)) return;
+      state.history[input.dataset.actualHistoryDate === "start" ? "start" : "end"] = value;
+    };
+    input.addEventListener("input", rememberDateValue);
+    input.addEventListener("change", rememberDateValue);
+    input.addEventListener("blur", rememberDateValue);
+  });
   document.querySelector("[data-actual-history-apply]")?.addEventListener("click", (event) => {
     const start = new Date(document.querySelector('[data-actual-history-date="start"]')?.value || "").getTime();
     const end = new Date(document.querySelector('[data-actual-history-date="end"]')?.value || "").getTime();
