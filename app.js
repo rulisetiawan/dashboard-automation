@@ -2503,7 +2503,7 @@ function actualAssetTable(assets) {
   `;
 
   const tableRows = pageItems.length ? pageItems.map((asset) => `
-    <tr class="clickable-row" data-machine-row="${asset.process || 'jetflow'}|${asset.id}" title="Klik untuk membuka detail ${asset.id}">
+    <tr class="clickable-row" data-machine-row="${asset.process || 'jetflow'}|${asset.id}" role="button" tabindex="0" aria-label="Buka detail mesin ${actualText(asset.id)}" title="Klik untuk membuka detail ${asset.id}">
       <td>
         <strong class="machine-id-highlight">${actualText(asset.id)}</strong>
         <br><small class="machine-name-sub">${actualText(asset.name)}</small>
@@ -3832,13 +3832,15 @@ function bindPageEvents() {
   });
 
   document.querySelectorAll("[data-machine-row]").forEach((row) => {
-    row.addEventListener("click", () => {
+    const openMachine = () => {
       const [type, machineId] = row.dataset.machineRow.split("|");
-      if (type && machineId) {
-        state.selected[type] = machineId;
-        const target = fleetFor(type).find((m) => m.id === machineId);
-        if (state.drill[type]) state.drill[type] = { area: target?.area || null, machine: machineId };
-        navigate(type);
+      if (type && machineId) openMachineDetail(type, machineId);
+    };
+    row.addEventListener("click", openMachine);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openMachine();
       }
     });
   });
@@ -3961,10 +3963,7 @@ function bindPageEvents() {
   document.querySelectorAll("[data-machine-target]").forEach((card) => {
     const openMachine = () => {
       const [type, machine] = card.dataset.machineTarget.split("|");
-      const target = fleetFor(type).find((item) => item.id === machine);
-      state.selected[type] = machine;
-      state.drill[type] = { area: target?.area || state.drill[type].area, machine };
-      renderPage();
+      openMachineDetail(type, machine);
     };
     card.addEventListener("click", openMachine);
     card.addEventListener("keydown", (event) => {
@@ -4038,12 +4037,7 @@ function bindPageEvents() {
   document.querySelectorAll("[data-open-power-machine]").forEach((button) => {
     button.addEventListener("click", () => {
       const [type, machineId] = button.dataset.openPowerMachine.split("|");
-      const machine = fleetFor(type).find((item) => item.id === machineId);
-      if (!machine) return;
-      state.page = type;
-      state.selected[type] = machineId;
-      state.drill[type] = { area: machine.area, machine: machineId };
-      renderPage();
+      openMachineDetail(type, machineId);
     });
   });
   document.querySelectorAll("[data-process-level]").forEach((button) => {
@@ -4204,8 +4198,7 @@ function bindPageEvents() {
   document.querySelectorAll("[data-alarm-machine]").forEach((row) => {
     const openMachine = () => {
       const [type, machineId] = row.dataset.alarmMachine.split("|");
-      state.selected[type] = machineId;
-      navigate(type);
+      openMachineDetail(type, machineId);
     };
     row.addEventListener("click", openMachine);
     row.addEventListener("keydown", (event) => {
@@ -4221,6 +4214,16 @@ function bindPageEvents() {
 function navigate(page) {
   if (state.drill[page]) state.drill[page] = { area: null, machine: null };
   state.page = page;
+  renderPage();
+  closeSidebar();
+}
+
+function openMachineDetail(type, machineId) {
+  const machine = fleetFor(type).find((item) => item.id === machineId);
+  if (!machine || !state.drill[type]) return;
+  state.page = type;
+  state.selected[type] = machineId;
+  state.drill[type] = { area: machine.area || null, machine: machineId };
   renderPage();
   closeSidebar();
 }

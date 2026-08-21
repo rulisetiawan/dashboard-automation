@@ -4,6 +4,19 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.43 — 21 Agustus 2026
+
+**Status:** Direct machine detail navigation
+
+### Diperbaiki
+
+- Klik asset pada Plant Overview langsung membuka detail mesin yang dipilih.
+- State area dan machine tidak lagi dihapus oleh navigasi menu proses.
+- Navigasi langsung diseragamkan untuk tabel asset, ranking mesin, alarm, dan power meter.
+- Baris tabel dapat dibuka menggunakan Enter atau Space.
+
+---
+
 ## Dashboard V1.42 — 21 Agustus 2026
 
 **Status:** Custom historian date input stability
