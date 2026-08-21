@@ -349,7 +349,7 @@ function hydrateChemicalTransactions(rows) {
     calator: item.calator_id,
     code: item.chemical_code,
     variant: item.chemical_name,
-    target: `${Number(item.target_kg).toFixed(1)} kg`,
+    target: item.target_kg == null ? "—" : `${Number(item.target_kg).toFixed(1)} kg`,
     actual: item.actual_kg == null ? "—" : `${Number(item.actual_kg).toFixed(1)} kg`,
     mode: item.mode,
     status: item.status,

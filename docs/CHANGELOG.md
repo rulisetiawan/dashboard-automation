@@ -4,6 +4,25 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Chemical CSV Import V1.0 — 21 Agustus 2026
+
+**Status:** Data aktual weighing tersimpan di PostgreSQL
+
+### Ditambahkan
+
+- Importer idempotent untuk 15 file Automatic, Manual, dan Emergency.
+- Sebanyak 112.856 source row dimasukkan ke `chemical_transaction`.
+- Metadata `source_file`, `source_row_id`, start/end time, dan `raw_payload` untuk audit.
+- Mapping lima unit dispensing ke asset ID aktual.
+
+### Keputusan
+
+- `target_kg` dan `calator_id` dibiarkan `NULL` karena tidak tersedia pada sumber.
+- Timestamp sumber diperlakukan sebagai waktu lokal WIB.
+- Dashboard menampilkan target kosong sebagai `—`, bukan `0 kg`.
+
+---
+
 ## Dashboard V1.36 — 21 Agustus 2026
 
 **Status:** Motor trend readability
