@@ -4,6 +4,27 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.47 — 21 Agustus 2026
+
+**Status:** Machine performance summary
+
+### Diubah
+
+- Card sensor duplikat di atas detail mesin diganti empat card summary operasional.
+- Live Sensor Measurements tetap khusus nilai snapshot aktual.
+- Load Batch otomatis menerapkan scope summary Current Batch.
+
+### Ditambahkan
+
+- Scope Current Batch, Current Shift, dan Today.
+- Kalkulasi runtime dari overlap `machine_state_event`.
+- Actual output dari process run/totalizer serta fallback estimated output dari integrasi speed.
+- Peak temperature lengkap dengan waktu kejadian.
+- Process stability sebagai temperature spread tanpa membuat tolerance pass/fail palsu.
+- Endpoint `GET /api/v1/assets/{assetId}/performance-summary`.
+
+---
+
 ## Dashboard V1.46 — 21 Agustus 2026
 
 **Status:** Actual-data batch investigation workspace

@@ -79,6 +79,9 @@ const state = {
     viewStart: .72,
     viewFraction: .28,
   },
+  machineSummary: {
+    scope: "shift",
+  },
   batchInvestigation: {
     jetflow: { machineId: null, batch: null },
     calator: { machineId: null, batch: null },
@@ -128,6 +131,9 @@ let deferredRealtimeRender = false;
 const actualBatchPrograms = new Map();
 const actualBatchProgramLoading = new Set();
 const actualBatchProgramErrors = new Map();
+const actualMachineSummaries = new Map();
+const actualMachineSummaryLoading = new Set();
+const actualMachineSummaryErrors = new Map();
 const historianParameterStorageKey = "pt-smm.historian.selected-parameter.v1";
 
 function loadHistorianParameterPreferences() {
@@ -3346,6 +3352,89 @@ function databaseSnapshotMetrics(machine, limit = 4) {
     });
 }
 
+function actualMachineSummaryRun(machine, runs = backendProcessRuns) {
+  return actualBatchRunFor(machine, runs)
+    || runs.filter((run) => run.asset_id === machine.id).sort((left, right) => new Date(right.started_at || 0) - new Date(left.started_at || 0))[0]
+    || null;
+}
+
+function actualMachineSummaryKey(machine, runs = backendProcessRuns) {
+  const run = state.machineSummary.scope === "batch" ? actualMachineSummaryRun(machine, runs) : null;
+  return `${machine.id}:${state.machineSummary.scope}:${run?.process_run_id || "latest"}`;
+}
+
+async function loadActualMachineSummary(machine, runs = backendProcessRuns) {
+  const key = actualMachineSummaryKey(machine, runs);
+  const cached = actualMachineSummaries.get(key);
+  if (actualMachineSummaryLoading.has(key) || cached && Date.now() - cached.loadedAt < 30_000) return;
+  actualMachineSummaryLoading.add(key);
+  actualMachineSummaryErrors.delete(key);
+  try {
+    const run = state.machineSummary.scope === "batch" ? actualMachineSummaryRun(machine, runs) : null;
+    const url = new URL(`/api/v1/assets/${encodeURIComponent(machine.id)}/performance-summary`, window.location.origin);
+    url.searchParams.set("scope", state.machineSummary.scope);
+    if (run?.process_run_id) url.searchParams.set("process_run_id", run.process_run_id);
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error(response.status === 404 ? "Belum ada range batch untuk summary mesin ini." : "Performance summary API unavailable.");
+    actualMachineSummaries.set(key, { data: await response.json(), loadedAt: Date.now() });
+  } catch (error) {
+    actualMachineSummaryErrors.set(key, error instanceof Error ? error.message : "Performance summary unavailable");
+  } finally {
+    actualMachineSummaryLoading.delete(key);
+    requestHistorianRender();
+  }
+}
+
+function actualDuration(seconds) {
+  const totalMinutes = Math.max(0, Math.round(Number(seconds || 0) / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
+function actualSummaryNumber(value, decimals = 1) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("id-ID", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : "—";
+}
+
+function actualPeakLabel(role) {
+  return actualSignalLabel(String(role || "Temperature").replace(/_PV$/i, "").replace(/^TEMPERATURE_/, ""));
+}
+
+function machinePerformanceSummary(machine, runs) {
+  const key = actualMachineSummaryKey(machine, runs);
+  const cached = actualMachineSummaries.get(key);
+  const data = cached?.data;
+  if (!actualMachineSummaryLoading.has(key) && (!cached || Date.now() - cached.loadedAt >= 30_000)) void loadActualMachineSummary(machine, runs);
+  const scopes = [["batch", "Current Batch"], ["shift", "Current Shift"], ["today", "Today"]];
+  const scopeButtons = scopes.map(([scope, label]) => `<button class="${state.machineSummary.scope === scope ? "active" : ""}" data-machine-summary-scope="${scope}">${label}</button>`).join("");
+  const header = `<div class="performance-summary-head"><div><span class="eyebrow">Machine performance summary</span><h2>Operational Summary</h2><p>${actualText(data?.range?.label || "Menghitung runtime, output, peak, dan stability dari PostgreSQL aktual.")}</p></div><div class="segmented performance-scope-control">${scopeButtons}</div></div>`;
+  if (!data) {
+    const error = actualMachineSummaryErrors.get(key);
+    const foot = error || "Loading calculated machine summary…";
+    return `<section class="performance-summary-section">${header}<div class="kpi-grid performance-summary-grid">${kpi("Total Runtime", "—", "", "RT", foot)}${kpi("Estimated Output", "—", "", "OUT", foot)}${kpi("Peak Temperature", "—", "", "PK", foot)}${kpi("Process Stability", "—", "", "STB", foot)}</div></section>`;
+  }
+
+  const availability = data.runtime.availability_percent == null ? "No complete state coverage" : `${actualSummaryNumber(data.runtime.availability_percent, 1)}% availability`;
+  const stateCoverage = data.runtime.state_coverage_percent == null ? "—" : `${actualSummaryNumber(data.runtime.state_coverage_percent, 0)}% state coverage`;
+  const runtimeFoot = `${availability} · ${stateCoverage} · ${data.runtime.stop_count} stop event`;
+  const outputTitle = data.output?.estimated === false ? "Actual Output" : "Estimated Output";
+  const outputValue = data.output ? actualSummaryNumber(data.output.value, 1) : "—";
+  const outputUnit = data.output?.unit || "";
+  const outputFoot = data.output ? `${data.output.estimated ? "Calculated from speed historian" : "Meter / process output"} · ${actualText(data.output.source)}` : "Output totalizer atau speed historian belum tersedia";
+  const peaks = [...(data.peaks || [])].sort((left, right) => String(left.signal_role).localeCompare(String(right.signal_role)));
+  const highestPeak = peaks.reduce((current, item) => !current || Number(item.peak_value) > Number(current.peak_value) ? item : current, null);
+  const peakValue = highestPeak ? actualSummaryNumber(highestPeak.peak_value, 1) : "—";
+  const peakUnit = highestPeak?.engineering_unit || "";
+  const peakFoot = peaks.length ? `${peaks.map((item) => `${actualPeakLabel(item.signal_role)} ${actualSummaryNumber(item.peak_value, 1)} ${item.engineering_unit || ""}`).join(" · ")} · highest at ${actualTime(highestPeak?.peak_at)}` : "Critical temperature historian belum tersedia";
+  const stabilityTitle = data.stability ? "Process Stability" : "Completed Batches";
+  const stabilityValue = data.stability ? actualSummaryNumber(data.stability.average_spread, 2) : actualSummaryNumber(data.completed_batches, 0);
+  const stabilityUnit = data.stability?.unit || "batch";
+  const stabilityFoot = data.stability ? `Avg temperature spread · peak ${actualSummaryNumber(data.stability.maximum_spread, 2)} ${data.stability.unit} · ${data.stability.sensor_count} sensors` : "Completed process run in selected scope";
+
+  return `<section class="performance-summary-section">${header}<div class="kpi-grid performance-summary-grid">${kpi("Total Runtime", actualDuration(data.runtime.seconds), "", "RT", runtimeFoot)}${kpi(outputTitle, outputValue, outputUnit, "OUT", outputFoot)}${kpi("Peak Temperature", peakValue, peakUnit, "PK", peakFoot)}${kpi(stabilityTitle, stabilityValue, stabilityUnit, "STB", stabilityFoot)}</div></section>`;
+}
+
 function databaseMachineReading(machine) {
   const metrics = databaseSnapshotMetrics(machine, 2);
   return metrics.length ? metrics.map((item) => `${item.label}: ${item.value}${item.unit ? ` ${item.unit}` : ""}`).join(" · ") : "No live snapshot";
@@ -3649,14 +3738,13 @@ function databaseMachineDetailPage(type) {
   const machineId = state.drill[type].machine || state.selected[type];
   const machine = fleetFor(type).find((item) => item.id === machineId);
   if (!machine) return databaseFleetPage(type);
-  const metrics = databaseSnapshotMetrics(machine, 4);
   const runs = backendProcessRuns.filter((run) => run.asset_id === machine.id);
   const chemicalTransactions = type === "chemical" ? chemicalDispensingLogs.filter((item) => item.dispenser === machine.id) : [];
   return `
     ${processBreadcrumb(type, machine)}
     ${pageHead(type, `<button class="button" data-process-level="area" data-process-type="${type}">← ${actualText(machine.areaLabel || machine.area)}</button><span class="range-badge">ACTUAL</span>`)}
     ${machineHero(machine, processConfig[type].code, `${actualText(machine.subtype || "—")} · ${actualText(machine.recipe || "Recipe belum dimapping")} · source ${actualText(machine.quality)}`)}
-    <section class="kpi-grid">${metrics.length ? metrics.map((metric, index) => kpi(metric.label, actualText(metric.value), metric.unit, ["PV", "SN", "LV", "OP"][index], "Snapshot PostgreSQL aktual")).join("") : actualMetric("Live snapshot", "—", "", "No data")}</section>
+    ${machinePerformanceSummary(machine, runs)}
     ${panel("Live sensor measurements", "Seluruh nilai dari asset_snapshot.values_json dan unit dari tag_definition", actualSensorValues([machine]))}
     ${actualBatchLookupPanel(machine, runs)}
     ${actualBatchWorkspace(machine, runs)}
@@ -3792,6 +3880,7 @@ function trackDatabaseProcessRun(processRunId) {
     return;
   }
   state.batchInvestigation[run.process_type] = { machineId: run.asset_id, batch: run.batch_no, processRunId: run.process_run_id };
+  state.machineSummary.scope = "batch";
   state.history.preset = "CUSTOM";
   state.history.start = startedAt;
   state.history.end = endedAt;
@@ -4057,6 +4146,12 @@ function bindPageEvents() {
       }
     });
   });
+  document.querySelectorAll("[data-machine-summary-scope]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.machineSummary.scope = button.dataset.machineSummaryScope;
+      renderPage({ preserveScroll: true });
+    });
+  });
   document.querySelectorAll("[data-actual-batch-form]").forEach((form) => {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -4083,6 +4178,7 @@ function bindPageEvents() {
   document.querySelectorAll("[data-actual-batch-clear]").forEach((button) => {
     button.addEventListener("click", () => {
       state.batchInvestigation[button.dataset.actualBatchClear] = { machineId: null, batch: null };
+      if (state.machineSummary.scope === "batch") state.machineSummary.scope = "shift";
       renderPage({ preserveScroll: true });
     });
   });
