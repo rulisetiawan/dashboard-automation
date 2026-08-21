@@ -2557,7 +2557,8 @@ function databaseActualHistorianPanel(machine) {
   if (data.error) return panel("Historical Trends", "Historian PostgreSQL", actualEmpty(data.error), `<div class="segmented">${rangeButtons}</div>`);
   const sensors = data.sensors;
   const motors = data.motors;
-  const defaultSensor = sensors.find((item) => /(_PV|_SV|_TOTAL)$/i.test(String(item.signal_role || ""))) || sensors[0];
+  const recentTagCode = backendTelemetry.find((item) => item.asset_id === machine.id)?.tag_code;
+  const defaultSensor = sensors.find((item) => item.tag_code === recentTagCode) || sensors.find((item) => /(_PV|_SV|_TOTAL)$/i.test(String(item.signal_role || ""))) || sensors[0];
   const selectedTagCode = actualHistorian.selectedTag.get(machine.id) || defaultSensor?.tag_code;
   const selectedSensor = sensors.find((item) => item.tag_code === selectedTagCode) || sensors[0];
   if (selectedSensor && !Array.isArray(selectedSensor.points)) void loadActualSensorSeries(machine, selectedSensor.tag_code);
