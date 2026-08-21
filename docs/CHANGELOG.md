@@ -4,6 +4,20 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.34 — 21 Agustus 2026
+
+**Status:** Historian satu parameter PV/SV
+
+### Diubah
+
+- Selector historian dikelompokkan berdasarkan parameter proses; suffix `_PV` dan `_SV` otomatis dipasangkan.
+- Grafik sensor hanya menampilkan PV aktual dan SV setpoint untuk satu parameter terpilih dengan warna serta legend berbeda.
+- Ringkasan menampilkan nilai PV, SV, dan deviasi terakhir menggunakan engineering unit yang sama.
+- Render WebSocket dan historian ditunda selama dropdown aktif agar kontrol tidak menutup sendiri.
+- Parameter tanpa tag atau sample SV diberi informasi eksplisit dan tidak diisi dengan data dummy.
+
+---
+
 ## Dashboard V1.33 — 21 Agustus 2026
 
 **Status:** Full Tag Registry historian selector

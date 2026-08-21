@@ -1735,6 +1735,11 @@ select:focus-visible {
   background: var(--primary);
 }
 
+.actual-trend-legend .pv { background: var(--primary); }
+.actual-trend-legend .sv {
+  background: repeating-linear-gradient(90deg, var(--warning) 0 5px, transparent 5px 8px);
+}
+.actual-trend-legend .muted { color: var(--ink-3); opacity: .72; }
 .actual-trend-legend .max { background: var(--warning); }
 .actual-trend-legend .min,
 .actual-trend-legend .phase-t { background: var(--success); }
@@ -1757,6 +1762,17 @@ select:focus-visible {
 .actual-historian-summary b {
   color: var(--ink);
   font-family: var(--font-data);
+}
+
+.actual-trend-note {
+  margin: 9px 0 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--warning);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  background: color-mix(in srgb, var(--warning) 7%, transparent);
+  color: var(--ink-3);
+  font-size: .66rem;
+  line-height: 1.5;
 }
 
 @media (max-width: 900px) {
