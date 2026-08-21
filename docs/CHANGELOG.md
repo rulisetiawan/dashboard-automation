@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.32 — 21 Agustus 2026
+
+**Status:** Trend aktual detail mesin
+
+### Ditambahkan
+
+- Panel historian sensor dan motor pada detail asset PostgreSQL.
+- Range `1H`, `8H`, `24H`, `7D`, pemilihan signal, serta grafik average/min/max sensor.
+- Grafik current R/S/T motor bila equipment historian tersedia.
+
+### Keputusan
+
+- Detail asset hanya memuat historian saat dibuka, agar overview 138 mesin tidak membuat query trend masif.
+- Data motor kosong ditampilkan apa adanya sampai master equipment dan mapping motor aktual tersedia.
+
+---
+
 ## Section & Parameter Dictionary V1.0 — 19 Agustus 2026
 
 **Status:** Standar baseline semantic tag

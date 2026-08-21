@@ -1651,6 +1651,86 @@ select:focus-visible {
   height: 100%;
 }
 
+.actual-historian-section {
+  display: grid;
+  gap: 14px;
+}
+
+.actual-historian-head,
+.actual-historian-toolbar,
+.actual-historian-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.actual-historian-head h2 {
+  margin: 3px 0;
+}
+
+.actual-historian-head p,
+.actual-historian-toolbar,
+.actual-historian-summary,
+.actual-historian-loading {
+  color: var(--ink-3);
+  font-size: .72rem;
+}
+
+.actual-historian-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.actual-historian-toolbar {
+  margin-bottom: 8px;
+}
+
+.actual-historian-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-2);
+  font-weight: 700;
+}
+
+.actual-historian-toolbar select {
+  max-width: 245px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.actual-historian-summary {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-top: 9px;
+}
+
+.actual-historian-summary span {
+  padding-right: 10px;
+  border-right: 1px solid var(--line-soft);
+}
+
+.actual-historian-summary b {
+  color: var(--ink);
+  font-family: var(--font-data);
+}
+
+@media (max-width: 900px) {
+  .actual-historian-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+  .actual-historian-head,
+  .actual-historian-toolbar { align-items: flex-start; flex-direction: column; }
+  .actual-historian-toolbar select { max-width: 100%; }
+}
+
 .interactive-chart {
   margin-top: 10px;
   overflow: hidden;
@@ -6816,5 +6896,429 @@ select:focus-visible {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+}
+
+/* ==========================================================================
+   Interactive Machine Status Table & Pagination
+   ========================================================================== */
+
+.machine-status-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.machine-table-process-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.mt-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.mt-tab:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.mt-tab.active {
+  background: var(--surface);
+  color: var(--primary);
+  border-color: var(--line-soft);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.mt-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: rgba(7, 142, 170, 0.1);
+  color: var(--primary);
+  font-family: var(--font-data);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.machine-table-area-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(246, 248, 249, 0.6);
+  border: 1px dashed var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.mt-filter-label {
+  color: var(--ink-3);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.machine-table-area-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mt-area-pill {
+  padding: 4px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.mt-area-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.mt-area-pill.active {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 2px 6px rgba(7, 142, 170, 0.25);
+}
+
+.mt-area-pill small {
+  opacity: 0.85;
+  font-family: var(--font-data);
+}
+
+.machine-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.machine-table-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 240px;
+  flex: 1;
+  max-width: 380px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  font-size: 0.75rem;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.machine-table-search-input {
+  width: 100%;
+  padding: 7px 28px 7px 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.75rem;
+  transition: border-color 140ms ease;
+}
+
+.machine-table-search-input:focus {
+  border-color: var(--primary);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.machine-table-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mt-status-btn {
+  padding: 5px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-3);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.mt-status-btn:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.mt-status-btn.active {
+  background: var(--surface-3);
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+
+.mt-status-btn.active.running {
+  background: var(--success-soft);
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.mt-status-btn.active.warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.mt-status-btn.active.fault {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.clickable-row:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+.machine-id-highlight {
+  color: var(--primary-strong);
+  font-family: var(--font-data);
+  font-weight: 700;
+}
+
+.machine-name-sub {
+  color: var(--ink-3);
+  font-size: 0.68rem;
+}
+
+.machine-area-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  color: var(--ink-2);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.machine-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.machine-progress-bar {
+  width: 60px;
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.machine-progress-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--success));
+  border-radius: 4px;
+}
+
+.table-empty-row {
+  text-align: center;
+  padding: 24px !important;
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+.machine-table-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.mt-page-info {
+  color: var(--ink-3);
+  font-size: 0.72rem;
+}
+
+.mt-page-info strong {
+  color: var(--ink);
+  font-family: var(--font-data);
+}
+
+.mt-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mt-page-btn {
+  padding: 5px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.mt-page-btn:hover:not(:disabled) {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.mt-page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.mt-page-current {
+  padding: 0 8px;
+  color: var(--ink-2);
+  font-size: 0.72rem;
+}
+
+.mt-page-current strong {
+  color: var(--primary);
+  font-family: var(--font-data);
+}
+
+/* ==========================================================================
+   Historical Telemetry Table Toolbar
+   ========================================================================== */
+
+.history-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.history-filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.history-select-control {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: border-color 140ms ease;
+  appearance: auto;
+}
+
+.history-select-control:focus {
+  border-color: var(--primary);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  font-family: var(--font-data);
+  font-size: 0.63rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.telemetry-val {
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.unit-text {
+  color: var(--ink-3);
+  font-size: 0.65rem;
+}
+
+.area-tag-badge {
+  color: var(--ink-3);
+  font-size: 0.65rem;
+}
+
+.font-sm {
+  font-size: 0.68rem;
+}
+
+@media (max-width: 780px) {
+  .history-table-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .history-filter-controls {
+    flex-direction: column;
+  }
+
+  .history-select-control {
+    width: 100%;
   }
 }
