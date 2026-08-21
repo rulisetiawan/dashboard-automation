@@ -1783,6 +1783,8 @@ select:focus-visible {
   .actual-historian-toolbar { align-items: flex-start; flex-direction: column; }
   .actual-historian-toolbar label { align-items: flex-start; flex-direction: column; width: 100%; }
   .actual-historian-toolbar .history-select-control { width: 100%; max-width: 100%; }
+  .actual-history-explorer-controls { align-items: stretch; flex-direction: column; }
+  .actual-history-explorer-controls .history-select-control { width: 100%; max-width: 100%; }
 }
 
 .interactive-chart {
@@ -5772,6 +5774,41 @@ select:focus-visible {
   border-color: var(--line);
   background: var(--surface-2);
   outline: none;
+}
+
+.resource-legend-row.static {
+  cursor: default;
+}
+
+.actual-history-explorer-controls {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.actual-history-explorer-controls .actual-historian-toolbar {
+  flex: 1;
+  justify-content: flex-start;
+  margin-bottom: 0;
+}
+
+.actual-history-explorer-controls .history-select-control {
+  width: min(32vw, 320px);
+  max-width: 320px;
+}
+
+.actual-history-custom {
+  margin-bottom: 12px;
+}
+
+.actual-history-view-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .resource-legend-row.active {

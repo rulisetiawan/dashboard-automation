@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.35 — 21 Agustus 2026
+
+**Status:** Visual analytics PostgreSQL aktual
+
+### Dikembalikan
+
+- Donut status mesin dan grafik output produksi pada Plant Overview.
+- Pie per lane/area serta ranking mesin pada overview setiap proses.
+- Pie Electrical Demand by Area dan ranking equipment pada Utilities.
+- Distribusi alarm per area serta ranking mesin terdampak.
+- Historical Trend Explorer PV/SV dengan preset, custom time range, zoom, drag, dan navigator.
+
+### Keputusan
+
+- Layout analitis lama dipertahankan, tetapi seluruh nilai membaca PostgreSQL aktual.
+- Dataset yang belum tersedia memakai empty state; tidak ada fallback simulasi.
+- Render WebSocket ditunda selama semua dropdown dan input aktif agar interaksi operator stabil.
+
+---
+
 ## Dashboard V1.34 — 21 Agustus 2026
 
 **Status:** Historian satu parameter PV/SV

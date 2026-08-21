@@ -125,6 +125,9 @@ const actualHistorian = {
   range: "8H",
   cache: new Map(),
   loading: new Set(),
+  explorerAssetId: null,
+  viewStart: 0,
+  viewFraction: 1,
   selectedParameter: new Map(),
   selectedEquipment: new Map(),
 };
@@ -2484,6 +2487,12 @@ function actualSensorValues(assets) {
 }
 
 function actualHistorianRange() {
+  if (actualHistorian.range === "CUSTOM") {
+    const from = new Date(state.history.start);
+    const to = new Date(state.history.end);
+    const hours = Math.max(1 / 60, (to.getTime() - from.getTime()) / 3_600_000);
+    return { from, to, granularity: hours > 24 ? "15m" : "1m" };
+  }
   const hours = { "1H": 1, "8H": 8, "24H": 24, "7D": 24 * 7 }[actualHistorian.range] || 8;
   const to = new Date();
   return { from: new Date(to.getTime() - hours * 60 * 60_000), to, granularity: hours > 24 ? "15m" : "1m" };
@@ -2547,7 +2556,7 @@ function actualHistorianDisplayValue(value, unit = "") {
 }
 
 function requestHistorianRender() {
-  const historianControlActive = document.activeElement?.matches?.("[data-actual-trend-parameter], [data-actual-motor-select]");
+  const historianControlActive = document.activeElement?.matches?.("select, input, textarea");
   if (historianControlActive) deferredRealtimeRender = true;
   else renderPage({ preserveScroll: true });
 }
@@ -2608,8 +2617,9 @@ function databaseActualHistorianPanel(machine) {
   const key = actualHistorianKey(machine.id);
   const data = actualHistorian.cache.get(key);
   if (!data && !actualHistorian.loading.has(key)) void loadActualHistorian(machine);
-  const rangeButtons = ["1H", "8H", "24H", "7D"].map((range) => `<button class="${actualHistorian.range === range ? "active" : ""}" data-actual-trend-range="${range}">${range}</button>`).join("");
-  if (!data) return panel("Historical Trends", "Memuat aggregate historian PostgreSQL untuk sensor dan motor.", `<div class="actual-historian-loading">Loading ${actualText(actualHistorian.range)} trend data…</div>`, `<div class="segmented">${rangeButtons}</div>`);
+  const rangeButtons = ["1H", "8H", "24H", "7D", "CUSTOM"].map((range) => `<button class="${actualHistorian.range === range ? "active" : ""}" data-actual-trend-range="${range}">${range === "CUSTOM" ? "Custom" : range}</button>`).join("");
+  const customRange = actualHistorian.range === "CUSTOM" ? `<div class="chemical-custom-range actual-history-custom"><label class="date-field"><span>Start date & time</span><input type="datetime-local" data-actual-history-date="start" value="${toDateTimeLocal(state.history.start)}" /></label><label class="date-field"><span>End date & time</span><input type="datetime-local" data-actual-history-date="end" value="${toDateTimeLocal(state.history.end)}" /></label><button class="button primary small" data-actual-history-apply="${actualText(machine.id)}">Apply range</button></div>` : "";
+  if (!data) return panel("Historical Trends", "Memuat aggregate historian PostgreSQL untuk sensor dan motor.", `${customRange}<div class="actual-historian-loading">Loading ${actualText(actualHistorian.range)} trend data…</div>`, `<div class="segmented">${rangeButtons}</div>`);
   if (data.error) return panel("Historical Trends", "Historian PostgreSQL", actualEmpty(data.error), `<div class="segmented">${rangeButtons}</div>`);
   const sensors = data.sensors;
   const motors = data.motors;
@@ -2638,7 +2648,7 @@ function databaseActualHistorianPanel(machine) {
   const motorContent = selectedMotor ? `
     <div class="actual-historian-toolbar"><label>Motor<select class="history-select-control" data-actual-motor-select="${machine.id}">${motors.map((item) => `<option value="${actualText(item.id)}" ${item.id === selectedMotor.id ? "selected" : ""}>${actualText(item.name)} · ${actualText(item.code)}</option>`).join("")}</select></label><span class="data-pill neutral">${selectedMotor.points.length} POINTS</span></div>
     ${selectedMotor.points.length ? `<div class="chart-container compact"><canvas class="chart-canvas" id="actual-motor-trend-${machine.id}" aria-label="Trend motor ${actualText(selectedMotor.name)}"></canvas></div><div class="actual-trend-legend"><span><i class="phase-r"></i>Phase R</span><span><i class="phase-s"></i>Phase S</span><span><i class="phase-t"></i>Phase T</span></div><div class="actual-historian-summary"><span>Power avg <b>${actualText(selectedMotor.points.at(-1)?.active_power_avg_kw ?? "—")} kW</b></span><span>Frequency <b>${actualText(selectedMotor.points.at(-1)?.drive_frequency_avg_hz ?? "—")} Hz</b></span><span>Energy delta <b>${actualText(selectedMotor.points.at(-1)?.energy_delta_kwh ?? "—")} kWh</b></span></div>` : actualEmpty("Equipment terdaftar, tetapi belum memiliki historian motor pada range ini.")}` : actualEmpty("Belum ada master equipment untuk asset ini.");
-  return panel("Historical Trends", `${actualText(rangeText)} · aggregate ${actualText(data.range?.granularity || "")} · satu parameter dengan pasangan PV/SV`, `<div class="actual-historian-grid"><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">PROCESS SENSOR</span><h3>PV / SV Parameter Trend</h3></div>${sensorContent}</article><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">MOTOR & DRIVE</span><h3>3-Phase Trend</h3></div>${motorContent}</article></div>`, `<div class="segmented">${rangeButtons}</div>`);
+  return panel("Historical Trends", `${actualText(rangeText)} · aggregate ${actualText(data.range?.granularity || "")} · satu parameter dengan pasangan PV/SV`, `${customRange}<div class="actual-historian-grid"><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">PROCESS SENSOR</span><h3>PV / SV Parameter Trend</h3></div>${sensorContent}</article><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">MOTOR & DRIVE</span><h3>3-Phase Trend</h3></div>${motorContent}</article></div>`, `<div class="segmented">${rangeButtons}</div>`);
 }
 
 function alignedActualParameterTrend(parameter) {
@@ -2713,7 +2723,28 @@ function actualUtilitiesPage() {
   const content = backendUtilities.length
     ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Code</th><th>Meter / Utility</th><th>Value</th><th>Source timestamp</th><th>Quality</th></tr></thead><tbody>${backendUtilities.map((item) => `<tr><td class="mono">${actualText(item.utility_code)}</td><td>${actualText(item.label)}</td><td><strong>${actualText(item.value)} ${actualText(item.unit)}</strong></td><td class="mono">${actualTime(item.source_ts)}</td><td>${actualText(item.quality)}</td></tr>`).join("")}</tbody></table></div>`
     : actualEmpty("Belum ada meter atau utility snapshot");
-  return `${pageHead("utilities", `<span class="range-badge">ACTUAL DATABASE</span>`)}${panel("Utility snapshot", "Hanya membaca utility_snapshot PostgreSQL", content)}`;
+  const assetById = new Map(actualFleet().map((asset) => [asset.id, asset]));
+  const areaMap = new Map();
+  backendEquipment.forEach((equipment) => {
+    const asset = assetById.get(equipment.assetId);
+    const area = asset?.area || "UNMAPPED";
+    const current = areaMap.get(area) || { key: area, label: asset?.areaLabel || area, value: 0, equipment: [] };
+    current.value += Number(equipment.powerKw) || 0;
+    current.equipment.push(equipment);
+    areaMap.set(area, current);
+  });
+  const powerAreas = [...areaMap.values()].sort((left, right) => right.value - left.value);
+  if (!powerAreas.some((area) => area.key === state.utility.selectedPowerArea)) state.utility.selectedPowerArea = powerAreas[0]?.key || null;
+  const selectedArea = powerAreas.find((area) => area.key === state.utility.selectedPowerArea) || powerAreas[0];
+  const powerRanking = [...(selectedArea?.equipment || [])].sort((left, right) => Number(right.powerKw || 0) - Number(left.powerKw || 0));
+  const maxPower = Number(powerRanking[0]?.powerKw) || 1;
+  const ranking = powerRanking.length ? `<div class="ranking-list">${powerRanking.map((item, index) => `<button class="ranking-row" data-machine-target="${actualText(assetById.get(item.assetId)?.process || "calator")}|${actualText(item.assetId)}"><span class="ranking-number">${index + 1}</span><span class="ranking-copy"><strong>${actualText(item.assetId)} · ${actualText(item.name)}</strong><small>${actualText(item.code)} · ${actualText(item.state)}</small><i><b style="width:${Number(item.powerKw || 0) / maxPower * 100}%"></b></i></span><span class="ranking-value">${Number(item.powerKw || 0).toLocaleString("id-ID", { maximumFractionDigits: 2 })}<small>kW</small></span></button>`).join("")}</div>` : actualEmpty("Belum ada snapshot power meter pada area ini.");
+  const powerPanel = powerAreas.length ? `<section class="management-analysis-grid">${panel("Electrical Demand by Area", "Penjumlahan active power seluruh equipment aktual per area.", actualDonutMarkup(powerAreas.map((area) => ({ ...area, key: area.key, selected: area.key === state.utility.selectedPowerArea })), "kW total", "kW", "data-actual-power-area"), `<span class="data-pill good">LIVE NOW</span>`)}${panel(`Top Electrical Loads${selectedArea ? ` · ${actualText(selectedArea.label)}` : ""}`, "Klik area pada pie, kemudian buka mesin untuk diagnostic motor dan drive.", ranking, `<span class="data-pill neutral">${powerRanking.length} EQUIPMENT</span>`)}</section>` : panel("Electrical Demand by Area", "Menunggu equipment_snapshot", actualEmpty("Belum ada power meter equipment aktual."));
+  return `${pageHead("utilities", `<span class="range-badge">ACTUAL DATABASE</span>`)}
+    <section class="kpi-grid">${backendUtilities.map((item) => actualMetric(item.label, Number(item.value).toLocaleString("id-ID", { maximumFractionDigits: 2 }), item.unit, `${actualTime(item.source_ts)} · ${item.quality}`)).join("") || actualMetric("Utility snapshot", "—", "", "No data")}</section>
+    ${powerPanel}
+    ${panel("Utility Snapshot Detail", "Nilai aktual dari utility_snapshot PostgreSQL", content)}
+  `;
 }
 
 function actualChemicalPage() {
@@ -2724,10 +2755,131 @@ function actualChemicalPage() {
 }
 
 function actualAlarmsPage() {
-  const content = backendAlarmEvents.length
-    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Severity</th><th>Asset</th><th>Batch</th><th>Alarm</th><th>State</th></tr></thead><tbody>${backendAlarmEvents.map((item) => `<tr><td class="mono">${actualTime(item.occurred_at)}</td><td>${actualText(item.severity)}</td><td>${actualText(item.asset_id)}</td><td>${actualText(item.batch_no)}</td><td><strong>${actualText(item.title)}</strong><br><small>${actualText(item.detail)}</small></td><td>${actualText(item.event_state)}</td></tr>`).join("")}</tbody></table></div>`
+  const scopedEvents = backendAlarmEvents.filter((item) => state.alarms.area === "all" || item.area_code === state.alarms.area);
+  const content = scopedEvents.length
+    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Severity</th><th>Area</th><th>Asset</th><th>Batch</th><th>Alarm</th><th>State</th></tr></thead><tbody>${scopedEvents.map((item) => `<tr><td class="mono">${actualTime(item.occurred_at)}</td><td>${actualText(item.severity)}</td><td>${actualText(item.area_code || "—")}</td><td>${actualText(item.asset_id)}</td><td>${actualText(item.batch_no)}</td><td><strong>${actualText(item.title)}</strong><br><small>${actualText(item.detail)}</small></td><td>${actualText(item.event_state)}</td></tr>`).join("")}</tbody></table></div>`
     : actualEmpty("Belum ada event alarm aktual");
-  return `${pageHead("alarms", `<span class="range-badge">ACTUAL DATABASE</span>`)}${panel("Alarm & event log", "Data dari alarm_event", content)}`;
+  const areaGroups = new Map();
+  backendAlarmEvents.forEach((event) => {
+    const key = event.area_code || "UNMAPPED";
+    const group = areaGroups.get(key) || { key, label: key, value: 0 };
+    group.value += 1;
+    areaGroups.set(key, group);
+  });
+  const assetGroups = new Map();
+  scopedEvents.forEach((event) => assetGroups.set(event.asset_id, (assetGroups.get(event.asset_id) || 0) + 1));
+  const rankedAssets = [...assetGroups].sort((left, right) => right[1] - left[1]);
+  const ranking = rankedAssets.length ? `<div class="ranking-list">${rankedAssets.map(([assetId, count], index) => { const asset = actualFleet().find((item) => item.id === assetId); return `<button class="ranking-row" ${asset ? `data-machine-target="${asset.process}|${asset.id}"` : ""}><span class="ranking-number">${index + 1}</span><span class="ranking-copy"><strong>${actualText(assetId)}</strong><small>${actualText(asset?.areaLabel || "Area belum dimapping")}</small><i><b style="width:${count / rankedAssets[0][1] * 100}%"></b></i></span><span class="ranking-value">${count}<small>events</small></span></button>`; }).join("")}</div>` : actualEmpty("Tidak ada alarm pada area terpilih.");
+  const active = backendAlarmEvents.filter((item) => item.event_state !== "CLEARED").length;
+  const critical = backendAlarmEvents.filter((item) => String(item.severity).toLowerCase() === "critical" && item.event_state !== "CLEARED").length;
+  return `${pageHead("alarms", `<span class="range-badge">ACTUAL DATABASE</span>`)}
+    <section class="kpi-grid">${actualMetric("Active alarms", active, "events", "event_state bukan CLEARED")}${actualMetric("Critical active", critical, "events", "severity = critical")}${actualMetric("Affected machines", new Set(backendAlarmEvents.map((item) => item.asset_id)).size, "asset", "alarm_event aktual")}${actualMetric("Alarm records", backendAlarmEvents.length, "rows", "loaded from PostgreSQL")}</section>
+    <section class="management-analysis-grid">${panel("Alarm Distribution by Area", "Klik segmen untuk memfilter ranking dan log alarm.", actualDonutMarkup([...areaGroups.values()].map((item) => ({ ...item, key: item.key, selected: item.key === state.alarms.area })), "alarm events", "events", "data-alarm-downtime-area"), state.alarms.area !== "all" ? `<button class="button ghost small" data-alarm-downtime-area="all">All areas</button>` : `<span class="data-pill good">ACTUAL</span>`)}${panel(`Top Affected Machines${state.alarms.area !== "all" ? ` · ${actualText(state.alarms.area)}` : ""}`, "Ranking jumlah alarm aktual; durasi downtime ditampilkan setelah event clear/downtime mapping tersedia.", ranking)}</section>
+    ${panel("Alarm & Event Log", "Data aktual dari alarm_event", content)}
+  `;
+}
+
+function actualHistoricalExplorer() {
+  const numericAssetIds = [...new Set(backendTelemetry.filter((item) => Number.isFinite(Number(item.value_number))).map((item) => item.asset_id))];
+  const candidates = numericAssetIds.map((assetId) => actualFleet().find((asset) => asset.id === assetId)).filter(Boolean);
+  if (!candidates.length) return panel("Historical Trend Explorer", "Aggregate historian PostgreSQL", actualEmpty("Belum ada asset dengan telemetry numerik."));
+  if (!candidates.some((asset) => asset.id === actualHistorian.explorerAssetId)) actualHistorian.explorerAssetId = candidates[0].id;
+  const machine = candidates.find((asset) => asset.id === actualHistorian.explorerAssetId) || candidates[0];
+  const key = actualHistorianKey(machine.id);
+  const data = actualHistorian.cache.get(key);
+  if (!data && !actualHistorian.loading.has(key)) void loadActualHistorian(machine);
+  const rangeButtons = ["1H", "8H", "24H", "7D", "CUSTOM"].map((range) => `<button class="${actualHistorian.range === range ? "active" : ""}" data-actual-trend-range="${range}">${range === "CUSTOM" ? "Custom" : range}</button>`).join("");
+  const customRange = actualHistorian.range === "CUSTOM" ? `<div class="chemical-custom-range actual-history-custom"><label class="date-field"><span>Start date & time</span><input type="datetime-local" data-actual-history-date="start" value="${toDateTimeLocal(state.history.start)}" /></label><label class="date-field"><span>End date & time</span><input type="datetime-local" data-actual-history-date="end" value="${toDateTimeLocal(state.history.end)}" /></label><button class="button primary small" data-actual-history-apply="${actualText(machine.id)}">Apply range</button></div>` : "";
+  const assetSelect = `<label>Machine<select class="history-select-control" data-history-explorer-asset>${candidates.map((asset) => `<option value="${actualText(asset.id)}" ${asset.id === machine.id ? "selected" : ""}>${actualText(asset.id)} · ${actualText(asset.name)}</option>`).join("")}</select></label>`;
+  if (!data) return panel("Historical Trend Explorer", "Memuat tag registry dan aggregate PostgreSQL", `<div class="actual-historian-toolbar">${assetSelect}<div class="segmented">${rangeButtons}</div></div>${customRange}<div class="actual-historian-loading">Loading ${actualText(actualHistorian.range)} historian…</div>`);
+  if (data.error) return panel("Historical Trend Explorer", "Historian PostgreSQL", actualEmpty(data.error), `<div class="segmented">${rangeButtons}</div>`);
+  const { parameters, parameter } = selectedActualParameter(machine, data);
+  const pvSensor = actualParameterSeries(parameter, "PV");
+  const svSensor = actualParameterSeries(parameter, "SV");
+  const fallbackSensor = pvSensor || svSensor || parameter?.tags[0];
+  const visibleSensors = [pvSensor, svSensor].filter(Boolean).length ? [pvSensor, svSensor].filter(Boolean) : [fallbackSensor].filter(Boolean);
+  visibleSensors.forEach((sensor) => { if (!Array.isArray(sensor.points)) void loadActualSensorSeries(machine, sensor.tag_code); });
+  const loading = visibleSensors.some((sensor) => !Array.isArray(sensor.points));
+  const hasPoints = visibleSensors.some((sensor) => sensor.points?.length);
+  const totalPoints = visibleSensors.reduce((sum, sensor) => sum + (sensor.points?.length || 0), 0);
+  const pvLatest = pvSensor?.points?.at(-1)?.last_value ?? pvSensor?.points?.at(-1)?.avg_value;
+  const svLatest = svSensor?.points?.at(-1)?.last_value ?? svSensor?.points?.at(-1)?.avg_value;
+  const unit = pvSensor?.engineering_unit || svSensor?.engineering_unit || fallbackSensor?.engineering_unit || "";
+  const deviation = Number.isFinite(Number(pvLatest)) && Number.isFinite(Number(svLatest)) ? Number(pvLatest) - Number(svLatest) : null;
+  const parameterSelect = parameter ? `<label>Parameter<select class="history-select-control" data-history-explorer-parameter="${actualText(machine.id)}">${parameters.map((item) => `<option value="${actualText(item.key)}" ${item.key === parameter.key ? "selected" : ""}>${actualText(item.label)}</option>`).join("")}</select></label>` : "";
+  const body = `<div class="actual-history-explorer-controls"><div class="actual-historian-toolbar">${assetSelect}${parameterSelect}<span class="data-pill neutral">${loading ? "…" : totalPoints} POINTS</span></div><div class="segmented">${rangeButtons}</div></div>${customRange}
+    ${loading ? `<div class="actual-historian-loading">Memuat PV/SV ${actualText(parameter?.label || "parameter")}…</div>` : hasPoints ? `<div class="trend-window-bar"><span id="actual-history-visible-label">${actualText(machine.id)} · ${actualText(parameter?.label)}</span><span>Drag chart atau navigator untuk menggeser waktu</span></div><div class="chart-container tall interactive-chart"><canvas id="actual-history-explorer-chart" class="chart-canvas" tabindex="0" aria-label="Historical PV dan SV ${actualText(parameter?.label)}"></canvas><div class="drag-hint">↔ Drag to explore</div></div><div class="trend-navigator" id="actual-history-navigator" role="slider" tabindex="0" aria-label="Posisi waktu historical aktual" aria-valuemin="0" aria-valuemax="100"><div class="navigator-track"><div class="navigator-selection" id="actual-history-navigator-selection"><span></span><span></span></div></div></div><div class="actual-history-view-actions"><button class="button ghost small" data-actual-history-shift="back">← Earlier</button><button class="button ghost small" data-actual-history-zoom="out">− Zoom</button><button class="button ghost small" data-actual-history-fit>Fit range</button><button class="button ghost small" data-actual-history-zoom="in">+ Zoom</button><button class="button ghost small" data-actual-history-shift="next">Later →</button></div><div class="actual-trend-legend"><span><i class="pv"></i>PV · Actual value</span><span class="${svSensor?.points?.length ? "" : "muted"}"><i class="sv"></i>SV · Setpoint${svSensor?.points?.length ? "" : " (belum ada data)"}</span></div><div class="actual-historian-summary"><span>PV terkini <b>${actualHistorianDisplayValue(pvLatest, unit)}</b></span><span>SV terkini <b>${actualHistorianDisplayValue(svLatest, unit)}</b></span><span>Deviasi <b>${actualHistorianDisplayValue(deviation, unit)}</b></span></div>` : actualEmpty("Parameter terdaftar tetapi belum memiliki data pada time range ini.")}`;
+  return panel("Historical Trend Explorer", "Pilih satu mesin dan parameter; pasangan PV/SV ditampilkan otomatis dari telemetry aggregate.", body, `<span class="data-pill good">POSTGRESQL ACTUAL</span>`);
+}
+
+function drawActualHistoryExplorer() {
+  if (state.page !== "trends" || !actualHistorian.explorerAssetId) return;
+  const machine = actualFleet().find((asset) => asset.id === actualHistorian.explorerAssetId);
+  const data = machine ? actualHistorian.cache.get(actualHistorianKey(machine.id)) : null;
+  if (!machine || !data || data.error) return;
+  const { parameter } = selectedActualParameter(machine, data);
+  const trend = alignedActualParameterTrend(parameter);
+  if (!trend.timestamps.length) return;
+  const visibleCount = Math.max(2, Math.min(trend.timestamps.length, Math.ceil(trend.timestamps.length * actualHistorian.viewFraction)));
+  const maxStart = Math.max(0, trend.timestamps.length - visibleCount);
+  const startIndex = Math.min(maxStart, Math.max(0, Math.round(actualHistorian.viewStart * maxStart)));
+  const endIndex = Math.min(trend.timestamps.length, startIndex + visibleCount);
+  const visibleTimestamps = trend.timestamps.slice(startIndex, endIndex);
+  const visibleSeries = trend.series.map((series) => ({ ...series, data: series.data.slice(startIndex, endIndex) }));
+  drawLineChart("actual-history-explorer-chart", visibleSeries.map((series) => ({ data: series.data, color: series.kind === "SV" ? "#d68b05" : "#078eaa", dash: series.kind === "SV", fill: series.kind === "PV" })), visibleTimestamps, { labelFormatter: historicalAxisLabel });
+  const selection = document.getElementById("actual-history-navigator-selection");
+  if (selection) {
+    selection.style.left = `${actualHistorian.viewStart * (1 - actualHistorian.viewFraction) * 100}%`;
+    selection.style.width = `${actualHistorian.viewFraction * 100}%`;
+  }
+  const visibleLabel = document.getElementById("actual-history-visible-label");
+  if (visibleLabel && visibleTimestamps.length) visibleLabel.textContent = `${machine.id} · ${parameter?.label || "Parameter"} · ${historicalAxisLabel(visibleTimestamps[0], visibleTimestamps.at(-1) - visibleTimestamps[0])} — ${historicalAxisLabel(visibleTimestamps.at(-1), visibleTimestamps.at(-1) - visibleTimestamps[0])}`;
+}
+
+function shiftActualHistoryView(delta) {
+  actualHistorian.viewStart = Math.max(0, Math.min(1, actualHistorian.viewStart + delta));
+  drawActualHistoryExplorer();
+}
+
+function zoomActualHistoryView(factor) {
+  actualHistorian.viewFraction = Math.max(0.08, Math.min(1, actualHistorian.viewFraction * factor));
+  actualHistorian.viewStart = Math.max(0, Math.min(1, actualHistorian.viewStart));
+  drawActualHistoryExplorer();
+}
+
+function bindActualHistoryExplorerPan() {
+  const canvas = document.getElementById("actual-history-explorer-chart");
+  const navigator = document.getElementById("actual-history-navigator");
+  if (!canvas || canvas.dataset.panBound) return;
+  canvas.dataset.panBound = "true";
+  let pointerId = null;
+  let previousX = 0;
+  canvas.addEventListener("pointerdown", (event) => {
+    pointerId = event.pointerId;
+    previousX = event.clientX;
+    canvas.setPointerCapture?.(pointerId);
+    canvas.classList.add("dragging");
+  });
+  canvas.addEventListener("pointermove", (event) => {
+    if (pointerId !== event.pointerId || actualHistorian.viewFraction >= 1) return;
+    const delta = (previousX - event.clientX) / Math.max(1, canvas.getBoundingClientRect().width) / Math.max(0.08, 1 - actualHistorian.viewFraction);
+    previousX = event.clientX;
+    shiftActualHistoryView(delta);
+  });
+  const stop = (event) => {
+    if (pointerId !== event.pointerId) return;
+    pointerId = null;
+    canvas.classList.remove("dragging");
+  };
+  canvas.addEventListener("pointerup", stop);
+  canvas.addEventListener("pointercancel", stop);
+  navigator?.addEventListener("pointerdown", (event) => {
+    if (actualHistorian.viewFraction >= 1) return;
+    const bounds = navigator.getBoundingClientRect();
+    const position = Math.max(0, Math.min(1, (event.clientX - bounds.left) / Math.max(1, bounds.width)));
+    actualHistorian.viewStart = Math.max(0, Math.min(1, (position - actualHistorian.viewFraction / 2) / (1 - actualHistorian.viewFraction)));
+    drawActualHistoryExplorer();
+  });
 }
 
 function actualTrendsPage() {
@@ -2897,6 +3049,7 @@ function actualTrendsPage() {
       ${actualMetric("Good Quality Rate", `${qualityRate}%`, "valid", `${goodQualityCount} dari ${backendTelemetry.length} GOOD`)}
       ${actualMetric("Latest Ingestion Time", actualTime(backendTelemetry[0]?.source_ts), "WIB", "Waktu sample PLC terkini")}
     </section>
+    ${actualHistoricalExplorer()}
     ${panel("Recent Telemetry Historian", "Data historis aktual dari database PostgreSQL", `
       <div class="machine-status-container">
         ${processTabs}
@@ -2946,17 +3099,103 @@ function databaseMachineReading(machine) {
   return metrics.length ? metrics.map((item) => `${item.label}: ${item.value}${item.unit ? ` ${item.unit}` : ""}`).join(" · ") : "No live snapshot";
 }
 
+function latestActualProcessRuns() {
+  const latest = new Map();
+  backendProcessRuns.forEach((run) => {
+    const key = `${run.asset_id}|${run.batch_no}`;
+    const current = latest.get(key);
+    const timestamp = new Date(run.updated_at || run.started_at || 0).getTime();
+    const currentTimestamp = new Date(current?.updated_at || current?.started_at || 0).getTime();
+    if (!current || timestamp >= currentTimestamp) latest.set(key, run);
+  });
+  return [...latest.values()];
+}
+
+function actualDonutMarkup(items, totalLabel, unit = "", attribute = null) {
+  const circumference = 402.12;
+  const total = items.reduce((sum, item) => sum + Number(item.value || 0), 0);
+  let used = 0;
+  const segments = items.map((item, index) => {
+    const length = total ? Number(item.value || 0) / total * circumference : 0;
+    const dataAttribute = attribute ? ` ${attribute}="${actualText(item.key)}" tabindex="0"` : "";
+    const segment = `<circle class="${item.selected ? "selected" : ""}" cx="80" cy="80" r="64" fill="none" stroke="${managementColors[index % managementColors.length]}" stroke-width="32" stroke-dasharray="${length.toFixed(2)} ${(circumference - length).toFixed(2)}" stroke-dashoffset="${(-used).toFixed(2)}" transform="rotate(-90 80 80)"${dataAttribute}><title>${actualText(item.label)}: ${actualText(item.value)} ${actualText(unit)}</title></circle>`;
+    used += length;
+    return segment;
+  }).join("");
+  const legend = items.map((item, index) => `<div class="resource-legend-row static ${item.selected ? "active" : ""}"><i style="background:${managementColors[index % managementColors.length]}"></i><span>${actualText(item.label)}</span><strong>${total ? (Number(item.value || 0) / total * 100).toFixed(1) : "0.0"}%</strong><small>${Number(item.value || 0).toLocaleString("id-ID", { maximumFractionDigits: 2 })} ${actualText(unit)}</small></div>`).join("");
+  return `<div class="resource-donut-wrap"><div class="resource-donut"><svg viewBox="0 0 160 160" role="img">${segments}</svg><div><strong>${Number(total).toLocaleString("id-ID", { maximumFractionDigits: 2 })}</strong><small>${actualText(totalLabel)}</small></div></div><div class="resource-legend">${legend}</div></div>`;
+}
+
+function actualOutputByProcess() {
+  const totals = new Map(["jetflow", "calator", "dryer", "kalender"].map((type) => [type, 0]));
+  latestActualProcessRuns().forEach((run) => {
+    const value = Number(run.output_quantity);
+    if (totals.has(run.process_type) && Number.isFinite(value)) totals.set(run.process_type, totals.get(run.process_type) + value);
+  });
+  return [...totals].map(([key, value]) => ({ key, label: processConfig[key].singular, value }));
+}
+
+const actualProcessMetricConfig = {
+  jetflow: { label: "Water Consumption", unit: "m³", keys: ["penggunaan_air_pv", "water_consumption_m3", "total_water_const"] },
+  calator: { label: "Production Output", unit: "m", keys: ["output_total_m"] },
+  dryer: { label: "Production Output", unit: "m", keys: ["output_total_m"] },
+  kalender: { label: "Production Output", unit: "m", keys: ["output_total_m"] },
+  chemical: { label: "Chemical Delivered", unit: "kg", keys: [] },
+};
+
+function actualMachineProcessMetric(type, machine) {
+  if (type === "chemical") {
+    return chemicalDispensingLogs.filter((item) => item.dispenser === machine.id).reduce((sum, item) => {
+      const value = Number.parseFloat(String(item.actual).replace(/[^0-9.,-]/g, "").replace(",", "."));
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+  }
+  const config = actualProcessMetricConfig[type];
+  const key = config.keys.find((candidate) => Number.isFinite(Number(machine.values?.[candidate])));
+  return key ? Number(machine.values[key]) : 0;
+}
+
+function actualProcessResourcePanels(type) {
+  const config = actualProcessMetricConfig[type];
+  const selectedArea = state.management.area[type];
+  const areaItems = processAreas[type].map((area) => ({
+    key: `${type}|${area.code}|actual`,
+    code: area.code,
+    label: type === "jetflow" ? area.label : `Area ${area.label}`,
+    selected: selectedArea === area.code,
+    value: fleetFor(type).filter((machine) => machine.area === area.code).reduce((sum, machine) => sum + actualMachineProcessMetric(type, machine), 0),
+  }));
+  const scopedMachines = fleetFor(type).filter((machine) => !selectedArea || machine.area === selectedArea);
+  const ranking = scopedMachines.map((machine) => ({ machine, value: actualMachineProcessMetric(type, machine) })).filter((item) => item.value > 0).sort((left, right) => right.value - left.value);
+  const max = ranking[0]?.value || 1;
+  const breakdown = panel(`${config.label} by ${type === "jetflow" ? "Lane" : "Area"}`, "Snapshot/totalizer aktual PostgreSQL. Klik segmen untuk memfilter ranking mesin.", actualDonutMarkup(areaItems, config.unit, config.unit, "data-resource-area"), `<span class="data-pill good">ACTUAL DATABASE</span>`);
+  const rankingContent = ranking.length ? `<div class="ranking-list">${ranking.map((item, index) => `<button class="ranking-row" data-machine-target="${type}|${item.machine.id}"><span class="ranking-number">${index + 1}</span><span class="ranking-copy"><strong>${actualText(item.machine.id)}</strong><small>${actualText(item.machine.areaLabel)} · ${actualText(item.machine.state)}</small><i><b style="width:${item.value / max * 100}%"></b></i></span><span class="ranking-value">${item.value.toLocaleString("id-ID", { maximumFractionDigits: 2 })}<small>${actualText(config.unit)}</small></span></button>`).join("")}</div>` : actualEmpty(`Belum ada ${config.label.toLowerCase()} aktual pada scope ini.`);
+  const rankingPanel = panel(`Top ${config.label}${selectedArea ? ` · ${actualText(processAreas[type].find((area) => area.code === selectedArea)?.label || selectedArea)}` : ""}`, selectedArea ? "Ranking terfilter berdasarkan area terpilih." : "Ranking seluruh mesin yang memiliki nilai aktual.", rankingContent, selectedArea ? `<button class="button ghost small" data-ranking-reset="${type}">All areas</button>` : `<span class="data-pill neutral">CURRENT SNAPSHOT</span>`);
+  return `<section class="management-analysis-grid">${breakdown}${rankingPanel}</section>`;
+}
+
 function databaseOverviewPage() {
   const assets = actualFleet();
   const running = assets.filter((asset) => asset.state === "running").length;
   const stopped = assets.filter((asset) => ["idle", "fault", "offline"].includes(asset.state)).length;
   const batches = new Set(assets.map((asset) => asset.batch).filter((batch) => batch && batch !== "—")).size;
+  const actualRuns = latestActualProcessRuns();
+  const completedRuns = actualRuns.filter((run) => String(run.run_status).toUpperCase() === "COMPLETED").length;
+  const outputByProcess = actualOutputByProcess();
+  const totalOutput = outputByProcess.reduce((sum, item) => sum + item.value, 0);
+  const stateBreakdown = [
+    { key: "running", label: "Running", value: assets.filter((asset) => asset.state === "running").length },
+    { key: "idle", label: "Idle", value: assets.filter((asset) => asset.state === "idle").length },
+    { key: "warning", label: "Warning", value: assets.filter((asset) => asset.state === "warning").length },
+    { key: "fault", label: "Fault", value: assets.filter((asset) => asset.state === "fault").length },
+    { key: "offline", label: "Offline", value: assets.filter((asset) => asset.state === "offline").length },
+  ].filter((item) => item.value > 0);
   const processFlow = ["jetflow", "calator", "dryer", "kalender"].map((type) => {
     const fleet = fleetFor(type);
     return processNode(processConfig[type].plural, `${fleet.length} asset terdaftar`, type, statusCount(fleet, "running"), statusCount(fleet, "warning"), statusCount(fleet, "fault"));
   }).join("");
-  const runs = backendProcessRuns.length
-    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Batch</th><th>Asset</th><th>Recipe</th><th>Status</th><th>Output</th><th>Start</th></tr></thead><tbody>${backendProcessRuns.slice(0, 10).map((run) => `<tr><td class="mono">${actualText(run.batch_no)}</td><td>${actualText(run.asset_id)}</td><td class="mono">${actualText(run.recipe_code)}</td><td>${actualText(run.run_status)}</td><td>${actualText(run.output_quantity ?? "—")} ${actualText(run.output_unit || "")}</td><td class="mono">${actualTime(run.started_at)}</td></tr>`).join("")}</tbody></table></div>`
+  const runs = actualRuns.length
+    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Batch</th><th>Asset</th><th>Recipe</th><th>Status</th><th>Output</th><th>Start</th></tr></thead><tbody>${actualRuns.slice(0, 10).map((run) => `<tr><td class="mono">${actualText(run.batch_no)}</td><td>${actualText(run.asset_id)}</td><td class="mono">${actualText(run.recipe_code)}</td><td>${actualText(run.run_status)}</td><td>${actualText(run.output_quantity ?? "—")} ${actualText(run.output_unit || "")}</td><td class="mono">${actualTime(run.started_at)}</td></tr>`).join("")}</tbody></table></div>`
     : actualEmpty("Belum ada process run aktual");
   return `
     ${pageHead("overview", `<span class="range-badge">POSTGRESQL ACTUAL</span>`)}
@@ -2965,13 +3204,17 @@ function databaseOverviewPage() {
       ${actualMetric("Machine running", running, "asset", "asset_snapshot.machine_state")}
       ${actualMetric("Stop / fault / offline", stopped, "asset", "asset_snapshot.machine_state")}
       ${actualMetric("Active batches", batches, "batch", "batch unik pada snapshot")}
+      ${actualMetric("Production output", totalOutput.toLocaleString("id-ID", { maximumFractionDigits: 1 }), "m", "latest unique process run")}
+      ${actualMetric("Completed batches", completedRuns, "batch", "run_status = COMPLETED")}
     </section>
     <section class="grid-2">
-      ${panel("Machine status", "Status aktual tiap asset", actualAssetTable(assets))}
+      ${panel("Machine Operating Status", "Komposisi kondisi seluruh asset aktual", actualDonutMarkup(stateBreakdown, "machines", "asset"), `<span class="data-pill good">LIVE NOW</span>`)}
       ${panel("Utility snapshot", "Nilai terbaru dari utility_snapshot", backendUtilities.length ? `<div class="metric-grid">${backendUtilities.map((item) => metricTile(actualText(item.label), `${actualText(item.value)}<small>${actualText(item.unit)}</small>`, `${actualTime(item.source_ts)} · ${actualText(item.quality)}`)).join("")}</div>` : actualEmpty("Belum ada utility snapshot"))}
     </section>
     ${panel("Textile process flow", "Jumlah dan kondisi asset yang terdaftar", `<div class="process-flow">${processFlow}</div>`)}
+    ${panel("Production Output by Process", "Output terakhir dari process run unik per asset dan batch", totalOutput > 0 ? `<div class="throughput-summary"><div><span>Total Output</span><strong>${totalOutput.toLocaleString("id-ID", { maximumFractionDigits: 1 })} <small>m</small></strong></div><div><span>Process with data</span><strong>${outputByProcess.filter((item) => item.value > 0).length} <small>process</small></strong></div><div><span>Database rows</span><strong>${actualRuns.length} <small>unique runs</small></strong></div></div><div class="chart-container production-bar-chart"><canvas id="actual-overview-output-chart" class="chart-canvas"></canvas></div>` : actualEmpty("Belum ada output produksi aktual pada process run."))}
     ${panel("Active process runs", "Batch dan output yang sudah tersimpan di database", runs)}
+    ${panel("Machine Directory", "Status aktual tiap asset · klik melalui process flow untuk drill-down area dan mesin", actualAssetTable(assets))}
   `;
 }
 
@@ -2997,6 +3240,7 @@ function databaseFleetPage(type) {
       ${actualMetric("Faults", statusCount(fleet, "fault"), "asset", "machine_state aktual")}
       ${actualMetric("Active batches", new Set(fleet.map((machine) => machine.batch).filter((batch) => batch && batch !== "—")).size, "batch", "batch snapshot aktual")}
     </section>
+    ${actualProcessResourcePanels(type)}
     <section class="area-grid">${cards}</section>
   `;
 }
@@ -3125,10 +3369,19 @@ function bindPageEvents() {
   document.querySelectorAll("[data-actual-trend-range]").forEach((button) => {
     button.addEventListener("click", () => {
       actualHistorian.range = button.dataset.actualTrendRange;
+      actualHistorian.viewStart = 0;
+      actualHistorian.viewFraction = 1;
+      if (actualHistorian.range !== "CUSTOM") {
+        const range = actualHistorianRange();
+        state.history.start = range.from.getTime();
+        state.history.end = range.to.getTime();
+      }
       renderPage({ preserveScroll: true });
     });
   });
   const releaseDeferredHistorianRender = (select) => {
+    if (select.dataset.deferredRenderBound) return;
+    select.dataset.deferredRenderBound = "true";
     select.addEventListener("blur", () => {
       window.setTimeout(() => {
         if (!deferredRealtimeRender) return;
@@ -3137,6 +3390,7 @@ function bindPageEvents() {
       }, 0);
     });
   };
+  document.querySelectorAll("select, input, textarea").forEach(releaseDeferredHistorianRender);
   document.querySelectorAll("[data-actual-trend-parameter]").forEach((select) => {
     select.addEventListener("change", () => {
       actualHistorian.selectedParameter.set(select.dataset.actualTrendParameter, select.value);
@@ -3152,6 +3406,56 @@ function bindPageEvents() {
       renderPage({ preserveScroll: true });
     });
     releaseDeferredHistorianRender(select);
+  });
+  document.querySelector("[data-history-explorer-asset]")?.addEventListener("change", (event) => {
+    actualHistorian.explorerAssetId = event.target.value;
+    actualHistorian.viewStart = 0;
+    actualHistorian.viewFraction = 1;
+    deferredRealtimeRender = false;
+    renderPage({ preserveScroll: true });
+  });
+  const explorerAssetSelect = document.querySelector("[data-history-explorer-asset]");
+  if (explorerAssetSelect) releaseDeferredHistorianRender(explorerAssetSelect);
+  document.querySelector("[data-history-explorer-parameter]")?.addEventListener("change", (event) => {
+    actualHistorian.selectedParameter.set(event.target.dataset.historyExplorerParameter, event.target.value);
+    actualHistorian.viewStart = 0;
+    actualHistorian.viewFraction = 1;
+    deferredRealtimeRender = false;
+    renderPage({ preserveScroll: true });
+  });
+  const explorerParameterSelect = document.querySelector("[data-history-explorer-parameter]");
+  if (explorerParameterSelect) releaseDeferredHistorianRender(explorerParameterSelect);
+  document.querySelector("[data-actual-history-apply]")?.addEventListener("click", (event) => {
+    const start = new Date(document.querySelector('[data-actual-history-date="start"]')?.value || "").getTime();
+    const end = new Date(document.querySelector('[data-actual-history-date="end"]')?.value || "").getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) {
+      showToast("Invalid time range", "Start time harus lebih awal dari end time.");
+      return;
+    }
+    state.history.start = start;
+    state.history.end = end;
+    actualHistorian.viewStart = 0;
+    actualHistorian.viewFraction = 1;
+    actualHistorian.cache.delete(actualHistorianKey(event.currentTarget.dataset.actualHistoryApply || actualHistorian.explorerAssetId));
+    renderPage({ preserveScroll: true });
+  });
+  document.querySelectorAll("[data-actual-history-shift]").forEach((button) => button.addEventListener("click", () => shiftActualHistoryView(button.dataset.actualHistoryShift === "back" ? -0.12 : 0.12)));
+  document.querySelectorAll("[data-actual-history-zoom]").forEach((button) => button.addEventListener("click", () => zoomActualHistoryView(button.dataset.actualHistoryZoom === "in" ? 0.62 : 1.5)));
+  document.querySelector("[data-actual-history-fit]")?.addEventListener("click", () => {
+    actualHistorian.viewStart = 0;
+    actualHistorian.viewFraction = 1;
+    drawActualHistoryExplorer();
+  });
+  bindActualHistoryExplorerPan();
+  document.querySelectorAll("[data-actual-power-area]").forEach((element) => {
+    const selectArea = () => {
+      state.utility.selectedPowerArea = element.dataset.actualPowerArea;
+      renderPage({ preserveScroll: true });
+    };
+    element.addEventListener("click", selectArea);
+    element.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectArea(); }
+    });
   });
   // Machine Table Controls
   document.querySelectorAll("[data-mt-process]").forEach((btn) => {
@@ -3779,12 +4083,17 @@ function initPageCharts() {
     ], labels),
   };
   charts[state.page]?.();
+  if (backendConnection.status === "connected" && backendConnection.dataMode === "ACTUAL_DATABASE" && state.page === "overview") {
+    const outputByProcess = actualOutputByProcess();
+    if (outputByProcess.some((item) => item.value > 0)) drawBarChart("actual-overview-output-chart", outputByProcess.map((item) => item.value), outputByProcess.map((item) => item.label), outputByProcess.map((_, index) => managementColors[index]), { showValues: true, standard: true, unit: "m" });
+  }
   if (state.drill[state.page]?.machine && sensorTrendConfig[state.page]) drawSensorComparisonTrends(state.page);
   if (state.motorDrive.selected && state.motorDrive.source === state.page) {
     drawMotorDriveTrend();
     bindMotorDrivePan();
   }
   drawActualMachineHistorian();
+  drawActualHistoryExplorer();
 }
 
 function drawSensorComparisonTrends(type) {
