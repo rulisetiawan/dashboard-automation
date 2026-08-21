@@ -13,7 +13,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Kalender_v1.12.md` | 1.12 | Aktif | Perbaikan alignment historical log Motor & Drive |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
 | `chemicals/Chemical_Dispensing_Calator_Concept_v1.6.md` | 1.6 | Aktif | Halaman konsumsi khusus, chart per chemical, mode audit, dan pagination PostgreSQL |
-| `dashboard/Dashboard_V1_Concept_v1.36.md` | 1.36 | Aktif | Warna kontras trend motor 3-phase dan pembatasan tampilan maksimal dua desimal |
+| `dashboard/Dashboard_V1_Concept_v1.39.md` | 1.39 | Aktif | Pilihan parameter historian konsisten saat refresh realtime maupun reload halaman |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
 | `backend/Backend_Data_Architecture_Concept_v1.0.md` | 1.0 | Aktif | Fondasi edge-to-historian, model database, API, security, dan roadmap integrasi backend |
 | `backend/Tag_Display_Mapping_Register_v1.0.md` | 1.0 | Aktif | Baseline canonical tag ke tampilan proses, utility, chemical, dan motor diagnostic |

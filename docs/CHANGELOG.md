@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.39 — 21 Agustus 2026
+
+**Status:** Historian parameter persistence
+
+### Diperbaiki
+
+- Parameter trend PV/SV tidak lagi mengikuti tag telemetry terbaru ketika data realtime melakukan refresh.
+- Pilihan parameter disimpan per asset di browser dan dipulihkan setelah halaman dimuat ulang.
+- Fallback deterministik hanya digunakan jika belum ada pilihan atau parameter yang tersimpan sudah tidak terdaftar.
+
+---
+
 ## Dashboard V1.38 — 21 Agustus 2026
 
 **Status:** Chemical consumption analytics

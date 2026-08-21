@@ -125,6 +125,18 @@ let backendProcessRuns = [];
 let realtimeSocket = null;
 let realtimeRefreshTimer = null;
 let deferredRealtimeRender = false;
+const historianParameterStorageKey = "pt-smm.historian.selected-parameter.v1";
+
+function loadHistorianParameterPreferences() {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(historianParameterStorageKey) || "{}");
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+const historianParameterPreferences = loadHistorianParameterPreferences();
 const actualHistorian = {
   range: "8H",
   cache: new Map(),
@@ -135,6 +147,17 @@ const actualHistorian = {
   selectedParameter: new Map(),
   selectedEquipment: new Map(),
 };
+
+function rememberActualParameter(assetId, parameterKey) {
+  if (!assetId || !parameterKey) return;
+  actualHistorian.selectedParameter.set(assetId, parameterKey);
+  historianParameterPreferences[assetId] = parameterKey;
+  try {
+    window.localStorage.setItem(historianParameterStorageKey, JSON.stringify(historianParameterPreferences));
+  } catch {
+    // The in-memory selection remains active when browser storage is unavailable.
+  }
+}
 
 const pageMeta = {
   overview: ["Plant Overview", "Live Operations", "Seluruh proses, mesin, utilitas, dan exception dalam satu tampilan."],
@@ -2611,15 +2634,15 @@ function actualParameterSeries(parameter, kind) {
 
 function selectedActualParameter(machine, data) {
   const parameters = actualSensorParameters(machine.id, data?.sensors || []);
-  const recentTagCode = backendTelemetry.find((item) => item.asset_id === machine.id)?.tag_code;
-  const recentTag = data?.sensors.find((item) => item.tag_code === recentTagCode);
-  const defaultKey = recentTag
-    ? actualTagParameterKey(machine.id, recentTag)
-    : parameters.find((parameter) => actualParameterSeries(parameter, "PV") || actualParameterSeries(parameter, "SV"))?.key || parameters[0]?.key;
-  const selectedKey = actualHistorian.selectedParameter.get(machine.id) || defaultKey;
+  const storedKey = actualHistorian.selectedParameter.get(machine.id) || historianParameterPreferences[machine.id];
+  const fallbackKey = parameters.find((parameter) => actualParameterSeries(parameter, "PV") || actualParameterSeries(parameter, "SV"))?.key || parameters[0]?.key;
+  const selectedKey = parameters.some((parameter) => parameter.key === storedKey) ? storedKey : fallbackKey;
+  if (selectedKey && actualHistorian.selectedParameter.get(machine.id) !== selectedKey) {
+    rememberActualParameter(machine.id, selectedKey);
+  }
   return {
     parameters,
-    parameter: parameters.find((item) => item.key === selectedKey) || parameters[0],
+    parameter: parameters.find((item) => item.key === selectedKey),
   };
 }
 
@@ -3660,7 +3683,7 @@ function bindPageEvents() {
   document.querySelectorAll("select, input, textarea").forEach(releaseDeferredHistorianRender);
   document.querySelectorAll("[data-actual-trend-parameter]").forEach((select) => {
     select.addEventListener("change", () => {
-      actualHistorian.selectedParameter.set(select.dataset.actualTrendParameter, select.value);
+      rememberActualParameter(select.dataset.actualTrendParameter, select.value);
       deferredRealtimeRender = false;
       renderPage({ preserveScroll: true });
     });
@@ -3684,7 +3707,7 @@ function bindPageEvents() {
   const explorerAssetSelect = document.querySelector("[data-history-explorer-asset]");
   if (explorerAssetSelect) releaseDeferredHistorianRender(explorerAssetSelect);
   document.querySelector("[data-history-explorer-parameter]")?.addEventListener("change", (event) => {
-    actualHistorian.selectedParameter.set(event.target.dataset.historyExplorerParameter, event.target.value);
+    rememberActualParameter(event.target.dataset.historyExplorerParameter, event.target.value);
     actualHistorian.viewStart = 0;
     actualHistorian.viewFraction = 1;
     deferredRealtimeRender = false;
