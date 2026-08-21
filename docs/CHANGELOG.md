@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.44 — 21 Agustus 2026
+
+**Status:** Digital Automation Dashboard identity
+
+### Diubah
+
+- Label Jakarta Plant pada topbar diganti menjadi Digital Automation Dashboard.
+- Descriptor Smart Manufacturing Dashboard pada sidebar diganti menjadi Digital Automation Dashboard.
+- Judul browser, meta description, identitas package, dan output build diselaraskan menjadi PT.SMM Digital Automation Dashboard.
+
+---
+
 ## Dashboard V1.43 — 21 Agustus 2026
 
 **Status:** Direct machine detail navigation
