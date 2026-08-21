@@ -3316,6 +3316,122 @@ select:focus-visible {
   font-size: 0.48rem;
 }
 
+.actual-batch-lookup {
+  margin-top: 13px;
+  padding: 22px 24px;
+}
+
+.actual-batch-table {
+  min-width: 920px;
+}
+
+.actual-batch-table th:first-child,
+.actual-batch-table td:first-child {
+  width: 24%;
+}
+
+.actual-batch-table th:nth-child(2),
+.actual-batch-table td:nth-child(2) {
+  width: 19%;
+}
+
+.actual-batch-table th:nth-child(3),
+.actual-batch-table td:nth-child(3),
+.actual-batch-table th:nth-child(4),
+.actual-batch-table td:nth-child(4) {
+  width: 18%;
+}
+
+.actual-batch-table th:nth-child(5),
+.actual-batch-table td:nth-child(5) {
+  width: 12%;
+}
+
+.actual-batch-table th:last-child,
+.actual-batch-table td:last-child {
+  width: 9%;
+}
+
+.actual-batch-workspace {
+  display: grid;
+  gap: 13px;
+  margin-bottom: 13px;
+}
+
+.actual-batch-workspace > .card,
+.actual-batch-workspace > .panel {
+  margin-bottom: 0;
+}
+
+.actual-batch-context-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.actual-batch-context-grid > div {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.actual-batch-context-grid span {
+  color: var(--ink-3);
+  font-size: 0.43rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.actual-batch-context-grid strong {
+  overflow: hidden;
+  color: var(--ink-1);
+  font-family: var(--font-data);
+  font-size: 0.55rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actual-batch-parameter-wrap,
+.actual-batch-process-wrap,
+.actual-batch-alarm-wrap {
+  max-height: 330px;
+  scrollbar-gutter: stable;
+}
+
+.actual-batch-parameter-wrap .parameter-config-table {
+  min-width: 860px;
+}
+
+.actual-batch-process-wrap .data-table {
+  min-width: 1120px;
+}
+
+.actual-batch-alarm-wrap .data-table {
+  min-width: 920px;
+}
+
+@media (max-width: 1100px) {
+  .actual-batch-context-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .actual-batch-lookup {
+    padding: 17px;
+  }
+
+  .actual-batch-context-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .batch-analysis-empty {
   display: grid;
   min-height: 210px;

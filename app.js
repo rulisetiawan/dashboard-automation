@@ -125,6 +125,9 @@ let backendProcessRuns = [];
 let realtimeSocket = null;
 let realtimeRefreshTimer = null;
 let deferredRealtimeRender = false;
+const actualBatchPrograms = new Map();
+const actualBatchProgramLoading = new Set();
+const actualBatchProgramErrors = new Map();
 const historianParameterStorageKey = "pt-smm.historian.selected-parameter.v1";
 
 function loadHistorianParameterPreferences() {
@@ -2632,6 +2635,40 @@ function actualParameterSeries(parameter, kind) {
   return parameter?.tags.find((tag) => actualTagSeriesKind(tag) === kind);
 }
 
+const actualBatchSetpointKeyByParameter = {
+  "UPPER_FELT.TEMPERATURE": "temperature_upper_c",
+  "LOWER_FELT.TEMPERATURE": "temperature_lower_c",
+  "UPPER_FELT.LOADCELL": "loadcell_upper_kg",
+  "LOWER_FELT.LOADCELL": "loadcell_lower_kg",
+  "FABRIC.WIDTH": "fabric_width_cm",
+  "OVERFEED.SPEED": "overfeed_percent",
+};
+
+function actualBatchSetpointSeries(machine, parameter, registeredTag) {
+  const run = actualBatchRunFor(machine);
+  const context = run ? actualBatchPrograms.get(run.process_run_id) : null;
+  const setpointKey = actualBatchSetpointKeyByParameter[parameter?.key];
+  if (!context || !setpointKey) return null;
+  const configuredSteps = context.steps.filter((step) => step.setpoint_json?.[setpointKey] != null && step.started_at);
+  if (!configuredSteps.length) return null;
+  const points = configuredSteps.flatMap((step, index) => {
+    const value = Number(step.setpoint_json[setpointKey]);
+    const nextStart = configuredSteps[index + 1]?.started_at;
+    const end = nextStart || context.run.ended_at || step.ended_at || step.started_at;
+    return [
+      { bucket_start: step.started_at, avg_value: value, last_value: value },
+      { bucket_start: end, avg_value: value, last_value: value },
+    ];
+  });
+  return {
+    ...(registeredTag || {}),
+    signal_role: registeredTag?.signal_role || `${setpointKey.toUpperCase()}_SV`,
+    engineering_unit: registeredTag?.engineering_unit || actualBatchSettingMeta(setpointKey)[1],
+    points,
+    derived_from_process_step: true,
+  };
+}
+
 function selectedActualParameter(machine, data) {
   const parameters = actualSensorParameters(machine.id, data?.sensors || []);
   const storedKey = actualHistorian.selectedParameter.get(machine.id) || historianParameterPreferences[machine.id];
@@ -2724,36 +2761,40 @@ function databaseActualHistorianPanel(machine) {
   const motors = data.motors;
   const { parameters, parameter: selectedParameter } = selectedActualParameter(machine, data);
   const pvSensor = actualParameterSeries(selectedParameter, "PV");
-  const svSensor = actualParameterSeries(selectedParameter, "SV");
-  const valueSensor = pvSensor || svSensor || selectedParameter?.tags[0];
-  const visibleSensors = [...new Set([pvSensor, svSensor].filter(Boolean).length ? [pvSensor, svSensor].filter(Boolean) : [valueSensor].filter(Boolean))];
+  const registeredSvSensor = actualParameterSeries(selectedParameter, "SV");
+  const valueSensor = pvSensor || registeredSvSensor || selectedParameter?.tags[0];
+  const visibleSensors = [...new Set([pvSensor, registeredSvSensor].filter(Boolean).length ? [pvSensor, registeredSvSensor].filter(Boolean) : [valueSensor].filter(Boolean))];
   visibleSensors.forEach((sensor) => {
     if (!Array.isArray(sensor.points)) void loadActualSensorSeries(machine, sensor.tag_code);
   });
+  const derivedSvSensor = actualBatchSetpointSeries(machine, selectedParameter, registeredSvSensor);
+  const svSensor = registeredSvSensor?.points?.length ? registeredSvSensor : derivedSvSensor || registeredSvSensor;
   const selectedEquipmentId = actualHistorian.selectedEquipment.get(machine.id) || motors.find((item) => item.points.length)?.id || motors[0]?.id;
   const selectedMotor = motors.find((item) => item.id === selectedEquipmentId) || motors[0];
   const rangeText = data.range ? `${formatDateTime(data.range.from.getTime(), true)} — ${formatDateTime(data.range.to.getTime(), true)}` : actualHistorian.range;
   const sensorLoading = visibleSensors.some((sensor) => !Array.isArray(sensor.points));
-  const sensorHasPoints = visibleSensors.some((sensor) => sensor.points?.length);
+  const sensorHasPoints = Boolean(pvSensor?.points?.length || svSensor?.points?.length || valueSensor?.points?.length);
   const pvLatest = pvSensor?.points?.at(-1)?.last_value ?? pvSensor?.points?.at(-1)?.avg_value;
   const svLatest = svSensor?.points?.at(-1)?.last_value ?? svSensor?.points?.at(-1)?.avg_value;
   const deviation = Number.isFinite(Number(pvLatest)) && Number.isFinite(Number(svLatest)) ? Number(pvLatest) - Number(svLatest) : null;
   const sensorUnit = pvSensor?.engineering_unit || svSensor?.engineering_unit || valueSensor?.engineering_unit || "";
-  const totalPoints = visibleSensors.reduce((sum, sensor) => sum + (Array.isArray(sensor.points) ? sensor.points.length : 0), 0);
+  const totalPoints = [pvSensor, svSensor].filter(Boolean).reduce((sum, sensor) => sum + (Array.isArray(sensor.points) ? sensor.points.length : 0), 0);
   const sensorContent = selectedParameter ? `
     <div class="actual-historian-toolbar"><label>Parameter<select class="history-select-control" data-actual-trend-parameter="${machine.id}">${parameters.map((item) => `<option value="${actualText(item.key)}" ${item.key === selectedParameter.key ? "selected" : ""}>${actualText(item.label)}</option>`).join("")}</select></label><span class="data-pill neutral">${sensorLoading ? "…" : totalPoints} POINTS</span></div>
-    ${sensorLoading ? `<div class="actual-historian-loading">Memuat trend PV/SV ${actualText(selectedParameter.label)}…</div>` : sensorHasPoints ? `<div class="chart-container compact"><canvas class="chart-canvas" id="actual-sensor-trend-${machine.id}" aria-label="Trend PV dan SV ${actualText(selectedParameter.label)}"></canvas></div><div class="actual-trend-legend"><span><i class="pv"></i>PV · Actual value</span><span class="${svSensor?.points?.length ? "" : "muted"}"><i class="sv"></i>SV · Setpoint${svSensor?.points?.length ? "" : " (belum ada data)"}</span></div><div class="actual-historian-summary"><span>PV terkini <b>${actualHistorianDisplayValue(pvLatest, sensorUnit)}</b></span><span>SV terkini <b>${actualHistorianDisplayValue(svLatest, sensorUnit)}</b></span><span>Deviasi PV − SV <b>${actualHistorianDisplayValue(deviation, sensorUnit)}</b></span></div>` : actualEmpty("Parameter terdaftar, tetapi belum memiliki data numerik pada range ini.")}
-    ${!svSensor ? `<p class="actual-trend-note">Tag SV untuk parameter ini belum terdaftar. Grafik tetap menampilkan PV atau nilai aktual yang tersedia.</p>` : ""}` : actualEmpty("Belum ada tag aktif untuk asset ini.");
+    ${sensorLoading ? `<div class="actual-historian-loading">Memuat trend PV/SV ${actualText(selectedParameter.label)}…</div>` : sensorHasPoints ? `<div class="chart-container compact"><canvas class="chart-canvas" id="actual-sensor-trend-${machine.id}" aria-label="Trend PV dan SV ${actualText(selectedParameter.label)}"></canvas></div><div class="actual-trend-legend"><span class="${pvSensor?.points?.length ? "" : "muted"}"><i class="pv"></i>PV · Actual telemetry${pvSensor?.points?.length ? "" : " (belum ada data)"}</span><span class="${svSensor?.points?.length ? "" : "muted"}"><i class="sv"></i>SV · ${svSensor?.derived_from_process_step ? "Process setting" : "Setpoint telemetry"}${svSensor?.points?.length ? "" : " (belum ada data)"}</span></div><div class="actual-historian-summary"><span>PV terkini <b>${actualHistorianDisplayValue(pvLatest, sensorUnit)}</b></span><span>SV terkini <b>${actualHistorianDisplayValue(svLatest, sensorUnit)}</b></span><span>Deviasi PV − SV <b>${actualHistorianDisplayValue(deviation, sensorUnit)}</b></span></div>` : actualEmpty("Parameter terdaftar, tetapi belum memiliki data numerik pada range ini.")}
+    ${!registeredSvSensor && !derivedSvSensor ? `<p class="actual-trend-note">Tag atau process setting SV untuk parameter ini belum tersedia. Grafik tetap menampilkan PV aktual yang ada.</p>` : ""}` : actualEmpty("Belum ada tag aktif untuk asset ini.");
   const motorContent = selectedMotor ? `
     <div class="actual-historian-toolbar"><label>Motor<select class="history-select-control" data-actual-motor-select="${machine.id}">${motors.map((item) => `<option value="${actualText(item.id)}" ${item.id === selectedMotor.id ? "selected" : ""}>${actualText(item.name)} · ${actualText(item.code)}</option>`).join("")}</select></label><span class="data-pill neutral">${selectedMotor.points.length} POINTS</span></div>
     ${selectedMotor.points.length ? `<div class="chart-container compact"><canvas class="chart-canvas" id="actual-motor-trend-${machine.id}" aria-label="Trend motor ${actualText(selectedMotor.name)}"></canvas></div><div class="actual-trend-legend"><span><i class="phase-r"></i>Phase R</span><span><i class="phase-s"></i>Phase S</span><span><i class="phase-t"></i>Phase T</span></div><div class="actual-historian-summary"><span>Power avg <b>${actualHistorianDisplayValue(selectedMotor.points.at(-1)?.active_power_avg_kw, "kW")}</b></span><span>Frequency <b>${actualHistorianDisplayValue(selectedMotor.points.at(-1)?.drive_frequency_avg_hz, "Hz")}</b></span><span>Energy delta <b>${actualHistorianDisplayValue(selectedMotor.points.at(-1)?.energy_delta_kwh, "kWh")}</b></span></div>` : actualEmpty("Equipment terdaftar, tetapi belum memiliki historian motor pada range ini.")}` : actualEmpty("Belum ada master equipment untuk asset ini.");
   return panel("Historical Trends", `${trackingLabel}${actualText(rangeText)} · aggregate ${actualText(data.range?.granularity || "")} · satu parameter dengan pasangan PV/SV`, `${customRange}<div class="actual-historian-grid"><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">PROCESS SENSOR</span><h3>PV / SV Parameter Trend</h3></div>${sensorContent}</article><article class="actual-historian-block"><div class="actual-historian-block-head"><span class="eyebrow">MOTOR & DRIVE</span><h3>3-Phase Trend</h3></div>${motorContent}</article></div>`, `<div class="segmented">${rangeButtons}</div>`, "actual-historian-panel");
 }
 
-function alignedActualParameterTrend(parameter) {
+function alignedActualParameterTrend(parameter, machine = null) {
+  const registeredSv = actualParameterSeries(parameter, "SV");
+  const effectiveSv = machine && !registeredSv?.points?.length ? actualBatchSetpointSeries(machine, parameter, registeredSv) || registeredSv : registeredSv;
   const available = [
     { kind: "PV", tag: actualParameterSeries(parameter, "PV") },
-    { kind: "SV", tag: actualParameterSeries(parameter, "SV") },
+    { kind: "SV", tag: effectiveSv },
   ].filter((item) => item.tag?.points?.length);
   if (!available.length) {
     const fallback = parameter?.tags.find((tag) => tag.points?.length);
@@ -2783,7 +2824,7 @@ function drawActualMachineHistorian() {
   const data = actualHistorian.cache.get(actualHistorianKey(machine.id));
   if (!data || data.error) return;
   const { parameter } = selectedActualParameter(machine, data);
-  const parameterTrend = alignedActualParameterTrend(parameter);
+  const parameterTrend = alignedActualParameterTrend(parameter, machine);
   if (parameterTrend.timestamps.length) drawLineChart(`actual-sensor-trend-${machine.id}`, parameterTrend.series.map((series) => ({ data: series.data, color: series.kind === "SV" ? "#d68b05" : "#078eaa", dash: series.kind === "SV", fill: series.kind === "PV" })), parameterTrend.timestamps, { labelFormatter: historicalAxisLabel });
   const selectedMotor = data.motors.find((item) => item.id === (actualHistorian.selectedEquipment.get(machine.id) || data.motors.find((candidate) => candidate.points.length)?.id));
   if (selectedMotor?.points.length) drawLineChart(`actual-motor-trend-${machine.id}`, [{ data: selectedMotor.points.map((point) => Number(point.current_r_avg_a)), color: "#0072b2", width: 2.4 }, { data: selectedMotor.points.map((point) => Number(point.current_s_avg_a)), color: "#d55e00", width: 2.4 }, { data: selectedMotor.points.map((point) => Number(point.current_t_avg_a)), color: "#009e73", width: 2.4 }], selectedMotor.points.map((point) => new Date(point.bucket_start).getTime()), { labelFormatter: historicalAxisLabel, axisDecimals: 2 });
@@ -3486,6 +3527,124 @@ function databaseEquipmentPanel(machine) {
   return `${panel("Motor & driven equipment", "Current R/S/T, voltage, power, runtime, energy, dan maintenance aktual", `<div class="motor-grid">${cards}</div>`)}${panel("Motor diagnostic log", "Snapshot equipment 3-phase dari equipment_snapshot", table)}`;
 }
 
+function actualBatchRunFor(machine, runs = backendProcessRuns) {
+  const selected = state.batchInvestigation[machine.process];
+  if (!selected || selected.machineId !== machine.id) return null;
+  return runs.find((run) => run.process_run_id === selected.processRunId)
+    || runs.find((run) => run.batch_no === selected.batch)
+    || null;
+}
+
+function actualBatchLookupPanel(machine, runs) {
+  const selectedRun = actualBatchRunFor(machine, runs);
+  const selectedBatch = selectedRun?.batch_no || "";
+  const rows = runs.length ? runs.map((run) => {
+    const selected = run.process_run_id === selectedRun?.process_run_id;
+    const tone = String(run.run_status).toUpperCase() === "COMPLETED" ? "good" : String(run.run_status).toUpperCase() === "HOLD" ? "warning" : "neutral";
+    return `<tr class="${selected ? "selected" : ""}">
+      <td class="mono"><strong>${actualText(run.batch_no)}</strong></td>
+      <td class="mono">${actualText(run.recipe_code || "—")}</td>
+      <td class="mono">${actualTime(run.started_at)}</td>
+      <td class="mono">${actualTime(run.ended_at)}</td>
+      <td><span class="data-pill ${tone}">${actualText(run.run_status)}</span></td>
+      <td><button class="batch-load-button ${selected ? "loaded" : ""}" type="button" data-track-process-run="${actualText(run.process_run_id)}" ${selected ? "disabled" : ""}>${selected ? "Loaded" : "Load"}</button></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="6">${actualEmpty("Belum ada batch_process_run untuk mesin ini.")}</td></tr>`;
+  return `<section class="card batch-investigation-card actual-batch-lookup">
+    <div class="batch-investigation-header">
+      <div class="batch-investigation-copy"><span class="eyebrow">Batch historian lookup</span><h2>Search Production Batch</h2><p>Load batch untuk mengikat parameter setting, trend telemetry aktual, process step, dan abnormal log pada satu rentang waktu.</p></div>
+      <form class="batch-search-form" data-actual-batch-form="${actualText(machine.id)}">
+        <label for="actual-batch-search-${actualText(machine.id)}">Batch number</label>
+        <div class="batch-search-row"><input class="search-control batch-search-input" id="actual-batch-search-${actualText(machine.id)}" data-actual-batch-input value="${actualText(selectedBatch)}" placeholder="Contoh: BATCH-KL5-20260821-001" autocomplete="off" maxlength="64"/><button class="button primary" type="submit">Load batch</button>${selectedRun ? `<button class="button ghost" type="button" data-actual-batch-clear="${actualText(machine.process)}">Clear</button>` : ""}</div>
+      </form>
+    </div>
+    <div class="batch-recent-head"><span>Recent batches</span><small>${runs.length} record aktual · scroll untuk melihat lainnya</small></div>
+    <div class="batch-recent-table-wrap" tabindex="0" aria-label="Recent process runs ${actualText(machine.id)}">
+      <table class="batch-recent-table actual-batch-table"><thead><tr><th>Batch No.</th><th>Recipe</th><th>Start</th><th>End</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>
+    ${selectedRun ? `<div class="batch-active-context"><span class="kpi-scope historical">BATCH LOADED</span><strong>${actualText(selectedRun.batch_no)}</strong><small>${actualText(machine.id)} · telemetry tetap berasal dari historian PostgreSQL aktual</small></div>` : ""}
+  </section>`;
+}
+
+const actualBatchSettingDictionary = {
+  temperature_upper_c: ["SV Temperature Upper", "°C"],
+  temperature_lower_c: ["SV Temperature Lower", "°C"],
+  loadcell_upper_kg: ["SV Loadcell Upper", "kg"],
+  loadcell_lower_kg: ["SV Loadcell Lower", "kg"],
+  fabric_width_cm: ["Fabric Width", "cm"],
+  overfeed_percent: ["Overfeed", "%"],
+  overspeed_expander_percent: ["Overspeed Expander", "%"],
+  overspeed_inlet_percent: ["Overspeed Inlet", "%"],
+  overspeed_plaiter_percent: ["Overspeed Plaiter", "%"],
+  target_output_m: ["Target Output", "m"],
+};
+
+function actualBatchSettingMeta(key) {
+  if (actualBatchSettingDictionary[key]) return actualBatchSettingDictionary[key];
+  const unit = key.endsWith("_kg") ? "kg" : key.endsWith("_cm") ? "cm" : key.endsWith("_c") ? "°C" : key.endsWith("_percent") ? "%" : key.endsWith("_m") ? "m" : "";
+  return [actualSignalLabel(key.replace(/_(kg|cm|c|percent|m)$/i, "")), unit];
+}
+
+function actualBatchJsonSummary(value) {
+  const entries = Object.entries(value || {});
+  if (!entries.length) return "—";
+  return entries.map(([key, item]) => {
+    const [label, unit] = actualBatchSettingMeta(key);
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const itemUnit = item.unit || unit;
+      const average = item.avg == null ? "—" : Number(item.avg).toLocaleString("id-ID", { maximumFractionDigits: 2 });
+      const minimum = item.min == null ? "—" : Number(item.min).toLocaleString("id-ID", { maximumFractionDigits: 2 });
+      const maximum = item.max == null ? "—" : Number(item.max).toLocaleString("id-ID", { maximumFractionDigits: 2 });
+      return `${actualText(label)} avg ${average}${itemUnit ? ` ${actualText(itemUnit)}` : ""} (min ${minimum} · max ${maximum})`;
+    }
+    return `${actualText(label)}: ${actualText(item)}${unit ? ` ${actualText(unit)}` : ""}`;
+  }).join(" · ");
+}
+
+function actualBatchContextPanel(context) {
+  const run = context.run;
+  const durationMinutes = run.started_at && run.ended_at ? Math.max(0, Math.round((new Date(run.ended_at) - new Date(run.started_at)) / 60_000)) : null;
+  const fields = [
+    ["Batch", run.batch_no], ["Customer", run.customer_name || "—"], ["Fabric", run.fabric_type || "—"], ["Gramasi", run.fabric_weight_gsm == null ? "—" : `${Number(run.fabric_weight_gsm).toLocaleString("id-ID", { maximumFractionDigits: 2 })} gsm`],
+    ["Target width", run.target_width_cm == null ? "—" : `${Number(run.target_width_cm).toLocaleString("id-ID", { maximumFractionDigits: 2 })} cm`], ["Target output", run.target_output_kg == null ? "—" : `${Number(run.target_output_kg).toLocaleString("id-ID", { maximumFractionDigits: 2 })} kg`],
+    ["Recipe", run.recipe_code || "—"], ["Run duration", durationMinutes == null ? "—" : `${durationMinutes} min`], ["Output actual", run.output_quantity == null ? "—" : `${Number(run.output_quantity).toLocaleString("id-ID", { maximumFractionDigits: 2 })} ${run.output_unit || ""}`],
+    ["Start", actualTime(run.started_at)], ["End", actualTime(run.ended_at)], ["Delivery target", actualTime(run.delivery_target_at)],
+  ];
+  return panel("Batch & Production Context", "Identitas produksi dan target dari production_batch + batch_process_run", `<div class="actual-batch-context-grid">${fields.map(([label, value]) => `<div><span>${actualText(label)}</span><strong>${actualText(value)}</strong></div>`).join("")}</div>`);
+}
+
+function actualBatchParameterPanel(context) {
+  const rows = context.steps.flatMap((step) => Object.entries(step.setpoint_json || {}).map(([key, value]) => {
+    const [label, unit] = actualBatchSettingMeta(key);
+    return `<tr><td class="mono">${String(step.step_no).padStart(2, "0")}</td><td><strong>${actualText(step.step_name)}</strong></td><td>${actualText(label)}</td><td class="mono"><strong>${actualText(value)}</strong></td><td>${actualText(unit || "—")}</td><td class="mono">${actualTime(step.started_at)} — ${actualTime(step.ended_at)}</td></tr>`;
+  }));
+  const content = rows.length ? `<div class="parameter-config-wrap actual-batch-parameter-wrap"><table class="parameter-config-table"><thead><tr><th>Step</th><th>Process</th><th>Parameter</th><th>SV / Target</th><th>Unit</th><th>Applied Time</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>` : actualEmpty("Batch ini belum memiliki setpoint_json pada process_step_execution.");
+  return panel("Parameter Configuration", "Setting mesin yang direkam per langkah proses; tidak menggunakan nilai tampilan hardcoded.", content, `<span class="range-badge">${rows.length} SETTINGS</span>`);
+}
+
+function actualBatchProcessPanel(context) {
+  const rows = context.steps.length ? context.steps.map((step) => `<tr><td class="mono">${String(step.step_no).padStart(2, "0")}</td><td><strong>${actualText(step.step_name)}</strong><br><small class="mono">${actualText(step.step_code || "—")}</small></td><td class="mono">${actualTime(step.started_at)}</td><td class="mono">${actualTime(step.ended_at)}</td><td><span class="data-pill ${String(step.status).toUpperCase() === "COMPLETED" ? "good" : "neutral"}">${actualText(step.status)}</span></td><td>${actualBatchJsonSummary(step.setpoint_json)}</td><td>${actualBatchJsonSummary(step.actual_json)}</td></tr>`).join("") : `<tr><td colspan="7">${actualEmpty("Belum ada process step untuk batch ini.")}</td></tr>`;
+  return panel("Process Sequence", "Urutan aktual, start/end time, setpoint, dan hasil per step", `<div class="table-wrap actual-batch-process-wrap"><table class="data-table"><thead><tr><th>Step</th><th>Process</th><th>Start</th><th>End</th><th>Status</th><th>Setpoint</th><th>Actual</th></tr></thead><tbody>${rows}</tbody></table></div>`, `<span class="range-badge">${context.steps.length} STEPS</span>`);
+}
+
+function actualBatchAlarmPanel(context) {
+  const alarms = context.alarms || [];
+  const rows = alarms.length ? alarms.map((alarm) => `<tr><td class="mono">${actualTime(alarm.occurred_at)}</td><td>${actualText(alarm.severity)}</td><td><strong>${actualText(alarm.title)}</strong><br><small>${actualText(alarm.detail || "—")}</small></td><td class="mono">${actualText(alarm.tag_code || "—")}</td><td>${actualText(alarm.event_state)}</td><td>${alarm.batch_no === context.run.batch_no ? "Batch linked" : "Time correlated"}</td></tr>`).join("") : `<tr><td colspan="6">${actualEmpty("Tidak ada abnormal event aktual pada interval batch ini.")}</td></tr>`;
+  return panel("Batch Abnormality Log", "Alarm terhubung batch atau berkorelasi dengan asset dan interval proses", `<div class="table-wrap actual-batch-alarm-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Severity</th><th>Event</th><th>Tag</th><th>State</th><th>Relation</th></tr></thead><tbody>${rows}</tbody></table></div>`, `<span class="range-badge">${alarms.length} EVENTS</span>`);
+}
+
+function actualBatchWorkspace(machine, runs) {
+  const run = actualBatchRunFor(machine, runs);
+  if (!run) return `<section class="card batch-analysis-empty"><div class="batch-empty-icon">⌕</div><strong>Trend dan detail batch belum dimuat</strong><span>Pilih Load pada recent batch atau cari nomor batch untuk menampilkan parameter setting, telemetry aktual PV/SV, process sequence, dan abnormal log.</span></section>`;
+  const context = actualBatchPrograms.get(run.process_run_id);
+  if (!context && !actualBatchProgramLoading.has(run.process_run_id)) void loadActualBatchProcessRun(run.process_run_id);
+  if (!context) {
+    const error = actualBatchProgramErrors.get(run.process_run_id);
+    return panel("Batch Investigation", `${actualText(run.batch_no)} · ${actualText(machine.id)}`, error ? actualEmpty(error) : `<div class="actual-historian-loading">Memuat context batch aktual dari PostgreSQL…</div>`, `<span class="range-badge">${error ? "ERROR" : "LOADING"}</span>`, "actual-batch-workspace");
+  }
+  return `<div class="actual-batch-workspace">${actualBatchContextPanel(context)}${actualBatchParameterPanel(context)}${databaseActualHistorianPanel(machine)}${actualBatchProcessPanel(context)}${actualBatchAlarmPanel(context)}</div>`;
+}
+
 function databaseMachineDetailPage(type) {
   const machineId = state.drill[type].machine || state.selected[type];
   const machine = fleetFor(type).find((item) => item.id === machineId);
@@ -3493,16 +3652,15 @@ function databaseMachineDetailPage(type) {
   const metrics = databaseSnapshotMetrics(machine, 4);
   const runs = backendProcessRuns.filter((run) => run.asset_id === machine.id);
   const chemicalTransactions = type === "chemical" ? chemicalDispensingLogs.filter((item) => item.dispenser === machine.id) : [];
-  const runContent = runs.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Batch</th><th>Recipe</th><th>Status</th><th>Output</th><th>Start</th><th>End</th><th>Action</th></tr></thead><tbody>${runs.map((run) => `<tr><td class="mono"><strong>${actualText(run.batch_no)}</strong></td><td class="mono">${actualText(run.recipe_code)}</td><td>${actualText(run.run_status)}</td><td>${actualText(run.output_quantity ?? "—")} ${actualText(run.output_unit || "")}</td><td class="mono">${actualTime(run.started_at)}</td><td class="mono">${actualTime(run.ended_at)}</td><td><button class="button ghost small" data-track-process-run="${actualText(run.process_run_id)}">Track batch</button></td></tr>`).join("")}</tbody></table></div>` : actualEmpty("No process run data");
   return `
     ${processBreadcrumb(type, machine)}
     ${pageHead(type, `<button class="button" data-process-level="area" data-process-type="${type}">← ${actualText(machine.areaLabel || machine.area)}</button><span class="range-badge">ACTUAL</span>`)}
     ${machineHero(machine, processConfig[type].code, `${actualText(machine.subtype || "—")} · ${actualText(machine.recipe || "Recipe belum dimapping")} · source ${actualText(machine.quality)}`)}
     <section class="kpi-grid">${metrics.length ? metrics.map((metric, index) => kpi(metric.label, actualText(metric.value), metric.unit, ["PV", "SN", "LV", "OP"][index], "Snapshot PostgreSQL aktual")).join("") : actualMetric("Live snapshot", "—", "", "No data")}</section>
     ${panel("Live sensor measurements", "Seluruh nilai dari asset_snapshot.values_json dan unit dari tag_definition", actualSensorValues([machine]))}
-    ${databaseActualHistorianPanel(machine)}
+    ${actualBatchLookupPanel(machine, runs)}
+    ${actualBatchWorkspace(machine, runs)}
     ${databaseEquipmentPanel(machine)}
-    ${panel("Process run history", "Batch dan recipe dari batch_process_run", runContent)}
     ${type === "chemical" ? panel("Chemical transfer log", "Transaksi aktual dari chemical_transaction", chemicalTransactions.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Request</th><th>Calator</th><th>Variant</th><th>Target</th><th>Actual</th><th>Status</th></tr></thead><tbody>${chemicalTransactions.map((item) => `<tr><td class="mono">${actualText(item.time)}</td><td class="mono">${actualText(item.request)}</td><td>${actualText(item.calator)}</td><td>${actualText(item.variant)}</td><td>${actualText(item.target)}</td><td>${actualText(item.actual)}</td><td>${actualText(item.status)}</td></tr>`).join("")}</tbody></table></div>` : actualEmpty("No chemical transaction data")) : ""}
   `;
 }
@@ -3593,6 +3751,37 @@ function loadBatchInvestigation(type, machineId, rawBatch) {
   renderPage({ preserveScroll: true });
 }
 
+async function loadActualBatchProcessRun(processRunId) {
+  if (!processRunId || actualBatchPrograms.has(processRunId) || actualBatchProgramLoading.has(processRunId)) return;
+  actualBatchProgramLoading.add(processRunId);
+  actualBatchProgramErrors.delete(processRunId);
+  try {
+    const response = await fetch(`/api/v1/batch/process-runs/${encodeURIComponent(processRunId)}/context`, { cache: "no-store" });
+    if (!response.ok) throw new Error(response.status === 404 ? "Batch process run tidak ditemukan." : "Batch context API belum tersedia.");
+    actualBatchPrograms.set(processRunId, await response.json());
+  } catch (error) {
+    actualBatchProgramErrors.set(processRunId, error instanceof Error ? error.message : "Batch context unavailable");
+  } finally {
+    actualBatchProgramLoading.delete(processRunId);
+    renderPage({ preserveScroll: true });
+  }
+}
+
+async function searchActualBatchProcessRun(machineId, batch) {
+  try {
+    const url = new URL("/api/v1/batch/lookup", window.location.origin);
+    url.searchParams.set("asset_id", machineId);
+    url.searchParams.set("batch_no", batch);
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    if (payload.run && !backendProcessRuns.some((run) => run.process_run_id === payload.run.process_run_id)) backendProcessRuns.unshift(payload.run);
+    return payload.run || null;
+  } catch {
+    return null;
+  }
+}
+
 function trackDatabaseProcessRun(processRunId) {
   const run = backendProcessRuns.find((item) => item.process_run_id === processRunId);
   if (!run) return;
@@ -3602,7 +3791,7 @@ function trackDatabaseProcessRun(processRunId) {
     showToast("Batch range unavailable", `${run.batch_no} belum memiliki start/end time yang valid.`);
     return;
   }
-  state.batchInvestigation[run.process_type] = { machineId: run.asset_id, batch: run.batch_no };
+  state.batchInvestigation[run.process_type] = { machineId: run.asset_id, batch: run.batch_no, processRunId: run.process_run_id };
   state.history.preset = "CUSTOM";
   state.history.start = startedAt;
   state.history.end = endedAt;
@@ -3610,9 +3799,9 @@ function trackDatabaseProcessRun(processRunId) {
   actualHistorian.viewStart = 0;
   actualHistorian.viewFraction = 1;
   actualHistorian.cache.delete(actualHistorianKey(run.asset_id));
-  showToast("Batch tracking loaded", `${run.batch_no} · ${formatDateTime(startedAt, true)} — ${formatDateTime(endedAt, true)}`);
+  void loadActualBatchProcessRun(run.process_run_id);
+  showToast("Batch loaded", `${run.batch_no} · ${formatDateTime(startedAt, true)} — ${formatDateTime(endedAt, true)}`);
   renderPage({ preserveScroll: true });
-  requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(".actual-historian-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })));
 }
 
 function bindPageEvents() {
@@ -3866,6 +4055,35 @@ function bindPageEvents() {
         event.preventDefault();
         openMachine();
       }
+    });
+  });
+  document.querySelectorAll("[data-actual-batch-form]").forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const machineId = form.dataset.actualBatchForm;
+      const batch = normalizeBatchNumber(form.querySelector("[data-actual-batch-input]")?.value);
+      if (!batch) {
+        showToast("Batch number required", "Masukkan nomor batch yang akan dimuat.");
+        form.querySelector("[data-actual-batch-input]")?.focus();
+        return;
+      }
+      const submit = form.querySelector('button[type="submit"]');
+      if (submit) submit.disabled = true;
+      const run = backendProcessRuns.find((item) => item.asset_id === machineId && String(item.batch_no).toUpperCase() === batch)
+        || await searchActualBatchProcessRun(machineId, batch);
+      if (submit) submit.disabled = false;
+      if (!run) {
+        showToast("Batch tidak ditemukan", `${batch} tidak terdaftar untuk ${machineId}.`);
+        form.querySelector("[data-actual-batch-input]")?.focus();
+        return;
+      }
+      trackDatabaseProcessRun(run.process_run_id);
+    });
+  });
+  document.querySelectorAll("[data-actual-batch-clear]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.batchInvestigation[button.dataset.actualBatchClear] = { machineId: null, batch: null };
+      renderPage({ preserveScroll: true });
     });
   });
   document.querySelectorAll("[data-track-process-run]").forEach((button) => {

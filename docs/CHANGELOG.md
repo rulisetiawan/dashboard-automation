@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.46 — 21 Agustus 2026
+
+**Status:** Actual-data batch investigation workspace
+
+### Ditambahkan
+
+- Search Production Batch dan tabel Recent Batches aktual pada detail mesin.
+- Load Batch untuk membuka production context, parameter configuration, trend PV/SV, process sequence, dan abnormality log.
+- Endpoint context batch yang menggabungkan production batch, process run, steps, transitions, dan alarm terkait.
+- Fallback garis SV dari process setting ketika tag SV belum mengirim telemetry, dengan label sumber yang eksplisit.
+
+### Diubah
+
+- Batch Kalender contoh tidak lagi menginject telemetry buatan.
+- Sebanyak 1.573 telemetry contoh lama dengan source `LOCAL-BATCH-TRACKING` dibersihkan.
+- Batch contoh sekarang mereferensikan 21.306 sample aktual `KL-DPN-05` pada pukul 10.00–12.00 WIB.
+- Nilai actual per step disimpan sebagai statistik min/max/avg dari telemetry aktual.
+
+---
+
 ## Dashboard V1.45 — 21 Agustus 2026
 
 **Status:** Kalender batch tracking example
