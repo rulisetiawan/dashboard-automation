@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V1.40 — 21 Agustus 2026
+
+**Status:** Historian time-range theme consistency
+
+### Diperbaiki
+
+- Tombol time range historian tidak lagi memakai tampilan tombol bawaan browser.
+- State normal, hover, focus, dan aktif mengikuti palet light industrial dashboard.
+- State aktif memakai aksen cyan agar range terpilih dapat dikenali dengan cepat.
+
+---
+
 ## Dashboard V1.39 — 21 Agustus 2026
 
 **Status:** Historian parameter persistence

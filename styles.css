@@ -1304,6 +1304,40 @@ select:focus-visible {
   box-shadow: 0 1px 5px rgba(27, 48, 57, 0.08);
 }
 
+.segmented [data-actual-trend-range] {
+  appearance: none;
+  min-width: 44px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: 0.58rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.segmented [data-actual-trend-range]:hover {
+  background: var(--surface-hover);
+  color: var(--primary-strong);
+}
+
+.segmented [data-actual-trend-range].active {
+  border-color: rgba(7, 142, 170, 0.18);
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 3px 9px rgba(7, 142, 170, 0.18);
+}
+
+.segmented [data-actual-trend-range]:focus-visible {
+  outline: 2px solid rgba(7, 142, 170, 0.32);
+  outline-offset: 1px;
+}
+
 .chart-container {
   position: relative;
   width: 100%;
