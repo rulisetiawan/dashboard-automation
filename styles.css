@@ -2700,6 +2700,14 @@ select:focus-visible {
   font-size: .5rem;
 }
 
+.chemical-unit-controller {
+  margin-bottom: 14px;
+  padding: 10px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
 .chemical-unit-modes,
 .chemical-mode-grid {
   display: grid;
@@ -3015,6 +3023,19 @@ select:focus-visible {
 .chemical-unit-live {
   justify-items: end;
   text-align: right;
+}
+
+.chemical-unit-live-reading {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.chemical-pid-head-actions .machine-connection-status {
+  padding: 9px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-2);
 }
 
 .calator-matrix-foot {
@@ -8719,6 +8740,10 @@ select:focus-visible {
     text-align: left;
   }
 
+  .chemical-unit-live-reading {
+    justify-items: start;
+  }
+
   .plant-answer-card {
     grid-column: span 6;
   }
@@ -8995,6 +9020,10 @@ select:focus-visible {
 
   .chemical-pagination label {
     grid-template-columns: auto 1fr;
+  }
+
+  .chemical-unit-live {
+    grid-template-columns: 1fr;
   }
 
   .chemical-log-table-wrap {

@@ -911,9 +911,12 @@ function machineConnectionSnapshot(machine, now = Date.now()) {
   };
 }
 
-function machineConnectionBadge(machine) {
+function machineConnectionBadge(machine, mode = "connection") {
   const connection = machineConnectionSnapshot(machine);
-  return `<span class="machine-connection-status ${connection.state}" data-machine-connection-id="${actualText(machine.id)}" title="${actualText(connection.detail)}"><i aria-hidden="true"></i><span><strong data-connection-label>${connection.label}</strong><small data-connection-detail>${actualText(connection.detail)}</small></span></span>`;
+  const connectedLabel = mode === "controller" ? "Controller Active" : "Connected";
+  const disconnectedLabel = mode === "controller" ? "Controller Offline" : "Disconnected";
+  const label = connection.state === "connected" ? connectedLabel : disconnectedLabel;
+  return `<span class="machine-connection-status ${connection.state}" data-machine-connection-id="${actualText(machine.id)}" data-connection-connected-label="${connectedLabel}" data-connection-disconnected-label="${disconnectedLabel}" title="${actualText(connection.detail)}"><i aria-hidden="true"></i><span><strong data-connection-label>${label}</strong><small data-connection-detail>${actualText(connection.detail)}</small></span></span>`;
 }
 
 function updateMachineConnectionIndicators() {
@@ -927,7 +930,9 @@ function updateMachineConnectionIndicators() {
     element.title = connection.detail;
     const label = element.querySelector("[data-connection-label]");
     const detail = element.querySelector("[data-connection-detail]");
-    if (label) label.textContent = connection.label;
+    if (label) label.textContent = connection.state === "connected"
+      ? element.dataset.connectionConnectedLabel || connection.label
+      : element.dataset.connectionDisconnectedLabel || connection.label;
     if (detail) detail.textContent = connection.detail;
   });
 }
@@ -1091,7 +1096,7 @@ function chemicalDispensingPidPanel(machine) {
     </g>`;
   }).join("");
   return `<section class="card pid-card">
-    <div class="pid-head"><div><span class="eyebrow">LIVE PROCESS SCHEMATIC</span><h2>Chemical Dispensing Skid · ${actualText(machine.id)}</h2><p>Delapan supply line masuk ke common manifold, ditimbang pada Tank 1, ditransfer ke Tank 2, lalu dialirkan melalui distribution header ke Calator area ${actualText(machine.areaLabel)}.</p></div><div class="pid-legend"><span><i class="pid-legend-dot ready"></i>No live data / binding ready</span><span><i class="pid-legend-valve"></i>Actuated valve</span><span><i class="pid-legend-line"></i>Process pipe</span></div></div>
+    <div class="pid-head"><div><span class="eyebrow">LIVE PROCESS SCHEMATIC</span><h2>Chemical Dispensing Skid · ${actualText(machine.id)}</h2><p>Delapan supply line masuk ke common manifold, ditimbang pada Tank 1, ditransfer ke Tank 2, lalu dialirkan melalui distribution header ke Calator area ${actualText(machine.areaLabel)}.</p></div><div class="pid-head-actions chemical-pid-head-actions">${machineConnectionBadge(machine, "controller")}<div class="pid-legend"><span><i class="pid-legend-dot ready"></i>No live data / binding ready</span><span><i class="pid-legend-valve"></i>Actuated valve</span><span><i class="pid-legend-line"></i>Process pipe</span></div></div></div>
     <div class="pid-scroll" tabindex="0" aria-label="P and ID chemical dispensing ${machine.id}">
       <svg class="chemical-dispensing-pid" viewBox="0 0 1440 ${diagramHeight}" role="img" aria-label="P and ID dispensing chemical: supply rack 8 valve, common manifold, Tank 1 dengan loadcell, transfer valve dan pump, Tank 2, serta distribution header ke Calator">
         <title>Chemical dispensing process schematic ${actualText(machine.id)}</title>
@@ -3298,6 +3303,7 @@ function actualAssetTable(assets) {
         <span class="machine-area-badge">${actualText(asset.areaLabel || asset.area)}</span>
       </td>
       <td>${statusPill(asset.state)}</td>
+      <td>${machineConnectionBadge(asset, "controller")}</td>
       <td>${machineAlarmNote(asset.id, true)}</td>
       <td class="mono"><strong>${actualText(asset.batch)}</strong></td>
       <td>
@@ -3309,7 +3315,7 @@ function actualAssetTable(assets) {
       <td class="mono">${actualTime(asset.sourceTs)}</td>
       <td><span class="quality-pill ${String(asset.quality).toLowerCase() === "good" ? "good" : "stale"}">${actualText(asset.quality)}</span></td>
     </tr>
-  `).join("") : `<tr><td colspan="8" class="table-empty-row">Tidak ada mesin yang sesuai dengan filter yang dipilih.</td></tr>`;
+  `).join("") : `<tr><td colspan="9" class="table-empty-row">Tidak ada mesin yang sesuai dengan filter yang dipilih.</td></tr>`;
 
   const paginationFooter = `
     <div class="machine-table-pagination">
@@ -3338,6 +3344,7 @@ function actualAssetTable(assets) {
               <th>Asset</th>
               <th>Area</th>
               <th>Status</th>
+              <th>Controller</th>
               <th>Active alarm</th>
               <th>Batch</th>
               <th>Progress</th>
@@ -3718,6 +3725,7 @@ function chemicalUnitOverview(data) {
     return `<article class="card chemical-unit-card" data-chemical-unit="${actualText(machine.id)}" role="button" tabindex="0">
       <div class="chemical-unit-head"><div><span class="area-code">${actualText(machine.area)}</span><h2>${actualText(machine.name)}</h2><p>${actualText(machine.id)} · ${actualText(machine.areaLabel)}</p></div>${statusPill(machine.state || "offline")}</div>
       <div class="chemical-unit-total"><strong>${chemicalNumber(item.total_kg || 0)}</strong><span>kg consumed</span></div>
+      <div class="chemical-unit-controller">${machineConnectionBadge(machine, "controller")}</div>
       <div class="chemical-unit-modes"><span><strong>${chemicalNumber(item.automatic_count || 0, 0)}</strong>Automatic</span><span><strong>${chemicalNumber(item.manual_count || 0, 0)}</strong>Manual</span><span class="${Number(item.emergency_count) ? "warning" : ""}"><strong>${chemicalNumber(item.emergency_count || 0, 0)}</strong>Emergency</span></div>
       <div class="chemical-unit-top"><span>Top chemical</span><strong>${actualText(item.top_chemical_code || "—")} · ${actualText(item.top_chemical_name || "No consumption")}</strong><small>${item.last_transaction_at ? `Last transaction ${actualTime(item.last_transaction_at)}` : "No transaction in selected range"}</small></div>
       <div class="area-card-foot"><span>${dispensingSupportedCalators(machine).length} supported Calators</span><strong>Open unit detail →</strong></div>
@@ -3767,7 +3775,7 @@ function chemicalTransactionPanel(data) {
 
 function chemicalUnitHeader(machine, data) {
   const supported = dispensingSupportedCalators(machine);
-  return `<section class="card chemical-unit-hero"><div><span class="eyebrow">CHEMICAL DISPENSING UNIT</span><h1>${actualText(machine.name)}</h1><p>${actualText(machine.id)} · Area ${actualText(machine.areaLabel)} · mendukung ${supported.length} Calator</p></div><div class="chemical-supported-list"><span>Supported Calators</span><strong>${supported.map((item) => actualText(item.id)).join(" · ") || "Belum dimapping"}</strong><small>Destination transaksi tetap “Belum teridentifikasi” sampai calator_id tersedia dari sumber.</small></div><div class="chemical-unit-live">${statusPill(machine.state || "offline")}<span>Last transaction</span><strong>${actualTime(data.summary?.last_transaction_at)}</strong></div></section>`;
+  return `<section class="card chemical-unit-hero"><div><span class="eyebrow">CHEMICAL DISPENSING UNIT</span><h1>${actualText(machine.name)}</h1><p>${actualText(machine.id)} · Area ${actualText(machine.areaLabel)} · mendukung ${supported.length} Calator</p></div><div class="chemical-supported-list"><span>Supported Calators</span><strong>${supported.map((item) => actualText(item.id)).join(" · ") || "Belum dimapping"}</strong><small>Destination transaksi tetap “Belum teridentifikasi” sampai calator_id tersedia dari sumber.</small></div><div class="chemical-unit-live">${machineConnectionBadge(machine, "controller")}<div class="chemical-unit-live-reading"><span>Machine state</span>${statusPill(machine.state || "offline")}</div><div class="chemical-unit-live-reading"><span>Last transaction</span><strong>${actualTime(data.summary?.last_transaction_at)}</strong></div></div></section>`;
 }
 
 function actualChemicalPage() {

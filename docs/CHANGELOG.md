@@ -4,6 +4,63 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.3 — 26 Agustus 2026
+
+**Status:** Asset heartbeat visibility
+
+### Ditambahkan
+
+- Status `Connected/Disconnected` pada direktori asset dan card mesin.
+- Status `Controller Active/Controller Offline` pada overview, detail, dan P&ID Chemical Dispensing.
+- Umur heartbeat dan timeout 30 detik yang diperbarui tanpa full-page render.
+
+### Dipertahankan
+
+- Machine state, valve position, alarm, dan connection state tetap dipisahkan.
+- Satu heartbeat per asset; tidak ada heartbeat individual per valve.
+- Interaction-safe rendering Dashboard v2.2.
+
+---
+
+## Chemical Dispensing Calator v1.11 — 26 Agustus 2026
+
+**Status:** Controller connection visibility
+
+### Ditambahkan
+
+- Indikator controller pada seluruh card dispensing, header detail, dan header P&ID.
+- Validasi live valve berdasarkan heartbeat asset.
+
+### Dipertahankan
+
+- Scope valve-only dari v1.10 tanpa mengaktifkan kembali motor tag atau diagnostic dispensing.
+
+---
+
+## P&ID Live State Architecture v1.2 — 26 Agustus 2026
+
+**Status:** Asset communication projection implemented
+
+### Ditambahkan
+
+- Field communication pada Asset API dan snapshot.
+- Event WebSocket `asset:communication` untuk card plant dan chemical.
+- Full instrument snapshot tetap hanya dikirim ketika kualitas heartbeat berubah.
+
+---
+
+## Dashboard V2.2 — 26 Agustus 2026
+
+**Status:** Source-aware realtime refresh
+
+### Ditambahkan
+
+- Selective endpoint refresh berdasarkan sumber database yang berubah.
+- Render guard untuk pointer, form control, sidebar, dan modal.
+- Preservation scroll serta update P&ID tanpa full render.
+
+---
+
 ## P&ID Live State Architecture v1.1 — 26 Agustus 2026
 
 **Status:** Asset heartbeat implemented
