@@ -2,13 +2,40 @@ import { BadRequestException, Controller, Get, NotFoundException, Param, Query }
 import { DatabaseService } from "./database.service.js";
 
 const validProcesses = new Set(["jetflow", "calator", "dryer", "kalender", "chemical"]);
-const assetProjection = "SELECT a.*, s.machine_state, s.batch_no, s.progress_percent, s.connected, s.source_ts, s.quality, s.values_json FROM asset a LEFT JOIN asset_snapshot s ON s.asset_id = a.asset_id";
+const assetProjection = `
+  SELECT
+    a.*,
+    s.machine_state,
+    COALESCE(active_run.batch_no, s.batch_no) AS batch_no,
+    COALESCE(active_run.progress_percent, s.progress_percent) AS progress_percent,
+    s.connected,
+    s.source_ts,
+    s.quality,
+    s.values_json,
+    communication.online AS communication_online,
+    communication.effective_quality AS communication_quality,
+    communication.heartbeat_tag_code,
+    communication.heartbeat_value,
+    communication.stale_after_seconds AS heartbeat_stale_after_seconds,
+    communication.source_ts AS heartbeat_source_ts
+  FROM asset a
+  LEFT JOIN asset_snapshot s ON s.asset_id = a.asset_id
+  LEFT JOIN asset_communication_state communication ON communication.asset_id = a.asset_id
+  LEFT JOIN LATERAL (
+    SELECT run.batch_no, run.progress_percent
+    FROM batch_process_run run
+    WHERE run.asset_id = a.asset_id
+      AND run.run_status IN ('RUNNING', 'HOLD')
+    ORDER BY run.source_updated_at DESC NULLS LAST, run.updated_at DESC, run.started_at DESC NULLS LAST
+    LIMIT 1
+  ) active_run ON TRUE
+`;
 const equipmentProjection = "SELECT e.*, s.equipment_state, s.current_r_a, s.current_s_a, s.current_t_a, s.voltage_rs_v, s.voltage_st_v, s.voltage_tr_v, s.active_power_kw, s.drive_frequency_hz, s.runtime_hours, s.energy_kwh, s.maintenance_due_at, s.source_ts, s.quality, s.values_json FROM equipment e LEFT JOIN equipment_snapshot s ON s.equipment_id = e.equipment_id";
 const actualDataMode = "ACTUAL_DATABASE";
 const aggregateTables: Record<string, string> = {
-  "1m": "telemetry_aggregate_1m",
-  "15m": "telemetry_aggregate_15m",
-  daily: "telemetry_aggregate_daily",
+  "1m": "telemetry_cagg_1m",
+  "15m": "telemetry_cagg_15m",
+  daily: "telemetry_cagg_daily",
 };
 const equipmentAggregateTables: Record<string, string> = {
   "1m": "equipment_telemetry_aggregate_1m",
@@ -35,7 +62,12 @@ function assetRow(row: Record<string, any>) {
     state: row.machine_state || "offline",
     batch: row.batch_no || "—",
     progress: Number(row.progress_percent || 0),
-    connected: row.connected || false,
+    connected: row.communication_online === true,
+    connectionStatus: row.communication_quality || "NOT_CONNECTED",
+    heartbeatTagCode: row.heartbeat_tag_code || null,
+    heartbeatValue: row.heartbeat_value ?? null,
+    heartbeatStaleAfterSeconds: Number(row.heartbeat_stale_after_seconds || 30),
+    heartbeatSourceTs: row.heartbeat_source_ts || null,
     sourceTs: row.source_ts || null,
     quality: row.quality || "NO_DATA",
     values: row.values_json || {},
@@ -69,14 +101,56 @@ function equipmentRow(row: Record<string, any>) {
   };
 }
 
+function instrumentStateRow(row: Record<string, any>) {
+  return {
+    tagCode: row.tag_code,
+    assetId: row.asset_id,
+    process: row.process_type,
+    area: row.area_code,
+    areaLabel: row.area_name,
+    assetName: row.asset_name,
+    elementCode: row.element_code,
+    parameterCode: row.parameter_code,
+    signalRole: row.signal_role,
+    engineeringUnit: row.engineering_unit,
+    value: row.value_number == null ? row.value_text : Number(row.value_number),
+    valueNumber: row.value_number == null ? null : Number(row.value_number),
+    valueText: row.value_text,
+    booleanValue: row.boolean_value,
+    rawQuality: row.raw_quality,
+    quality: row.effective_quality,
+    semanticState: row.semantic_state,
+    staleAfterSeconds: Number(row.stale_after_seconds),
+    sourceTs: row.source_ts,
+    ingestedAt: row.ingested_at,
+    updatedAt: row.updated_at,
+    freshnessMode: row.freshness_mode,
+    communicationQuality: row.communication_quality,
+    heartbeatSourceTs: row.heartbeat_source_ts,
+  };
+}
+
 @Controller("api/v1")
 export class ApiController {
   constructor(private readonly database: DatabaseService) {}
 
   @Get("integration/status")
   async status() {
-    const result = await this.database.query("SELECT process_type, COUNT(*)::int AS asset_count FROM asset WHERE active = TRUE GROUP BY process_type ORDER BY process_type");
-    return { data_mode: actualDataMode, storage: "POSTGRESQL_NATIVE_LOCAL", framework: "NESTJS", scope: "ALL_PROCESSES", processes: result.rows, gateway_ingestion: false, server_time: new Date().toISOString() };
+    const [result, timescale] = await Promise.all([
+      this.database.query("SELECT process_type, COUNT(*)::int AS asset_count FROM asset WHERE active = TRUE GROUP BY process_type ORDER BY process_type"),
+      this.database.query("SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'"),
+    ]);
+    return {
+      data_mode: actualDataMode,
+      storage: timescale.rows[0] ? "TIMESCALEDB_LOCAL" : "POSTGRESQL_NATIVE_LOCAL",
+      timescaledb_version: timescale.rows[0]?.extversion || null,
+      framework: "NESTJS",
+      scope: "ALL_PROCESSES",
+      processes: result.rows,
+      gateway_ingestion: true,
+      batch_api_ingestion: true,
+      server_time: new Date().toISOString(),
+    };
   }
 
   @Get("assets")
@@ -96,6 +170,68 @@ export class ApiController {
     return { data_mode: actualDataMode, asset: assetRow(asset.rows[0]), tags: tags.rows };
   }
 
+  @Get("assets/:assetId/instrument-states")
+  async instrumentStates(
+    @Param("assetId") assetId: string,
+    @Query("element") element?: string,
+    @Query("changed_after") changedAfter?: string,
+  ) {
+    const asset = await this.database.query("SELECT asset_id FROM asset WHERE asset_id = $1 AND active = TRUE", [assetId]);
+    if (!asset.rows[0]) throw new NotFoundException("asset not found");
+
+    const values: unknown[] = [assetId];
+    const clauses = ["asset_id = $1", "active = TRUE"];
+    if (element) {
+      values.push(element.toUpperCase());
+      clauses.push(`element_code = $${values.length}`);
+    }
+    if (changedAfter) {
+      const parsed = new Date(changedAfter);
+      if (Number.isNaN(parsed.getTime())) throw new BadRequestException("changed_after harus berupa ISO date yang valid.");
+      values.push(parsed.toISOString());
+      clauses.push(`updated_at > $${values.length}::timestamptz`);
+    }
+
+    const result = await this.database.query(
+      `SELECT * FROM instrument_state WHERE ${clauses.join(" AND ")} ORDER BY element_code, parameter_code, tag_code`,
+      values,
+    );
+    const snapshotVersion = result.rows.reduce<Date | null>((latest, row) => {
+      const updatedAt = new Date(row.updated_at);
+      return !latest || updatedAt > latest ? updatedAt : latest;
+    }, null);
+
+    return {
+      data_mode: actualDataMode,
+      asset_id: assetId,
+      snapshot_version: snapshotVersion?.toISOString() || null,
+      states: result.rows.map(instrumentStateRow),
+    };
+  }
+
+  @Get("assets/:assetId/communication")
+  async assetCommunication(@Param("assetId") assetId: string) {
+    const result = await this.database.query(
+      `SELECT * FROM asset_communication_state WHERE asset_id = $1`,
+      [assetId],
+    );
+    const row = result.rows[0];
+    if (!row) throw new NotFoundException("asset not found");
+    return {
+      data_mode: actualDataMode,
+      asset_id: row.asset_id,
+      heartbeat_tag_code: row.heartbeat_tag_code,
+      heartbeat_value: row.heartbeat_value,
+      online: row.online,
+      raw_quality: row.raw_quality,
+      quality: row.effective_quality,
+      stale_after_seconds: Number(row.stale_after_seconds),
+      source_ts: row.source_ts,
+      ingested_at: row.ingested_at,
+      updated_at: row.updated_at,
+    };
+  }
+
   @Get("dispensing/transactions")
   async dispensingTransactions(@Query("asset_id") assetId?: string) {
     const result = assetId
@@ -111,15 +247,48 @@ export class ApiController {
   }
 
   @Get("telemetry/recent")
-  async recentTelemetry(@Query("limit") rawLimit?: string) {
-    const limit = Math.min(Math.max(Number(rawLimit) || 100, 1), 500);
-    const result = await this.database.query(`
-      SELECT t.asset_id, t.tag_code, d.signal_role, d.engineering_unit, t.source_ts, t.value_number, t.value_text, t.quality
-      FROM telemetry_sample t
-      JOIN tag_definition d ON d.tag_code = t.tag_code
-      ORDER BY t.source_ts DESC
-      LIMIT $1
-    `, [limit]);
+  async recentTelemetry(
+    @Query("limit") rawLimit?: string,
+    @Query("per_asset") rawPerAsset?: string,
+    @Query("asset_id") filterAssetId?: string,
+  ) {
+    const limit = Math.min(Math.max(Number(rawLimit) || 100, 1), 2000);
+    const perAsset = rawPerAsset === "true" || rawPerAsset === "1";
+
+    let result;
+    if (perAsset) {
+      // Fetch the N most recent samples per distinct asset to ensure all machines appear
+      result = await this.database.query(`
+        SELECT t.asset_id, t.tag_code, d.signal_role, d.engineering_unit, t.source_ts, t.value_number, t.value_text, t.quality
+        FROM telemetry_sample t
+        JOIN tag_definition d ON d.tag_code = t.tag_code
+        WHERE (t.asset_id, t.source_ts) IN (
+          SELECT asset_id, MAX(source_ts)
+          FROM telemetry_sample
+          GROUP BY asset_id, tag_code
+          ORDER BY asset_id, MAX(source_ts) DESC
+        )
+        ORDER BY t.source_ts DESC
+        LIMIT $1
+      `, [limit]);
+    } else if (filterAssetId) {
+      result = await this.database.query(`
+        SELECT t.asset_id, t.tag_code, d.signal_role, d.engineering_unit, t.source_ts, t.value_number, t.value_text, t.quality
+        FROM telemetry_sample t
+        JOIN tag_definition d ON d.tag_code = t.tag_code
+        WHERE t.asset_id = $2
+        ORDER BY t.source_ts DESC
+        LIMIT $1
+      `, [limit, filterAssetId]);
+    } else {
+      result = await this.database.query(`
+        SELECT t.asset_id, t.tag_code, d.signal_role, d.engineering_unit, t.source_ts, t.value_number, t.value_text, t.quality
+        FROM telemetry_sample t
+        JOIN tag_definition d ON d.tag_code = t.tag_code
+        ORDER BY t.source_ts DESC
+        LIMIT $1
+      `, [limit]);
+    }
     return { data_mode: actualDataMode, samples: result.rows };
   }
 
@@ -129,7 +298,7 @@ export class ApiController {
     const table = aggregateTables[granularity];
     if (!table) throw new BadRequestException("granularity harus 1m, 15m, atau daily.");
     const [rangeFrom, rangeTo] = queryRange(from, to, granularity === "daily" ? 31 * 24 : 24);
-    const result = await this.database.query(`SELECT bucket_start, sample_count, good_sample_count, bad_sample_count, min_value, max_value, avg_value, first_value, last_value, delta_value, last_source_ts, refreshed_at FROM ${table} WHERE asset_id = $1 AND tag_code = $2 AND bucket_start >= $3 AND bucket_start <= $4 ORDER BY bucket_start`, [assetId, tagCode, rangeFrom, rangeTo]);
+    const result = await this.database.query(`SELECT bucket_start, sample_count, good_sample_count, bad_sample_count, min_value, max_value, avg_value, first_value, last_value, delta_value, last_source_ts, NULL::timestamptz AS refreshed_at FROM ${table} WHERE asset_id = $1 AND tag_code = $2 AND bucket_start >= $3 AND bucket_start <= $4 ORDER BY bucket_start`, [assetId, tagCode, rangeFrom, rangeTo]);
     return { data_mode: actualDataMode, granularity, from: rangeFrom, to: rangeTo, points: result.rows };
   }
 
@@ -186,7 +355,30 @@ export class ApiController {
   @Get("alarms/recent")
   async recentAlarms(@Query("limit") rawLimit?: string) {
     const limit = Math.min(Math.max(Number(rawLimit) || 100, 1), 500);
-    const result = await this.database.query("SELECT * FROM alarm_event ORDER BY occurred_at DESC LIMIT $1", [limit]);
-    return { data_mode: actualDataMode, alarms: result.rows };
+    const alarmSelect = `
+      SELECT
+        ae.*,
+        COALESCE(ar.rule_type, 'HIGH') AS rule_type,
+        td.signal_role,
+        td.engineering_unit
+      FROM alarm_event ae
+      LEFT JOIN alarm_rule ar ON ar.rule_id = ae.rule_id
+      LEFT JOIN tag_definition td ON td.tag_code = ae.tag_code
+    `;
+    const [recent, active] = await Promise.all([
+      this.database.query(`${alarmSelect} ORDER BY ae.occurred_at DESC LIMIT $1`, [limit]),
+      this.database.query(`${alarmSelect}
+        WHERE COALESCE(ae.event_state, 'ACTIVE') <> 'CLEARED'
+        ORDER BY
+          CASE UPPER(COALESCE(ae.severity, 'WARNING')) WHEN 'CRITICAL' THEN 0 WHEN 'WARNING' THEN 1 ELSE 2 END,
+          ae.occurred_at DESC
+      `),
+    ]);
+    return {
+      data_mode: actualDataMode,
+      alarms: recent.rows,
+      active_alarms: active.rows,
+      active_count: active.rowCount,
+    };
   }
 }

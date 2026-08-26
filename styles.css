@@ -194,6 +194,39 @@ select:focus-visible {
   overflow-y: auto;
   padding: 16px 12px 12px;
   scrollbar-width: thin;
+  scrollbar-color: rgba(121, 151, 162, 0.42) transparent;
+  overscroll-behavior: contain;
+}
+
+.nav::-webkit-scrollbar {
+  width: 8px;
+}
+
+.nav::-webkit-scrollbar-track {
+  margin-block: 8px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.nav::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(121, 151, 162, 0.4);
+  background-clip: padding-box;
+}
+
+.nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 177, 190, 0.62);
+  background-clip: padding-box;
+}
+
+.nav::-webkit-scrollbar-button,
+.nav::-webkit-scrollbar-corner {
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
 }
 
 .nav-group-label {
@@ -330,15 +363,19 @@ select:focus-visible {
   position: sticky;
   top: 0;
   z-index: 40;
-  display: flex;
-  height: var(--topbar-height);
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+  min-height: var(--topbar-height);
   padding: 0 24px;
   border-bottom: 1px solid var(--line-soft);
   background: rgba(248, 250, 251, 0.88);
   backdrop-filter: blur(18px);
+}
+
+.topbar-main {
+  display: flex;
+  min-height: var(--topbar-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
 }
 
 .topbar-left,
@@ -379,6 +416,18 @@ select:focus-visible {
   color: var(--ink);
   font-weight: 600;
   text-overflow: ellipsis;
+}
+
+.dashboard-version {
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--line));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  color: var(--primary);
+  font-family: var(--font-data);
+  font-size: 0.43rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .crumb-separator {
@@ -940,8 +989,61 @@ select:focus-visible {
   margin-top: 13px;
   padding-top: 10px;
   border-top: 1px solid var(--line-soft);
-  color: var(--success);
   font-size: 0.5rem;
+}
+
+.machine-connection-status {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-3);
+}
+
+.machine-connection-status > i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.machine-connection-status > span,
+.machine-connection-status strong,
+.machine-connection-status small {
+  display: block;
+  min-width: 0;
+}
+
+.machine-connection-status strong {
+  color: currentColor;
+  font-family: var(--font-data);
+  font-size: 0.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.machine-connection-status small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: 0.43rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.machine-connection-status.connected {
+  color: var(--success);
+}
+
+.machine-connection-status.disconnected {
+  color: var(--danger);
+}
+
+.machine-hero-meta > .machine-connection-status {
+  padding-left: 18px;
+  border-left: 1px solid var(--line-soft);
 }
 
 .kpi-grid {
@@ -1773,6 +1875,118 @@ select:focus-visible {
 .chart-canvas {
   width: 100%;
   height: 100%;
+}
+
+.has-trend-hover {
+  position: relative;
+}
+
+.has-trend-hover canvas {
+  cursor: crosshair;
+}
+
+.trend-hover-layer {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 90ms ease;
+}
+
+.trend-hover-layer.visible {
+  visibility: visible;
+  opacity: 1;
+}
+
+.trend-hover-line {
+  position: absolute;
+  width: 1px;
+  border-left: 1px dashed color-mix(in srgb, var(--primary) 58%, transparent);
+  transform: translateX(-0.5px);
+}
+
+.trend-hover-points i {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--surface) 72%, transparent);
+  transform: translate(-50%, -50%);
+}
+
+.trend-hover-tooltip {
+  position: absolute;
+  min-width: 178px;
+  max-width: min(270px, calc(100% - 16px));
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: 0 10px 28px rgba(19, 46, 57, 0.14);
+  backdrop-filter: blur(8px);
+}
+
+.trend-hover-tooltip > strong {
+  display: block;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-size: 0.47rem;
+}
+
+.trend-hover-tooltip > span {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  color: var(--ink-2);
+  font-size: 0.46rem;
+}
+
+.trend-hover-tooltip > span > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.trend-hover-tooltip em {
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trend-hover-tooltip b {
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bar-hover-highlight {
+  position: absolute;
+  border: 2px solid color-mix(in srgb, var(--primary) 72%, white);
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.trend-hover-tooltip .trend-tooltip-total {
+  margin-bottom: 7px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.trend-hover-tooltip .trend-tooltip-total > i {
+  border: 1px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
 }
 
 .actual-historian-toolbar,
@@ -2986,7 +3200,7 @@ select:focus-visible {
 
 .pid-card {
   margin-bottom: 13px;
-  padding: 17px;
+  padding: 20px;
 }
 
 .pid-head {
@@ -2998,24 +3212,88 @@ select:focus-visible {
 }
 
 .pid-head h2 {
-  margin: 4px 0 5px;
-  font-size: 0.84rem;
+  margin: 5px 0 6px;
+  font-size: 0.9rem;
 }
 
 .pid-head p {
-  max-width: 700px;
+  max-width: 780px;
   margin: 0;
   color: var(--ink-3);
-  font-size: 0.57rem;
-  line-height: 1.55;
+  font-size: 0.58rem;
+  line-height: 1.6;
+}
+
+.pid-head-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.pid-collapse-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid #bdd7dd;
+  border-radius: 9px;
+  background: #f4fafb;
+  color: #087f97;
+  font: 800 0.52rem/1 var(--font-body);
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, color .18s ease;
+}
+
+.pid-collapse-button:hover,
+.pid-collapse-button:focus-visible {
+  border-color: #7cbac6;
+  background: #eaf6f8;
+  color: #056d82;
+  outline: none;
+}
+
+.pid-collapse-button i {
+  width: 8px;
+  height: 8px;
+  transform: rotate(45deg);
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transition: transform .18s ease;
+}
+
+.pid-collapse-button[aria-expanded="true"] i {
+  transform: rotate(225deg);
+}
+
+.kalender-pid-body {
+  display: block;
+}
+
+.kalender-pid-card.is-collapsed {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.kalender-pid-card.is-collapsed .pid-head {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.kalender-pid-card.is-collapsed .pid-head p,
+.kalender-pid-card.is-collapsed .pid-legend,
+.kalender-pid-card.is-collapsed .kalender-pid-body {
+  display: none;
 }
 
 .pid-legend {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 10px;
-  padding-top: 5px;
+  gap: 8px;
+  padding-top: 4px;
   color: var(--ink-3);
   font-size: 0.52rem;
   white-space: nowrap;
@@ -3024,153 +3302,917 @@ select:focus-visible {
 .pid-legend span {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid #dce7e9;
+  border-radius: 999px;
+  background: #f8fbfb;
 }
 
 .pid-legend-valve {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   transform: rotate(45deg);
-  border: 2px solid var(--success);
-  background: #effbf7;
+  border: 1.5px solid #168f75;
+  background: #e7f6f1;
 }
 
 .pid-legend-line {
-  width: 16px;
-  height: 2px;
-  background: var(--accent);
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: #168ca4;
+}
+
+.pid-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8ba2a9;
+  box-shadow: 0 0 0 3px rgba(139, 162, 169, .13);
+}
+
+.pid-legend-dot.ready {
+  background: #119b70;
+  box-shadow: 0 0 0 3px rgba(17, 155, 112, .13);
 }
 
 .pid-scroll {
   overflow-x: auto;
-  border: 1px solid #dce7e9;
-  border-radius: var(--radius-sm);
-  background:
-    linear-gradient(90deg, rgba(19, 46, 57, 0.025) 1px, transparent 1px),
-    linear-gradient(rgba(19, 46, 57, 0.025) 1px, transparent 1px),
-    #fbfdfd;
-  background-size: 24px 24px;
+  border: 1px solid #d7e3e6;
+  border-radius: 14px;
+  background: #f4f8f9;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .82);
 }
 
 .chemical-dispensing-pid {
   display: block;
-  min-width: 860px;
+  min-width: 1080px;
   width: 100%;
   height: auto;
   font-family: var(--font-mono);
 }
 
+.chemical-dispensing-pid * {
+  vector-effect: non-scaling-stroke;
+}
+
+.chemical-dispensing-pid .pid-canvas-grid {
+  fill-opacity: .58;
+  stroke: #cddde1;
+  stroke-width: 1.2;
+}
+
+.chemical-dispensing-pid .pid-zone > rect {
+  fill: rgba(255, 255, 255, .8);
+  stroke: #dce7e9;
+  stroke-width: 1.2;
+}
+
+.chemical-dispensing-pid .pid-zone-index {
+  fill: #0b8ca5;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.chemical-dispensing-pid .pid-section-label {
+  fill: #315d68;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .09em;
+}
+
+.chemical-dispensing-pid .pid-section-note {
+  fill: #8aa0a7;
+  font-size: 9px;
+  font-weight: 600;
+}
+
 .chemical-dispensing-pid .pid-pipe {
   fill: none;
-  stroke: #457b88;
-  stroke-width: 3;
+  stroke: #607f87;
+  stroke-width: 3.2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .chemical-dispensing-pid .pid-pipe.thin {
-  stroke-width: 2;
-  stroke: #87a7ae;
+  stroke-width: 2.2;
+  stroke: #91a9af;
 }
 
-.chemical-dispensing-pid .pid-transfer-line,
+.chemical-dispensing-pid .pid-header-pipe {
+  stroke: #335d67;
+  stroke-width: 5;
+}
+
+.chemical-dispensing-pid .pid-active-pipe,
 .chemical-dispensing-pid .pid-discharge {
-  stroke: #078eaa;
+  stroke: #108ca4;
+  stroke-width: 4;
 }
 
-.chemical-dispensing-pid .pid-valve path {
-  fill: #effbf7;
-  stroke: var(--success);
+.chemical-dispensing-pid .pid-arrow-head {
+  fill: #108ca4;
+}
+
+.chemical-dispensing-pid .pid-junction {
+  fill: #335d67;
+  stroke: #f7fbfb;
   stroke-width: 2;
 }
 
-.chemical-dispensing-pid .pid-valve circle {
-  fill: var(--success);
+.chemical-dispensing-pid .pid-source-card {
+  fill: #fff;
+  stroke: #cedde1;
+  stroke-width: 1.2;
 }
 
-.chemical-dispensing-pid .pid-transfer path {
-  fill: #eef8fb;
-  stroke: var(--accent);
+.chemical-dispensing-pid .pid-source-index {
+  fill: #e4f3f6;
+  stroke: #bedce3;
+  stroke-width: 1;
 }
 
-.chemical-dispensing-pid .pid-transfer circle {
-  fill: var(--accent);
-}
-
-.chemical-dispensing-pid .pid-valve text,
-.chemical-dispensing-pid .pid-loadcells text,
-.chemical-dispensing-pid .pid-flow-label {
-  fill: #416773;
+.chemical-dispensing-pid .pid-source-code {
+  fill: #087f97;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 900;
 }
 
-.chemical-dispensing-pid .pid-source-label,
-.chemical-dispensing-pid .pid-section-label {
-  fill: #78929a;
-  font-size: 10px;
+.chemical-dispensing-pid .pid-source-label {
+  fill: #244d58;
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: .08em;
 }
 
-.chemical-dispensing-pid .pid-tank ellipse,
-.chemical-dispensing-pid .pid-tank path {
-  fill: url(#pidTankFill);
-  stroke: #2b8290;
-  stroke-width: 2;
+.chemical-dispensing-pid .pid-source-name {
+  fill: #839aa1;
+  font-size: 8.5px;
+  font-weight: 600;
 }
 
-.chemical-dispensing-pid .pid-tank rect {
-  fill: rgba(63, 173, 154, .19);
+.chemical-dispensing-pid .pid-valve .pid-valve-body {
+  fill: #e8f6f2;
+  stroke: #158f74;
+  stroke-width: 1.8;
+}
+
+.chemical-dispensing-pid .pid-valve .pid-valve-stem {
+  stroke: #547780;
+  stroke-width: 1.5;
+}
+
+.chemical-dispensing-pid .pid-valve .pid-valve-actuator {
+  fill: #fff;
+  stroke: #547780;
+  stroke-width: 1.4;
+}
+
+.chemical-dispensing-pid .pid-transfer .pid-valve-body,
+.chemical-dispensing-pid .pid-route .pid-valve-body {
+  fill: #e5f4f7;
+  stroke: #108ca4;
+}
+
+.chemical-dispensing-pid .pid-state-ready .pid-status-dot {
+  fill: #91a4aa;
+  stroke: #edf2f3;
+  stroke-width: 4;
+}
+
+/* Live P&ID state is applied directly from instrument_state without re-rendering SVG. */
+.chemical-dispensing-pid .pid-live-open .pid-status-dot,
+.chemical-dispensing-pid .pid-live-running .pid-status-dot,
+.chemical-dispensing-pid .pid-live-active .pid-status-dot,
+.kalender-process-pid .pid-live-open .kalender-pid-state-dot,
+.kalender-process-pid .pid-live-running .kalender-pid-state-dot,
+.kalender-process-pid .pid-live-active .kalender-pid-state-dot {
+  fill: #08a776;
+  stroke: #d8f7ed;
+}
+
+.chemical-dispensing-pid .pid-valve.pid-live-open .pid-valve-body {
+  fill: #bdf1dd;
+  stroke: #087f5b;
+  stroke-width: 2.5;
+}
+
+.chemical-dispensing-pid .pid-inlet-line.pid-live-open > .pid-pipe,
+.chemical-dispensing-pid .pid-destination.pid-live-open > .pid-pipe {
+  stroke: #08a776;
+  stroke-width: 4;
+}
+
+.kalender-process-pid .kalender-pid-valve.pid-live-open path {
+  fill: #bdf1dd;
+  stroke: #087f5b;
+  stroke-width: 2.5;
+}
+
+.chemical-dispensing-pid .pid-live-closed .pid-status-dot,
+.chemical-dispensing-pid .pid-live-stopped .pid-status-dot,
+.chemical-dispensing-pid .pid-live-inactive .pid-status-dot,
+.kalender-process-pid .pid-live-closed .kalender-pid-state-dot,
+.kalender-process-pid .pid-live-stopped .kalender-pid-state-dot,
+.kalender-process-pid .pid-live-inactive .kalender-pid-state-dot {
+  fill: #879aa0;
+  stroke: #edf2f3;
+}
+
+.chemical-dispensing-pid .pid-valve.pid-live-closed .pid-valve-body,
+.chemical-dispensing-pid .pid-valve.pid-live-stopped .pid-valve-body,
+.chemical-dispensing-pid .pid-valve.pid-live-inactive .pid-valve-body {
+  fill: #e7edef;
+  stroke: #6f858c;
+}
+
+.kalender-process-pid .kalender-pid-valve.pid-live-closed path,
+.kalender-process-pid .kalender-pid-valve.pid-live-stopped path,
+.kalender-process-pid .kalender-pid-valve.pid-live-inactive path {
+  fill: #e7edef;
+  stroke: #6f858c;
+}
+
+.chemical-dispensing-pid .pid-live-fault .pid-status-dot,
+.chemical-dispensing-pid .pid-live-alarm .pid-status-dot,
+.chemical-dispensing-pid .pid-live-bad .pid-status-dot,
+.kalender-process-pid .pid-live-fault .kalender-pid-state-dot,
+.kalender-process-pid .pid-live-alarm .kalender-pid-state-dot,
+.kalender-process-pid .pid-live-bad .kalender-pid-state-dot {
+  fill: #e3485d;
+  stroke: #ffe1e5;
+}
+
+.chemical-dispensing-pid .pid-valve.pid-live-fault .pid-valve-body,
+.chemical-dispensing-pid .pid-valve.pid-live-alarm .pid-valve-body,
+.chemical-dispensing-pid .pid-valve.pid-live-bad .pid-valve-body,
+.kalender-process-pid .kalender-pid-valve.pid-live-fault path,
+.kalender-process-pid .kalender-pid-valve.pid-live-alarm path,
+.kalender-process-pid .kalender-pid-valve.pid-live-bad path {
+  fill: #ffe1e5;
+  stroke: #d9344d;
+}
+
+.chemical-dispensing-pid .pid-live-stale .pid-status-dot,
+.kalender-process-pid .pid-live-stale .kalender-pid-state-dot {
+  fill: #d68b05;
+  stroke: #fff0cf;
+}
+
+.chemical-dispensing-pid .pid-valve.pid-live-stale .pid-valve-body,
+.kalender-process-pid .kalender-pid-valve.pid-live-stale path {
+  fill: #fff0cf;
+  stroke: #bd7600;
+  stroke-dasharray: 4 3;
+}
+
+.chemical-dispensing-pid .pid-live-state,
+.kalender-process-pid .pid-live-state {
+  transition: fill .18s ease, stroke .18s ease, opacity .18s ease;
+}
+
+.chemical-dispensing-pid .pid-equipment-tag {
+  fill: #52717a;
+  font-size: 8.5px;
+  font-weight: 800;
+}
+
+.chemical-dispensing-pid .pid-line-tag {
+  fill: #e6f3f5;
+  stroke: #c3dde2;
+  stroke-width: 1;
+}
+
+.chemical-dispensing-pid .pid-manifold > text,
+.chemical-dispensing-pid .pid-transfer-skid > text,
+.chemical-dispensing-pid .pid-distribution-header > text {
+  fill: #3d6973;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.chemical-dispensing-pid .pid-flow-label {
+  fill: #718c93;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+
+.chemical-dispensing-pid .pid-vessel-shadow {
+  fill: rgba(26, 66, 77, .08);
+  stroke: none;
+}
+
+.chemical-dispensing-pid .pid-vessel-shell {
+  stroke: #2f6875;
+  stroke-width: 2.2;
+}
+
+.chemical-dispensing-pid .pid-vessel-top {
+  fill: rgba(255, 255, 255, .78);
+  stroke: #2f6875;
+  stroke-width: 2.2;
+}
+
+.chemical-dispensing-pid .pid-vessel-band {
+  fill: none;
+  stroke: #83a1a8;
+  stroke-width: 1.4;
+}
+
+.chemical-dispensing-pid .pid-vessel-leg {
+  fill: none;
+  stroke: #486f78;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.chemical-dispensing-pid .pid-equipment-plate {
+  fill: rgba(255, 255, 255, .86);
+  stroke: #c8dce0;
+  stroke-width: 1.1;
 }
 
 .chemical-dispensing-pid .pid-tank-title {
-  fill: #163f49;
-  font-size: 17px;
-  font-weight: 800;
+  fill: #143f4a;
+  font-size: 13px;
+  font-weight: 900;
   text-anchor: middle;
 }
 
 .chemical-dispensing-pid .pid-tank-sub {
-  fill: #5f7d86;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .06em;
+  fill: #627f87;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .07em;
   text-anchor: middle;
 }
 
 .chemical-dispensing-pid .pid-tank-value {
-  fill: #087b88;
-  font-size: 12px;
-  font-weight: 700;
+  fill: #07889f;
+  font-size: 8.5px;
+  font-weight: 800;
   text-anchor: middle;
 }
 
-.chemical-dispensing-pid .pid-loadcells path {
-  fill: #f4fbfc;
-  stroke: #4b8792;
-  stroke-width: 2;
-}
-
-.chemical-dispensing-pid .pid-destination rect {
-  fill: #fff;
-  stroke: #b8d2d8;
+.chemical-dispensing-pid .pid-loadcells rect {
+  fill: #f6fbfb;
+  stroke: #477680;
   stroke-width: 1.5;
 }
 
-.chemical-dispensing-pid .pid-destination circle {
-  fill: var(--accent);
+.chemical-dispensing-pid .pid-signal-line {
+  fill: none;
+  stroke: #74929a;
+  stroke-width: 1.4;
+  stroke-dasharray: 5 4;
+}
+
+.chemical-dispensing-pid .pid-instrument {
+  fill: #fff;
+  stroke: #2f7180;
+  stroke-width: 1.5;
+}
+
+.chemical-dispensing-pid .pid-instrument-code {
+  fill: #226472;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.chemical-dispensing-pid .pid-instrument-no {
+  fill: #789198;
+  font-size: 7.5px;
+  font-weight: 700;
+}
+
+.chemical-dispensing-pid .pid-pump > circle:first-of-type {
+  fill: #edf7f8;
+  stroke: #108ca4;
+  stroke-width: 2;
+}
+
+.chemical-dispensing-pid .pid-pump > path {
+  fill: #108ca4;
+  stroke: none;
+}
+
+.chemical-dispensing-pid .pid-destination-card {
+  fill: #fff;
+  stroke: #c6d9dd;
+  stroke-width: 1.2;
+}
+
+.chemical-dispensing-pid .pid-destination-status {
+  fill: #119b70;
 }
 
 .chemical-dispensing-pid .pid-destination-id {
-  fill: #176a7a;
-  font-size: 13px;
-  font-weight: 800;
+  fill: #1a5967;
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .chemical-dispensing-pid .pid-destination-name {
-  fill: #6f8890;
+  fill: #7e969d;
+  font-size: 8.5px;
+  font-weight: 600;
+}
+
+.chemical-dispensing-pid .pid-empty-note {
+  fill: #8ba0a6;
   font-size: 10px;
+  font-weight: 600;
+}
+
+.kalender-pid-scroll {
+  background: #f4f8f9;
+}
+
+.kalender-process-pid {
+  display: block;
+  min-width: 1120px;
+  width: 100%;
+  height: auto;
+  font-family: var(--font-mono);
+}
+
+.kalender-process-pid-simple {
+  min-width: 1180px;
+}
+
+.kalender-process-pid-simple .kalender-simple-zone > rect {
+  fill: rgba(255, 255, 255, .86);
+  stroke: #d5e3e6;
+  stroke-width: 1.2;
+}
+
+.kalender-process-pid-simple .kalender-simple-process-frame {
+  fill: rgba(237, 245, 246, .44);
+  stroke: #b9ccd1;
+  stroke-width: 1.5;
+}
+
+.kalender-process-pid-simple .kalender-simple-steam > text {
+  fill: #8a6a2b;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.kalender-process-pid-simple .kalender-steam-drop {
+  stroke-width: 2.4;
+}
+
+.kalender-process-pid-simple .kalender-simple-valve .kalender-pid-tag {
+  font-size: 7.5px;
+}
+
+.kalender-monitor-chip > rect {
+  fill: #f7fafb;
+  stroke: #d5e2e5;
+  stroke-width: 1.1;
+  transition: fill .18s ease, stroke .18s ease;
+}
+
+.kalender-monitor-label {
+  fill: #375f69;
+  font-size: 7.5px;
+  font-weight: 900;
+}
+
+.kalender-monitor-detail {
+  fill: #8a9da3;
+  font-size: 6.5px;
+  font-weight: 700;
+  letter-spacing: .03em;
+}
+
+.kalender-monitor-heading {
+  fill: #789097;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.kalender-function-label {
+  fill: #789097;
+  font-size: 6.5px;
+  font-weight: 800;
+  letter-spacing: .05em;
+}
+
+.kalender-bearing-points path {
+  fill: none;
+  stroke: #6f8990;
+  stroke-width: 1.4;
+}
+
+.kalender-bearing-points rect {
+  fill: #e8f3f5;
+  stroke: #397583;
+  stroke-width: 1.2;
+}
+
+.kalender-bearing-points text {
+  fill: #607b83;
+  font-size: 6.5px;
+  font-weight: 900;
+}
+
+.kalender-process-pid .kalender-monitor-chip.pid-live-open > rect,
+.kalender-process-pid .kalender-monitor-chip.pid-live-running > rect,
+.kalender-process-pid .kalender-monitor-chip.pid-live-active > rect {
+  fill: #edf9f5;
+  stroke: #9dddc8;
+}
+
+.kalender-process-pid .kalender-monitor-chip.pid-live-closed > rect,
+.kalender-process-pid .kalender-monitor-chip.pid-live-stopped > rect,
+.kalender-process-pid .kalender-monitor-chip.pid-live-inactive > rect {
+  fill: #f3f6f7;
+  stroke: #d5dfe2;
+}
+
+.kalender-process-pid .kalender-monitor-chip.pid-live-fault > rect,
+.kalender-process-pid .kalender-monitor-chip.pid-live-alarm > rect,
+.kalender-process-pid .kalender-monitor-chip.pid-live-bad > rect {
+  fill: #fff1f3;
+  stroke: #edb4bd;
+}
+
+.kalender-process-pid .kalender-monitor-chip.pid-live-stale > rect {
+  fill: #fff8e9;
+  stroke: #efd49a;
+}
+
+.kalender-process-pid * {
+  vector-effect: non-scaling-stroke;
+}
+
+.kalender-pid-canvas {
+  fill-opacity: .58;
+  stroke: #cddde1;
+  stroke-width: 1.2;
+}
+
+.kalender-pid-zone > rect {
+  fill: rgba(255, 255, 255, .8);
+  stroke: #dce7e9;
+  stroke-width: 1.2;
+}
+
+.kalender-zone-index {
+  fill: #0b8ca5;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.kalender-zone-title {
+  fill: #315d68;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.kalender-zone-note {
+  fill: #8aa0a7;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.kalender-legend-fabric,
+.kalender-legend-steam {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+}
+
+.kalender-legend-fabric {
+  background: #e34f63;
+}
+
+.kalender-legend-steam {
+  background: #d68b05;
+}
+
+.pid-legend-dot.binding {
+  background: #0b8ca5;
+  box-shadow: 0 0 0 3px rgba(11, 140, 165, .14);
+}
+
+.kalender-utility-pipe {
+  fill: none;
+  stroke: #d68b05;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.kalender-steam-arrow {
+  fill: #d68b05;
+}
+
+.kalender-fabric-arrow {
+  fill: #e34f63;
+}
+
+.kalender-pid-valve path {
+  fill: #fff6e5;
+  stroke: #bc7600;
+  stroke-width: 1.8;
+}
+
+.kalender-pid-valve line {
+  stroke: #7b6b4e;
+  stroke-width: 1.5;
+}
+
+.kalender-pid-valve rect {
+  fill: #fff;
+  stroke: #8e7546;
+  stroke-width: 1.3;
+}
+
+.kalender-pid-state-dot {
+  fill: #0b8ca5;
+  stroke: #e2f2f5;
+  stroke-width: 4;
+}
+
+.kalender-pid-tag {
+  fill: #5c7379;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.kalender-line-tag {
+  fill: #fff6e7;
+  stroke: #ecd29c;
+  stroke-width: 1;
+}
+
+.kalender-steam-system > text {
+  fill: #8a6a2b;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .05em;
+}
+
+.kalender-utility-label {
+  fill: #a46b08 !important;
+}
+
+.kalender-machine-frame,
+.kalender-plaiter-body {
+  fill: #fff;
+  stroke: #6b858c;
+  stroke-width: 1.8;
+}
+
+.kalender-source-rack,
+.kalender-process-frame {
+  fill: rgba(255, 255, 255, .72);
+  stroke: #6b858c;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.kalender-process-frame {
+  fill: rgba(237, 245, 246, .42);
+  stroke: #b9ccd1;
+}
+
+.kalender-fabric-stack {
+  fill: none;
+  stroke: #e34f63;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.kalender-machine-stand,
+.kalender-expander-bed,
+.kalender-conveyor-chute,
+.kalender-plaiter-arm,
+.kalender-dancer-arm,
+.kalender-table {
+  fill: none;
+  stroke: #58737b;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.kalender-expander-axis {
+  stroke: #98adb2;
+  stroke-width: 2;
+}
+
+.kalender-expander-bar {
+  fill: #f7fafb;
+  stroke: #607b83;
+  stroke-width: 1.6;
+}
+
+.kalender-felt-loop > path:first-child {
+  fill: none;
+  stroke: #385f69;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.kalender-felt-guide,
+.kalender-felt-drive {
+  fill: #f4f8f9;
+  stroke: #385f69;
+  stroke-width: 2;
+}
+
+.kalender-felt-drive {
+  fill: #e7f2f4;
+}
+
+.kalender-drive-cross {
+  fill: none;
+  stroke: #607b83;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.kalender-guide-code {
+  fill: #607b83;
+  font-size: 6px;
+  font-weight: 900;
+}
+
+.kalender-loadcell-code {
+  fill: #496c75;
+  font-size: 6.5px;
+  font-weight: 900;
+  letter-spacing: .03em;
+}
+
+.kalender-guide-roll,
+.kalender-expander-roll,
+.kalender-loadcell-roll,
+.kalender-belt-roll,
+.kalender-plaiter-pivot {
+  fill: #edf5f6;
+  stroke: #335f69;
+  stroke-width: 2;
+}
+
+.kalender-equipment-title {
+  fill: #315d68;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.kalender-pid-motor > circle:first-of-type {
+  fill: #e6f4f6;
+  stroke: #167f93;
+  stroke-width: 1.8;
+}
+
+.kalender-pid-motor > text:not(.kalender-pid-motor-label) {
+  fill: #0d778c;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.kalender-pid-motor-label {
+  fill: #718b92;
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.kalender-width-beam {
+  fill: none;
+  stroke: #8267c7;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+.kalender-signal-line {
+  fill: none;
+  stroke: #76939a;
+  stroke-width: 1.4;
+  stroke-dasharray: 5 4;
+}
+
+.kalender-instrument {
+  fill: #fff;
+  stroke: #357482;
+  stroke-width: 1.6;
+}
+
+.kalender-instrument-code {
+  fill: #276674;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.kalender-instrument-no {
+  fill: #81979d;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.kalender-sensor-label {
+  fill: #607b83;
+  font-size: 7.5px;
+  font-weight: 800;
+}
+
+.kalender-roll-shadow {
+  fill: rgba(22, 61, 71, .1);
+}
+
+.kalender-heated-roll {
+  stroke: #2f6875;
+  stroke-width: 2.5;
+}
+
+.kalender-roll-hub {
+  fill: #dce9eb;
+  stroke: #66858d;
+  stroke-width: 1.6;
+}
+
+.kalender-roll-title {
+  fill: #173f49;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.kalender-roll-sub {
+  fill: #6b848b;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.kalender-belt-body {
+  fill: #fff;
+  stroke: #51727a;
+  stroke-width: 2;
+}
+
+.kalender-belt-line {
+  fill: none;
+  stroke: #8ca4aa;
+  stroke-width: 1.5;
+}
+
+.kalender-plaiter-body {
+  fill: rgba(246, 250, 251, .9);
+}
+
+.kalender-folded-fabric {
+  fill: none;
+  stroke: #e34f63;
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.kalender-fabric-shadow,
+.kalender-fabric-path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.kalender-fabric-shadow {
+  stroke: rgba(255, 255, 255, .95);
+  stroke-width: 8;
+}
+
+.kalender-fabric-path {
+  stroke: #e34f63;
+  stroke-width: 5;
+}
+
+.kalender-flow-directions path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.kalender-flow-label {
+  fill: #fff0f2;
+  stroke: #efb8c0;
+  stroke-width: 1;
+}
+
+.kalender-fabric-flow > text {
+  fill: #b5384a;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
 }
 
 .pid-foot {
@@ -3236,6 +4278,7 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 7px;
+  flex-wrap: wrap;
 }
 
 .batch-search-input {
@@ -3248,8 +4291,42 @@ select:focus-visible {
 }
 
 .batch-search-row .batch-search-input {
-  width: 100%;
+  flex: 1 1 300px;
+  width: auto;
   min-width: 0;
+}
+
+.batch-export-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 7px;
+  border-left: 1px solid var(--line-soft);
+}
+
+.batch-export-button {
+  min-width: 88px;
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--line));
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  color: var(--primary-strong);
+  white-space: nowrap;
+}
+
+.batch-export-button.excel {
+  border-color: color-mix(in srgb, var(--success) 34%, var(--line));
+  background: color-mix(in srgb, var(--success) 7%, var(--surface));
+  color: var(--success);
+}
+
+.batch-export-button:hover:not(:disabled),
+.batch-export-button:focus-visible {
+  border-color: currentColor;
+  transform: translateY(-1px);
+}
+
+.batch-export-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .batch-recent-head {
@@ -6112,6 +7189,179 @@ select:focus-visible {
   }
 }
 
+.alarm-notification-anchor {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.alarm-popup-root {
+  width: clamp(250px, 28vw, 430px);
+  min-width: 0;
+  flex: 0 1 430px;
+}
+
+.alarm-popup-root:empty {
+  display: none;
+}
+
+.alarm-header-carousel {
+  display: grid;
+  height: 35px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--line));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warning) 6%, var(--surface));
+  animation: alarm-carousel-in 180ms ease-out;
+}
+
+.alarm-header-carousel.critical {
+  border-color: color-mix(in srgb, var(--danger) 38%, var(--line));
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+}
+
+.alarm-header-carousel.info {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--line));
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.alarm-carousel-main {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 4px 3px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.alarm-carousel-main:hover {
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+}
+
+.alarm-carousel-severity {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+  color: var(--warning);
+  font-family: var(--font-data);
+  font-size: 0.5rem;
+  font-weight: 700;
+}
+
+.critical .alarm-carousel-severity {
+  background: color-mix(in srgb, var(--danger) 13%, var(--surface));
+  color: var(--danger);
+}
+
+.info .alarm-carousel-severity {
+  background: color-mix(in srgb, var(--primary) 13%, var(--surface));
+  color: var(--primary);
+}
+
+.alarm-carousel-copy {
+  display: block;
+  min-width: 0;
+}
+
+.alarm-carousel-copy small,
+.alarm-carousel-copy strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alarm-carousel-copy small {
+  margin-bottom: 1px;
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: 0.4rem;
+  line-height: 1;
+}
+
+.alarm-carousel-copy strong {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--ink);
+  font-size: 0.5rem;
+  line-height: 1.1;
+}
+
+.alarm-carousel-copy strong b {
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-family: var(--font-data);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.alarm-header-carousel.critical .alarm-carousel-copy strong b {
+  color: var(--danger);
+}
+
+.alarm-carousel-copy strong em {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 0.48rem;
+  font-style: normal;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alarm-carousel-index {
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: 0.43rem;
+  white-space: nowrap;
+}
+
+.alarm-carousel-navigation {
+  display: flex;
+  height: 100%;
+  border-left: 1px solid var(--line-soft);
+}
+
+.alarm-carousel-navigation button {
+  width: 24px;
+  border: 0;
+  border-left: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.alarm-carousel-navigation button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--primary);
+}
+
+.alarm-carousel-navigation button:disabled {
+  color: var(--line);
+  cursor: default;
+}
+
+@keyframes alarm-carousel-in {
+  from { opacity: 0.4; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 .toast-root {
   position: fixed;
   right: 18px;
@@ -6139,6 +7389,613 @@ select:focus-visible {
   margin-bottom: 3px;
   color: var(--ink);
   font-size: 0.65rem;
+}
+
+.alarm-popup {
+  position: relative;
+  overflow: hidden;
+  border-left: 4px solid var(--warning);
+  background: linear-gradient(110deg, #fffaf1, var(--surface) 72%);
+}
+
+.alarm-popup.critical {
+  border-left-color: var(--danger);
+  background: linear-gradient(110deg, #fff3f5, var(--surface) 72%);
+}
+
+.alarm-popup.info {
+  border-left-color: var(--primary);
+  background: linear-gradient(110deg, #f0fafc, var(--surface) 72%);
+}
+
+.alarm-popup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.alarm-popup-head span {
+  color: var(--warning);
+  font-family: var(--font-data);
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.alarm-popup.critical .alarm-popup-head span {
+  color: var(--danger);
+}
+
+.alarm-popup.info .alarm-popup-head span {
+  color: var(--primary);
+}
+
+.alarm-popup-head strong {
+  margin: 0;
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: 0.5rem;
+}
+
+.alarm-popup p,
+.alarm-popup small {
+  display: block;
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+
+.alarm-popup small {
+  padding-top: 7px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--ink-2);
+}
+
+.icon-button.has-active-alarm {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
+  color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.machine-active-alarm-note {
+  display: grid;
+  grid-template-columns: auto minmax(200px, 0.72fr) minmax(0, 2fr);
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warning) 7%, var(--surface));
+  color: var(--ink-2);
+  text-align: left;
+  cursor: default;
+}
+
+.machine-active-alarm-note.critical {
+  border-color: color-mix(in srgb, var(--danger) 38%, var(--line));
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+}
+
+.machine-alarm-signal {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--warning) 14%, transparent);
+}
+
+.machine-active-alarm-note.critical .machine-alarm-signal {
+  background: var(--danger);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.machine-alarm-summary {
+  display: block;
+  min-width: 0;
+}
+
+.machine-alarm-summary strong,
+.machine-alarm-summary small,
+.machine-alarm-compact strong,
+.machine-alarm-compact small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.machine-alarm-summary strong,
+.machine-alarm-compact strong {
+  color: var(--ink);
+  font-size: 0.53rem;
+  text-transform: uppercase;
+}
+
+.machine-alarm-summary small,
+.machine-alarm-compact small {
+  margin-top: 2px;
+  color: var(--ink-3);
+  font-size: 0.48rem;
+}
+
+.machine-alarm-facts {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 0.72fr minmax(210px, 1.5fr) 0.72fr;
+  gap: 0;
+  margin: 0;
+}
+
+.machine-alarm-facts > div {
+  min-width: 0;
+  padding: 0 14px;
+  border-left: 1px solid color-mix(in srgb, var(--danger) 18%, var(--line));
+}
+
+.machine-alarm-facts dt {
+  margin-bottom: 3px;
+  color: var(--ink-3);
+  font-size: 0.43rem;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.machine-alarm-facts dd {
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-size: 0.49rem;
+  font-weight: 600;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.machine-alarm-compact {
+  display: inline-flex;
+  max-width: 220px;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--warning) 28%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning) 6%, var(--surface));
+}
+
+.machine-alarm-compact > span:last-child {
+  min-width: 0;
+}
+
+.machine-alarm-compact.critical {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+}
+
+.machine-alarm-compact.critical .machine-alarm-signal {
+  background: var(--danger);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.machine-alarm-clear {
+  color: var(--ink-3);
+  font-size: 0.5rem;
+}
+
+.machine-hero > .machine-active-alarm-note {
+  grid-column: 1 / -1;
+  margin: -3px 0 0;
+}
+
+@media (max-width: 920px) {
+  .machine-active-alarm-note {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .machine-alarm-facts {
+    grid-column: 2;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .machine-alarm-facts > div:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .machine-alarm-facts {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .machine-alarm-facts > div {
+    padding: 0;
+    border-left: 0;
+  }
+
+  .machine-alarm-facts dd {
+    white-space: normal;
+  }
+}
+
+.alarm-popup-head > div:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.alarm-popup-controls {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.alarm-popup-control,
+.alarm-popup-open {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-family: var(--font-ui);
+  font-size: 0.48rem;
+  cursor: pointer;
+}
+
+.alarm-popup-control {
+  padding: 5px 7px;
+}
+
+.alarm-popup-control.close {
+  color: var(--danger);
+}
+
+.alarm-popup-open {
+  width: 100%;
+  margin-top: 9px;
+  padding: 7px 9px;
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--line));
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.alarm-popup-open:hover,
+.alarm-popup-control:hover {
+  background: var(--surface-hover);
+}
+
+.alarm-popup-persistent {
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--line));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  color: var(--danger) !important;
+  font-size: 0.43rem !important;
+}
+
+.alarm-popup.minimized > p,
+.alarm-popup.minimized > small,
+.alarm-popup.minimized > .alarm-popup-open {
+  display: none;
+}
+
+.alarm-popup.minimized > strong {
+  margin-bottom: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-alarm-section {
+  scroll-margin-top: 74px;
+}
+
+.active-alarm-table-wrap {
+  max-height: 430px;
+  overflow: auto;
+}
+
+.alarm-condition-row.critical td:first-child {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.alarm-condition-row.warning td:first-child {
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+
+.alarm-asset-link {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-family: var(--font-data);
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.alarm-asset-link:hover {
+  text-decoration: underline;
+}
+
+.range-badge.critical {
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--line));
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface));
+  color: var(--danger);
+}
+
+.alarm-configuration-bottom {
+  margin-top: 18px;
+  padding-top: 5px;
+  border-top: 1px dashed var(--line);
+  scroll-margin-top: 74px;
+}
+
+.alarm-rule-configuration {
+  margin-bottom: 18px;
+  padding: 22px;
+}
+
+.alarm-rule-config-header,
+.alarm-rule-form-head,
+.alarm-rule-form-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.alarm-rule-config-header {
+  margin-bottom: 18px;
+}
+
+.alarm-rule-config-header h2,
+.alarm-rule-form-head h3 {
+  margin: 5px 0 4px;
+}
+
+.alarm-rule-config-header h2 {
+  font-size: 0.92rem;
+}
+
+.alarm-rule-form-head h3 {
+  font-size: 0.78rem;
+}
+
+.alarm-rule-config-header p,
+.alarm-rule-form-head p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.52rem;
+  line-height: 1.55;
+}
+
+.alarm-rule-form {
+  margin-bottom: 18px;
+  padding: 17px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--line));
+  border-radius: var(--radius-md);
+  background: linear-gradient(120deg, #f7fbfc, #ffffff 64%);
+}
+
+.alarm-rule-form-head {
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.alarm-enabled-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 0.54rem;
+  font-weight: 700;
+}
+
+.alarm-enabled-control input {
+  accent-color: var(--success);
+}
+
+.alarm-rule-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.alarm-rule-form-grid .field-group {
+  gap: 5px;
+}
+
+.alarm-rule-form-grid .search-control,
+.alarm-rule-form-grid .select-control {
+  width: 100%;
+  min-width: 0;
+  background: var(--surface);
+}
+
+.alarm-rule-form-grid textarea.search-control {
+  min-height: 70px;
+  padding-top: 9px;
+  resize: vertical;
+}
+
+.alarm-tag-field,
+.alarm-name-field {
+  grid-column: span 2;
+}
+
+.alarm-message-field {
+  grid-column: span 2;
+}
+
+.alarm-input-unit {
+  position: relative;
+}
+
+.alarm-input-unit .search-control {
+  padding-right: 42px;
+}
+
+.alarm-input-unit > span {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  color: var(--ink-3);
+  font-family: var(--font-data);
+  font-size: 0.48rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.field-error,
+.alarm-config-error {
+  color: var(--danger);
+  font-size: 0.48rem;
+}
+
+.alarm-config-error {
+  margin-bottom: 18px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--line));
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+}
+
+.alarm-rule-form-foot {
+  align-items: flex-end;
+  margin-top: 15px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.alarm-rule-form-foot > span {
+  max-width: 640px;
+  color: var(--ink-3);
+  font-size: 0.48rem;
+  line-height: 1.5;
+}
+
+.alarm-rule-form-foot > div,
+.alarm-rule-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.alarm-rule-table-wrap {
+  max-height: 410px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.alarm-rule-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+}
+
+.alarm-rule-table td small,
+.alarm-recommendation {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-3);
+  font-size: 0.44rem;
+  line-height: 1.45;
+}
+
+.alarm-recommendation {
+  color: var(--primary-strong);
+}
+
+.process-deviation-configuration {
+  scroll-margin-top: 74px;
+}
+
+.process-deviation-rule-form {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--line));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary-soft) 48%, #fff), #fff 62%);
+}
+
+.deviation-rule-form-grid {
+  align-items: end;
+}
+
+.deviation-monitor-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.deviation-monitor-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 0.5rem;
+  font-weight: 700;
+}
+
+.deviation-monitor-options input {
+  accent-color: var(--primary);
+}
+
+.deviation-rule-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.deviation-rule-table th,
+.deviation-rule-table td {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .alarm-rule-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .alarm-rule-configuration {
+    padding: 16px;
+  }
+
+  .alarm-rule-config-header,
+  .alarm-rule-form-head,
+  .alarm-rule-form-foot {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .alarm-rule-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .alarm-tag-field,
+  .alarm-name-field,
+  .alarm-message-field {
+    grid-column: auto;
+  }
 }
 
 @keyframes toast-in {
@@ -6838,6 +8695,7 @@ select:focus-visible {
 
 .sidebar-backdrop {
   display: none;
+  pointer-events: none;
 }
 
 @media (max-width: 1180px) {
@@ -7193,6 +9051,7 @@ select:focus-visible {
     z-index: 45;
     background: rgba(10, 20, 25, 0.32);
     backdrop-filter: blur(3px);
+    pointer-events: auto;
   }
 
   .brand {
@@ -7481,6 +9340,11 @@ select:focus-visible {
   .pid-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .pid-head-actions {
+    width: 100%;
+    align-items: flex-start;
   }
 
   .pid-legend {

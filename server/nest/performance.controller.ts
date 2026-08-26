@@ -129,7 +129,7 @@ export class PerformanceController {
           SUM(a.avg_value) AS output_value,
           COUNT(*)::int AS bucket_count
         FROM tag_definition d
-        JOIN telemetry_aggregate_1m a ON a.tag_code = d.tag_code AND a.asset_id = d.asset_id
+        JOIN telemetry_cagg_1m a ON a.tag_code = d.tag_code AND a.asset_id = d.asset_id
         WHERE d.asset_id = $1
           AND d.active = TRUE
           AND UPPER(d.signal_role) LIKE '%SPEED%PV%'
@@ -200,7 +200,7 @@ export class PerformanceController {
           SELECT a.bucket_start,
             MAX(a.avg_value) - MIN(a.avg_value) AS spread_value,
             COUNT(DISTINCT a.tag_code)::int AS sensor_count
-          FROM telemetry_aggregate_1m a
+          FROM telemetry_cagg_1m a
           JOIN tag_definition d ON d.tag_code = a.tag_code
           WHERE a.asset_id = $1
             AND d.active = TRUE

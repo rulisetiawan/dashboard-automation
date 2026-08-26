@@ -14,12 +14,17 @@
 
 Mesin Kalender merupakan proses lanjutan setelah Dryer. Kain yang keluar dari Dryer dalam kondisi semi-kering dimasukkan ke Kalender untuk dirapikan. Secara fungsi, proses ini menyerupai penyetrikaan kain.
 
-Kain melewati dua bagian utama yang disebut:
+Kain melewati beberapa bagian utama yang disebut:
 
+- Inlet 
+- Expander 
 - Upper felt.
 - Lower felt.
+- Cooling Belt
+- Conveyor Belt
+- Plaiter
 
-Upper felt dan lower felt menggunakan panas dari steam untuk memanaskan kain selama melewati mesin. Kondisi mekanis dan termal pada kedua sisi perlu dijaga agar proses merata.
+Inlet, Upper felt dan lower felt menggunakan panas dari steam untuk memanaskan kain selama melewati mesin. Kondisi mekanis dan termal pada kedua sisi perlu dijaga agar proses merata.
 
 Parameter kritis awal yang telah diidentifikasi:
 
@@ -52,6 +57,7 @@ Baseline menggunakan informasi berikut sebagai fakta awal:
 7. Parameter proses mencakup temperature upper dan lower.
 8. Overfeed merupakan parameter proses penting.
 9. Parameter tersebut memengaruhi gramasi, bowing, dan shrinkage.
+10. Parameter main speed juga mempengaruhi hasil output kain
 
 Detail lain dalam dokumen ini adalah konsep awal yang perlu dikonfirmasi di lapangan.
 

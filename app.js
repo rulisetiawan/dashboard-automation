@@ -82,6 +82,9 @@ const state = {
   machineSummary: {
     scope: "shift",
   },
+  pidPanel: {
+    kalender: false,
+  },
   batchInvestigation: {
     jetflow: { machineId: null, batch: null },
     calator: { machineId: null, batch: null },
@@ -91,6 +94,17 @@ const state = {
   },
   alarms: {
     area: "all",
+  },
+  alarmConfig: {
+    assetId: null,
+    tagCode: null,
+    editingRuleId: null,
+    draft: {},
+    deviationAssetId: null,
+    deviationPvTagCode: null,
+    deviationSvTagCode: null,
+    editingDeviationRuleId: null,
+    deviationDraft: {},
   },
   machineTable: {
     process: "all",
@@ -112,6 +126,57 @@ const state = {
   },
 };
 
+const navigationStorageKey = "pt-smm.dashboard.navigation.v2";
+const navigationPages = new Set(["overview", "jetflow", "calator", "dryer", "kalender", "utilities", "chemical", "alarms", "trends", "health"]);
+const processNavigationPages = ["jetflow", "calator", "dryer", "kalender", "chemical"];
+
+function restoreDashboardNavigation() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(navigationStorageKey) || "null");
+    if (!saved || typeof saved !== "object") return;
+    if (navigationPages.has(saved.page)) state.page = saved.page;
+    processNavigationPages.forEach((type) => {
+      if (typeof saved.selected?.[type] === "string") state.selected[type] = saved.selected[type];
+      const savedDrill = saved.drill?.[type];
+      if (savedDrill && typeof savedDrill === "object") {
+        state.drill[type] = {
+          area: typeof savedDrill.area === "string" ? savedDrill.area : null,
+          machine: typeof savedDrill.machine === "string" ? savedDrill.machine : null,
+        };
+      }
+      const savedBatch = saved.batchInvestigation?.[type];
+      if (savedBatch && typeof savedBatch === "object") {
+        state.batchInvestigation[type] = {
+          machineId: typeof savedBatch.machineId === "string" ? savedBatch.machineId : null,
+          batch: typeof savedBatch.batch === "string" ? savedBatch.batch : null,
+          ...(typeof savedBatch.processRunId === "string" ? { processRunId: savedBatch.processRunId } : {}),
+        };
+      }
+    });
+    if (["batch", "shift", "today"].includes(saved.machineSummaryScope)) state.machineSummary.scope = saved.machineSummaryScope;
+    if (typeof saved.pidPanel?.kalender === "boolean") state.pidPanel.kalender = saved.pidPanel.kalender;
+  } catch {
+    // Gunakan default navigation jika browser storage tidak tersedia atau rusak.
+  }
+}
+
+function persistDashboardNavigation() {
+  try {
+    window.localStorage.setItem(navigationStorageKey, JSON.stringify({
+      page: state.page,
+      selected: state.selected,
+      drill: state.drill,
+      batchInvestigation: state.batchInvestigation,
+      machineSummaryScope: state.machineSummary.scope,
+      pidPanel: state.pidPanel,
+    }));
+  } catch {
+    // Dashboard tetap berfungsi selama sesi berjalan tanpa browser storage.
+  }
+}
+
+restoreDashboardNavigation();
+
 const backendConnection = {
   status: "connecting",
   dataMode: "ACTUAL_DATABASE",
@@ -119,22 +184,48 @@ const backendConnection = {
   lastSync: null,
   realtime: "connecting",
 };
+const defaultHeartbeatStaleAfterSeconds = 30;
 
 let backendUtilities = [];
 let backendTelemetry = [];
 let backendAlarmEvents = [];
+let backendActiveAlarmEvents = [];
 let backendEquipment = [];
 let backendProcessRuns = [];
 let realtimeSocket = null;
 let realtimeRefreshTimer = null;
 let deferredRealtimeRender = false;
+let realtimeBackendRefreshInFlight = false;
+const realtimePendingSources = new Set();
+const realtimeUiRefresh = {
+  pending: false,
+  timer: null,
+  activePointers: new Set(),
+  lastInteractionAt: 0,
+};
+const pidInstrumentStateCache = new Map();
+let pidInstrumentRequestId = 0;
+let pidSubscribedAssetId = null;
 const actualBatchPrograms = new Map();
 const actualBatchProgramLoading = new Set();
 const actualBatchProgramErrors = new Map();
 const actualMachineSummaries = new Map();
 const actualMachineSummaryLoading = new Set();
 const actualMachineSummaryErrors = new Map();
-const historianParameterStorageKey = "pt-smm.historian.selected-parameter.v1";
+const alarmConfiguration = {
+  rules: [],
+  deviationRules: [],
+  tagsByAsset: new Map(),
+  tagLoading: new Set(),
+  tagErrors: new Map(),
+  loading: false,
+  loaded: false,
+  error: null,
+};
+const alarmPopupUi = {
+  selectedAlarmId: null,
+};
+const historianParameterStorageKey = "pt-smm.historian.selected-parameter.v2";
 
 function loadHistorianParameterPreferences() {
   try {
@@ -429,16 +520,146 @@ function connectRealtimeChannel() {
   realtimeSocket.on("connect", () => {
     backendConnection.realtime = "connected";
     realtimeSocket.emit("dashboard:subscribe");
+    subscribeActivePidAsset();
     updateBackendIndicator();
   });
   realtimeSocket.on("disconnect", () => {
     backendConnection.realtime = "reconnecting";
+    pidSubscribedAssetId = null;
     updateBackendIndicator();
   });
-  realtimeSocket.on("dashboard:refresh", () => {
-    if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
-    realtimeRefreshTimer = setTimeout(() => connectNonJetflowBackend(), 180);
+  realtimeSocket.on("dashboard:refresh", (payload) => {
+    queueRealtimeBackendRefresh(payload?.sources);
   });
+  realtimeSocket.on("alarm:active", (alarm) => {
+    upsertActiveAlarm(alarm);
+    updateNavigationCounts();
+    showAlarmPopup(alarm);
+    alarmConfiguration.loaded = false;
+  });
+  realtimeSocket.on("alarm:cleared", (alarm) => {
+    removeActiveAlarm(alarm?.alarm_event_id);
+    updateNavigationCounts();
+    syncActiveAlarmPopups();
+    alarmConfiguration.loaded = false;
+  });
+  realtimeSocket.on("instrument:delta", (payload) => {
+    const assetId = String(payload?.asset_id || "").trim().toUpperCase();
+    if (!assetId || !Array.isArray(payload?.states)) return;
+    cachePidInstrumentStates(assetId, payload.states);
+    if (activePidAssetId() === assetId) applyPidInstrumentStates(assetId);
+  });
+  realtimeSocket.on("asset:communication", (payload) => {
+    const assetId = String(payload?.assetId || "").trim().toUpperCase();
+    if (!assetId) return;
+    const machine = actualFleet().find((item) => String(item.id).toUpperCase() === assetId);
+    if (!machine) return;
+    machine.connected = payload.connected === true;
+    machine.connectionStatus = payload.connectionStatus || "NOT_CONNECTED";
+    machine.heartbeatTagCode = payload.heartbeatTagCode || null;
+    machine.heartbeatValue = payload.heartbeatValue ?? null;
+    machine.heartbeatStaleAfterSeconds = Number(payload.heartbeatStaleAfterSeconds || defaultHeartbeatStaleAfterSeconds);
+    machine.heartbeatSourceTs = payload.heartbeatSourceTs || null;
+    updateMachineConnectionIndicators();
+  });
+}
+
+const pidVisualStateClasses = [
+  "pid-live-open", "pid-live-closed", "pid-live-running", "pid-live-stopped",
+  "pid-live-active", "pid-live-inactive", "pid-live-fault", "pid-live-alarm",
+  "pid-live-stale", "pid-live-bad", "pid-live-unknown",
+];
+
+function activePidAssetId() {
+  if (!document.querySelector(".chemical-dispensing-pid, .kalender-process-pid")) return null;
+  const machineId = state.drill[state.page]?.machine;
+  return typeof machineId === "string" && machineId ? machineId.toUpperCase() : null;
+}
+
+function cachePidInstrumentStates(assetId, states) {
+  const assetCache = pidInstrumentStateCache.get(assetId) || new Map();
+  states.forEach((item) => {
+    if (!item?.elementCode) return;
+    const key = item.tagCode || `${item.elementCode}.${item.parameterCode || "STATE"}`;
+    assetCache.set(key, item);
+  });
+  pidInstrumentStateCache.set(assetId, assetCache);
+}
+
+function pidStatePriority(item) {
+  const semantic = String(item?.semanticState || "UNKNOWN").toUpperCase();
+  const quality = String(item?.quality || "UNKNOWN").toUpperCase();
+  if (["BAD", "NOT_CONNECTED"].includes(quality) || ["BAD", "NOT_CONNECTED"].includes(semantic)) return 100;
+  if (quality === "STALE" || semantic === "STALE") return 90;
+  if (semantic === "FAULT") return 80;
+  if (semantic === "ALARM") return 70;
+  if (["OPEN", "RUNNING", "ACTIVE"].includes(semantic)) return 60;
+  if (["CLOSED", "STOPPED", "INACTIVE"].includes(semantic)) return 50;
+  return 10;
+}
+
+function pidVisualState(item) {
+  const quality = String(item?.quality || "UNKNOWN").toUpperCase();
+  const semantic = String(item?.semanticState || "UNKNOWN").toUpperCase();
+  if (["BAD", "NOT_CONNECTED"].includes(quality) || ["BAD", "NOT_CONNECTED"].includes(semantic)) return "bad";
+  if (quality === "STALE" || semantic === "STALE") return "stale";
+  return ["OPEN", "CLOSED", "RUNNING", "STOPPED", "ACTIVE", "INACTIVE", "FAULT", "ALARM"].includes(semantic)
+    ? semantic.toLowerCase()
+    : "unknown";
+}
+
+function applyPidInstrumentStates(assetId) {
+  if (activePidAssetId() !== assetId) return;
+  const cached = [...(pidInstrumentStateCache.get(assetId)?.values() || [])];
+  const byElement = new Map();
+  cached.forEach((item) => {
+    const code = String(item.elementCode || "").toUpperCase();
+    if (!code) return;
+    const current = byElement.get(code);
+    if (!current || pidStatePriority(item) >= pidStatePriority(current)) byElement.set(code, item);
+  });
+
+  document.querySelectorAll(".chemical-dispensing-pid [data-element-code], .kalender-process-pid [data-element-code]").forEach((element) => {
+    const item = byElement.get(String(element.dataset.elementCode || "").toUpperCase());
+    element.classList.remove(...pidVisualStateClasses);
+    if (!item) return;
+    const visualState = pidVisualState(item);
+    element.classList.add("pid-live-state", `pid-live-${visualState}`);
+    element.dataset.pidSemanticState = String(item.semanticState || "UNKNOWN").toUpperCase();
+    element.dataset.pidQuality = String(item.quality || "UNKNOWN").toUpperCase();
+    const sourceTime = item.sourceTs ? new Date(item.sourceTs).toLocaleString("id-ID", { hour12: false }) : "—";
+    const stateLabel = `${element.dataset.pidSemanticState} · ${element.dataset.pidQuality} · ${sourceTime}`;
+    if (!element.dataset.pidBaseLabel) element.dataset.pidBaseLabel = element.getAttribute("aria-label") || element.dataset.elementCode;
+    element.setAttribute("aria-label", `${element.dataset.pidBaseLabel} · ${stateLabel}`);
+    const title = [...element.children].find((child) => child.tagName?.toLowerCase() === "title");
+    if (title) title.textContent = `${element.dataset.pidBaseLabel} · ${stateLabel}`;
+  });
+}
+
+function subscribeActivePidAsset() {
+  const assetId = activePidAssetId();
+  if (!assetId || !realtimeSocket?.connected) return;
+  if (pidSubscribedAssetId === assetId) return;
+  pidSubscribedAssetId = assetId;
+  realtimeSocket.emit("asset:subscribe", { asset_id: assetId });
+}
+
+async function activatePidBindingForCurrentView() {
+  const assetId = activePidAssetId();
+  if (!assetId) return;
+  subscribeActivePidAsset();
+  applyPidInstrumentStates(assetId);
+  const requestId = ++pidInstrumentRequestId;
+  try {
+    const response = await fetch(`/api/v1/assets/${encodeURIComponent(assetId)}/instrument-states`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Instrument state API ${response.status}`);
+    const payload = await response.json();
+    if (requestId !== pidInstrumentRequestId || activePidAssetId() !== assetId) return;
+    cachePidInstrumentStates(assetId, payload.states || []);
+    applyPidInstrumentStates(assetId);
+  } catch (error) {
+    console.warn("P&ID live-state binding unavailable", error);
+  }
 }
 
 function utilityValue(code, fallback) {
@@ -464,41 +685,185 @@ function hydrateChemicalTransactions(rows) {
   })));
 }
 
-async function connectNonJetflowBackend() {
+const backendProcesses = ["jetflow", "calator", "dryer", "kalender", "chemical"];
+
+async function fetchJson(url, label) {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error(`${label} unavailable (${response.status})`);
+  return response.json();
+}
+
+async function refreshAssetFleets() {
+  const payloads = await Promise.all(backendProcesses.map(async (process) => [
+    process,
+    await fetchJson(`/api/v1/assets?process=${process}`, `Asset API ${process}`),
+  ]));
+  const targetFleet = { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers };
+  payloads.forEach(([process, payload]) => targetFleet[process].splice(0, targetFleet[process].length, ...(payload.assets || [])));
+}
+
+function realtimeRenderBlocked() {
+  const active = document.activeElement;
+  const controlFocused = active?.matches?.("input, select, textarea, [contenteditable='true']");
+  return document.hidden
+    || realtimeUiRefresh.activePointers.size > 0
+    || controlFocused
+    || Boolean(document.querySelector("[data-motor-drive-backdrop], .sidebar.open"))
+    || Date.now() - realtimeUiRefresh.lastInteractionAt < 420;
+}
+
+function scheduleSafeRealtimeRender() {
+  realtimeUiRefresh.pending = true;
+  if (realtimeUiRefresh.timer) return;
+  const attempt = () => {
+    realtimeUiRefresh.timer = null;
+    if (!realtimeUiRefresh.pending) return;
+    if (realtimeRenderBlocked()) {
+      realtimeUiRefresh.timer = window.setTimeout(attempt, 650);
+      return;
+    }
+    realtimeUiRefresh.pending = false;
+    deferredRealtimeRender = false;
+    renderPage({ preserveScroll: true });
+  };
+  realtimeUiRefresh.timer = window.setTimeout(attempt, 260);
+}
+
+function markRealtimeInteraction() {
+  realtimeUiRefresh.lastInteractionAt = Date.now();
+}
+
+function queueRealtimeBackendRefresh(sources) {
+  const values = Array.isArray(sources) && sources.length ? sources : ["__all__"];
+  values.forEach((source) => realtimePendingSources.add(String(source)));
+  if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
+  realtimeRefreshTimer = window.setTimeout(() => {
+    realtimeRefreshTimer = null;
+    void flushRealtimeBackendRefresh();
+  }, 180);
+}
+
+async function flushRealtimeBackendRefresh() {
+  if (realtimeBackendRefreshInFlight) return;
+  const sources = new Set(realtimePendingSources);
+  realtimePendingSources.clear();
+  if (!sources.size) return;
+  realtimeBackendRefreshInFlight = true;
   try {
-    const statusResponse = await fetch("/api/v1/integration/status", { cache: "no-store" });
-    if (!statusResponse.ok) throw new Error("Backend not ready");
-    const status = await statusResponse.json();
-    const processes = ["jetflow", "calator", "dryer", "kalender", "chemical"];
-    const responses = await Promise.all(processes.map(async (process) => {
-      const response = await fetch(`/api/v1/assets?process=${process}`, { cache: "no-store" });
-      if (!response.ok) throw new Error(`Asset API ${process} unavailable`);
-      return [process, await response.json()];
+    await refreshBackendSources(sources);
+  } catch (error) {
+    console.warn("Selective realtime refresh failed", error);
+  } finally {
+    realtimeBackendRefreshInFlight = false;
+    if (realtimePendingSources.size) queueRealtimeBackendRefresh([...realtimePendingSources]);
+  }
+}
+
+async function refreshBackendSources(sources) {
+  const knownSources = new Set([
+    "asset", "asset_snapshot", "utility_snapshot", "chemical_transaction", "alarm_event", "alarm_rule_state",
+    "production_batch", "batch_process_run", "equipment", "equipment_snapshot", "telemetry_sample",
+    "process_deviation_rule", "process_target_execution", "process_setpoint_change_event", "process_deviation_event",
+  ]);
+  const refreshAll = sources.has("__all__") || [...sources].some((source) => !knownSources.has(source));
+  const tasks = [];
+
+  if (refreshAll || sources.has("asset") || sources.has("asset_snapshot")) tasks.push(refreshAssetFleets());
+  if (refreshAll || sources.has("chemical_transaction")) {
+    tasks.push(fetchJson("/api/v1/dispensing/transactions", "Chemical transaction API").then((payload) => {
+      hydrateChemicalTransactions(payload.transactions || []);
+      invalidateChemicalAnalytics();
     }));
-    const chemicalResponse = await fetch("/api/v1/dispensing/transactions", { cache: "no-store" });
-    const utilityResponse = await fetch("/api/v1/utilities/snapshot", { cache: "no-store" });
+  }
+  if (refreshAll || sources.has("utility_snapshot")) {
+    tasks.push(fetchJson("/api/v1/utilities/snapshot", "Utility API").then((payload) => { backendUtilities = payload.utilities || []; }));
+  }
+  if (refreshAll || sources.has("alarm_event") || sources.has("alarm_rule_state")) {
+    tasks.push(fetchJson("/api/v1/alarms/recent?limit=100", "Alarm API").then((payload) => {
+      backendAlarmEvents = payload.alarms || [];
+      backendActiveAlarmEvents = payload.active_alarms || backendAlarmEvents.filter((item) => item.event_state !== "CLEARED");
+    }));
+  }
+  if (refreshAll || sources.has("equipment") || sources.has("equipment_snapshot")) {
+    tasks.push(fetchJson("/api/v1/equipment", "Equipment API").then((payload) => { backendEquipment = payload.equipment || []; }));
+  }
+  if (refreshAll || sources.has("production_batch") || sources.has("batch_process_run")) {
+    tasks.push(fetchJson("/api/v1/batch/process-runs", "Batch process API").then((payload) => {
+      backendProcessRuns = payload.runs || [];
+      actualMachineSummaries.clear();
+    }));
+  }
+  if (refreshAll || sources.has("process_deviation_rule")) alarmConfiguration.loaded = false;
+  if (refreshAll || sources.has("process_target_execution") || sources.has("process_setpoint_change_event") || sources.has("process_deviation_event")) {
+    actualBatchPrograms.clear();
+    actualBatchProgramErrors.clear();
+  }
+  if (refreshAll || sources.has("telemetry_sample")) {
     const fetchMode = state.historyTable.fetchMode || "per_asset";
     const telemetryUrl = fetchMode === "per_asset"
       ? "/api/v1/telemetry/recent?per_asset=true&limit=2000"
       : "/api/v1/telemetry/recent?limit=500";
-    const telemetryResponse = await fetch(telemetryUrl, { cache: "no-store" });
-    const alarmResponse = await fetch("/api/v1/alarms/recent?limit=100", { cache: "no-store" });
-    const equipmentResponse = await fetch("/api/v1/equipment", { cache: "no-store" });
-    const processRunResponse = await fetch("/api/v1/batch/process-runs", { cache: "no-store" });
-    if (!chemicalResponse.ok || !utilityResponse.ok || !telemetryResponse.ok || !alarmResponse.ok || !equipmentResponse.ok || !processRunResponse.ok) throw new Error("Operational API unavailable");
-    const targetFleet = { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers };
-    responses.forEach(([process, payload]) => targetFleet[process].splice(0, targetFleet[process].length, ...payload.assets));
-    hydrateChemicalTransactions((await chemicalResponse.json()).transactions);
-    backendUtilities = (await utilityResponse.json()).utilities;
-    backendTelemetry = (await telemetryResponse.json()).samples;
-    backendAlarmEvents = (await alarmResponse.json()).alarms;
-    backendEquipment = (await equipmentResponse.json()).equipment;
-    backendProcessRuns = (await processRunResponse.json()).runs;
+    tasks.push(fetchJson(telemetryUrl, "Telemetry API").then((payload) => { backendTelemetry = payload.samples || []; }));
+  }
+
+  await Promise.all(tasks);
+  backendConnection.lastSync = new Date().toISOString();
+  updateNavigationCounts();
+  syncActiveAlarmPopups();
+  updateBackendIndicator();
+  if (realtimeSourcesAffectCurrentPage(sources, refreshAll)) scheduleSafeRealtimeRender();
+}
+
+function realtimeSourcesAffectCurrentPage(sources, refreshAll = false) {
+  if (refreshAll || state.page === "overview") return true;
+  const sourceGroups = {
+    asset: new Set(["asset", "asset_snapshot"]),
+    batch: new Set(["production_batch", "batch_process_run", "process_target_execution", "process_setpoint_change_event", "process_deviation_event"]),
+    alarm: new Set(["alarm_event", "alarm_rule_state", "process_deviation_rule", "process_deviation_event"]),
+    equipment: new Set(["equipment", "equipment_snapshot"]),
+    utility: new Set(["utility_snapshot"]),
+    chemical: new Set(["chemical_transaction"]),
+    telemetry: new Set(["telemetry_sample"]),
+  };
+  const matches = (...groups) => groups.some((group) => [...sourceGroups[group]].some((source) => sources.has(source)));
+  if (["jetflow", "calator", "dryer", "kalender"].includes(state.page)) return matches("asset", "batch", "alarm", "equipment");
+  if (state.page === "chemical") return matches("asset", "chemical", "alarm");
+  if (state.page === "utilities") return matches("utility", "asset");
+  if (state.page === "alarms") return matches("alarm");
+  if (state.page === "trends") return matches("telemetry", "batch");
+  if (state.page === "health") return matches("telemetry", "asset", "equipment");
+  return true;
+}
+
+async function connectNonJetflowBackend() {
+  try {
+    const status = await fetchJson("/api/v1/integration/status", "Backend status");
+    const fetchMode = state.historyTable.fetchMode || "per_asset";
+    const telemetryUrl = fetchMode === "per_asset"
+      ? "/api/v1/telemetry/recent?per_asset=true&limit=2000"
+      : "/api/v1/telemetry/recent?limit=500";
+    const [, chemicalPayload, utilityPayload, telemetryPayload, alarmPayload, equipmentPayload, processRunPayload] = await Promise.all([
+      refreshAssetFleets(),
+      fetchJson("/api/v1/dispensing/transactions", "Chemical transaction API"),
+      fetchJson("/api/v1/utilities/snapshot", "Utility API"),
+      fetchJson(telemetryUrl, "Telemetry API"),
+      fetchJson("/api/v1/alarms/recent?limit=100", "Alarm API"),
+      fetchJson("/api/v1/equipment", "Equipment API"),
+      fetchJson("/api/v1/batch/process-runs", "Batch process API"),
+    ]);
+    hydrateChemicalTransactions(chemicalPayload.transactions || []);
+    backendUtilities = utilityPayload.utilities || [];
+    backendTelemetry = telemetryPayload.samples || [];
+    backendAlarmEvents = alarmPayload.alarms || [];
+    backendActiveAlarmEvents = alarmPayload.active_alarms || backendAlarmEvents.filter((item) => item.event_state !== "CLEARED");
+    backendEquipment = equipmentPayload.equipment || [];
+    backendProcessRuns = processRunPayload.runs || [];
     backendConnection.status = "connected";
     backendConnection.storage = status.storage;
     backendConnection.dataMode = status.data_mode;
     backendConnection.lastSync = status.server_time;
     updateNavigationCounts();
+    syncActiveAlarmPopups();
   } catch {
     backendConnection.status = "fallback";
   }
@@ -509,6 +874,62 @@ async function connectNonJetflowBackend() {
 function statusPill(value) {
   const labels = { running: "Running", warning: "Warning", fault: "Fault", idle: "Idle", offline: "Offline" };
   return `<span class="status-pill ${value}">${labels[value] || value}</span>`;
+}
+
+function heartbeatAgeLabel(ageSeconds) {
+  if (!Number.isFinite(ageSeconds)) return "Heartbeat belum diterima";
+  if (ageSeconds < 1) return "Heartbeat baru diterima";
+  if (ageSeconds < 60) return `Heartbeat ${Math.floor(ageSeconds)} detik lalu`;
+  return `Heartbeat ${Math.floor(ageSeconds / 60)} menit lalu`;
+}
+
+function machineConnectionSnapshot(machine, now = Date.now()) {
+  const quality = String(machine?.connectionStatus || "").toUpperCase();
+  const staleAfterSeconds = Math.max(1, Number(machine?.heartbeatStaleAfterSeconds) || defaultHeartbeatStaleAfterSeconds);
+  const heartbeatTime = machine?.heartbeatSourceTs ? new Date(machine.heartbeatSourceTs).getTime() : Number.NaN;
+  const ageSeconds = Number.isFinite(heartbeatTime) ? Math.max(0, (now - heartbeatTime) / 1000) : Number.NaN;
+
+  // Kompatibilitas untuk data demo lama yang belum memiliki tag heartbeat.
+  if (!quality && !Number.isFinite(heartbeatTime)) {
+    return {
+      state: machine?.connected ? "connected" : "disconnected",
+      label: machine?.connected ? "Connected" : "Disconnected",
+      detail: "Status snapshot",
+    };
+  }
+
+  const connected = machine?.connected === true
+    && quality === "GOOD"
+    && Number.isFinite(ageSeconds)
+    && ageSeconds <= staleAfterSeconds;
+  if (connected) return { state: "connected", label: "Connected", detail: heartbeatAgeLabel(ageSeconds) };
+  const timedOut = Number.isFinite(ageSeconds) && ageSeconds > staleAfterSeconds;
+  return {
+    state: "disconnected",
+    label: "Disconnected",
+    detail: timedOut ? `Timeout ${staleAfterSeconds} detik · ${heartbeatAgeLabel(ageSeconds).replace("Heartbeat ", "")}` : heartbeatAgeLabel(ageSeconds),
+  };
+}
+
+function machineConnectionBadge(machine) {
+  const connection = machineConnectionSnapshot(machine);
+  return `<span class="machine-connection-status ${connection.state}" data-machine-connection-id="${actualText(machine.id)}" title="${actualText(connection.detail)}"><i aria-hidden="true"></i><span><strong data-connection-label>${connection.label}</strong><small data-connection-detail>${actualText(connection.detail)}</small></span></span>`;
+}
+
+function updateMachineConnectionIndicators() {
+  const machines = new Map(actualFleet().map((machine) => [String(machine.id).toUpperCase(), machine]));
+  document.querySelectorAll("[data-machine-connection-id]").forEach((element) => {
+    const machine = machines.get(String(element.dataset.machineConnectionId || "").toUpperCase());
+    if (!machine) return;
+    const connection = machineConnectionSnapshot(machine);
+    element.classList.toggle("connected", connection.state === "connected");
+    element.classList.toggle("disconnected", connection.state === "disconnected");
+    element.title = connection.detail;
+    const label = element.querySelector("[data-connection-label]");
+    const detail = element.querySelector("[data-connection-detail]");
+    if (label) label.textContent = connection.label;
+    if (detail) detail.textContent = connection.detail;
+  });
 }
 
 function liveValue(value, unit = "", variance = 0.2, decimals = 1) {
@@ -554,6 +975,42 @@ function kpi(label, value, unit, icon, foot, tone = "") {
   `;
 }
 
+function activeAlarmsForAsset(assetId) {
+  return backendActiveAlarmEvents
+    .filter((alarm) => alarm.asset_id === assetId && alarm.event_state !== "CLEARED")
+    .sort((left, right) => {
+      const priority = { critical: 0, warning: 1, info: 2 };
+      const severityOrder = (priority[String(left.severity || "warning").toLowerCase()] ?? 3) - (priority[String(right.severity || "warning").toLowerCase()] ?? 3);
+      return severityOrder || new Date(right.occurred_at || 0) - new Date(left.occurred_at || 0);
+    });
+}
+
+function machineAlarmNote(assetId, compact = false) {
+  const events = activeAlarmsForAsset(assetId);
+  if (!events.length) return compact ? `<span class="machine-alarm-clear">No active alarm</span>` : "";
+  const criticalCount = events.filter((alarm) => String(alarm.severity).toLowerCase() === "critical").length;
+  const primary = events[0];
+  const tone = criticalCount ? "critical" : "warning";
+  const countLabel = criticalCount ? `${criticalCount} critical` : `${events.length} active`;
+  const ruleType = String(primary.rule_type || primary.alarm_type || "HIGH").replace(/^RULE_/, "");
+  const operator = alarmRuleOperator(ruleType);
+  const unit = primary.engineering_unit || "";
+  const threshold = primary.threshold_value == null ? Number.NaN : Number(primary.threshold_value);
+  const trigger = primary.trigger_value == null ? Number.NaN : Number(primary.trigger_value);
+  const thresholdText = Number.isFinite(threshold) ? `${operator} ${threshold.toLocaleString("id-ID", { maximumFractionDigits: 2 })}${unit ? ` ${unit}` : ""}` : "—";
+  const triggerText = Number.isFinite(trigger) ? `${trigger.toLocaleString("id-ID", { maximumFractionDigits: 2 })}${unit ? ` ${unit}` : ""}` : "—";
+  if (compact) return `<span class="machine-alarm-compact ${tone}"><span class="machine-alarm-signal" aria-hidden="true"></span><span><strong>${actualText(countLabel)}</strong><small>${actualTime(primary.occurred_at)} · Rule ${actualText(thresholdText)}</small></span></span>`;
+  return `<div class="machine-active-alarm-note ${tone}" role="note" aria-label="Active alarm information">
+    <span class="machine-alarm-signal" aria-hidden="true"></span>
+    <span class="machine-alarm-summary"><strong>${actualText(countLabel)}</strong><small>${actualText(primary.title || "Process alarm")}${events.length > 1 ? ` · +${events.length - 1} alarm lain` : ""}</small></span>
+    <dl class="machine-alarm-facts">
+      <div><dt>Started</dt><dd>${actualTime(primary.occurred_at)}</dd></div>
+      <div><dt>Parameter / Rule</dt><dd>${actualText(primary.signal_role || primary.tag_code || "—")} · ${actualText(ruleType)} ${actualText(thresholdText)}</dd></div>
+      <div><dt>Trigger value</dt><dd>${actualText(triggerText)}</dd></div>
+    </dl>
+  </div>`;
+}
+
 function machineHero(machine, code, meta) {
   return `
     <section class="card machine-hero">
@@ -568,43 +1025,362 @@ function machineHero(machine, code, meta) {
         <div class="hero-meta-item"><span>Batch</span><strong>${machine.batch}</strong></div>
         <div class="hero-meta-item"><span>Progress</span><strong>${machine.progress}%</strong></div>
         <div class="hero-meta-item"><span>Last update</span><strong>${machine.sourceTs ? backendTimeLabel(machine.sourceTs) : "NOW · 18ms"}</strong></div>
+        ${machineConnectionBadge(machine)}
       </div>
+      ${machineAlarmNote(machine.id)}
     </section>
   `;
 }
 
 function chemicalDispensingPidPanel(machine) {
   const destinations = dispensingSupportedCalators(machine);
-  const destinationYs = destinations.map((_, index) => 350 + index * 62);
-  const diagramHeight = Math.max(610, 310 + destinations.length * 62);
-  const valve = (x, y, label, flow = "inlet") => `<g class="pid-valve pid-${flow}"><title>${label} · open</title><path d="M ${x - 13} ${y} L ${x} ${y - 13} L ${x + 13} ${y} L ${x} ${y + 13} Z"/><circle cx="${x}" cy="${y}" r="3"/><text x="${x}" y="${y - 22}" text-anchor="middle">${label}</text></g>`;
-  const inletLeft = [0, 1, 2, 3].map((index) => {
-    const y = 170 + index * 36;
-    return `<g><line class="pid-pipe" x1="105" y1="${y}" x2="420" y2="${y}"/>${valve(300, y, `XV-10${index + 1}`)}<text class="pid-source-label" x="116" y="${y - 9}">INLET ${index + 1}</text></g>`;
+  const availableChemicals = chemicalAnalytics.data?.available_chemicals || [];
+  const inletSources = [
+    { code: "WTR", name: "Process water" },
+    ...availableChemicals.slice(0, 7).map((item) => ({ code: item.chemical_code, name: item.chemical_name })),
+  ];
+  while (inletSources.length < 8) {
+    const sequence = inletSources.length;
+    inletSources.push({ code: `CH-${String(sequence).padStart(2, "0")}`, name: `Chemical line ${sequence}` });
+  }
+  const diagramHeight = 760;
+  const gradientId = `pid-vessel-${String(machine.id).replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
+  const patternId = `pid-grid-${String(machine.id).replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
+  const arrowId = `pid-arrow-${String(machine.id).replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
+  const valve = (x, y, label, elementCode, flow = "inlet") => {
+    const tagX = flow === "transfer" ? x + 27 : x;
+    const tagY = flow === "transfer" ? y + 4 : y + 28;
+    const tagAnchor = flow === "transfer" ? "start" : "middle";
+    return `<g class="pid-valve pid-${flow} pid-state-ready" data-element-code="${elementCode}" role="img" aria-label="${label} valve">
+    <title>${label} · live state ready</title>
+    <path class="pid-valve-body" d="M ${x - 14} ${y - 10} L ${x} ${y} L ${x - 14} ${y + 10} Z M ${x + 14} ${y - 10} L ${x} ${y} L ${x + 14} ${y + 10} Z"/>
+    <line class="pid-valve-stem" x1="${x}" y1="${y}" x2="${x}" y2="${y - 18}"/>
+    <rect class="pid-valve-actuator" x="${x - 8}" y="${y - 28}" width="16" height="10" rx="2"/>
+    <circle class="pid-status-dot" cx="${x + 21}" cy="${y - 20}" r="4"/>
+    <text class="pid-equipment-tag" x="${tagX}" y="${tagY}" text-anchor="${tagAnchor}">${label}</text>
+  </g>`;
+  };
+  const inlets = inletSources.slice(0, 8).map((source, index) => {
+    const y = 142 + index * 70;
+    const valveCode = `INLET_VALVE_${String(index + 1).padStart(2, "0")}`;
+    return `<g class="pid-inlet-line" data-element-code="${valveCode}">
+      <rect class="pid-source-card" x="62" y="${y - 24}" width="170" height="48" rx="8"/>
+      <rect class="pid-source-index" x="62" y="${y - 24}" width="38" height="48" rx="8"/>
+      <text class="pid-source-code" x="81" y="${y + 4}" text-anchor="middle">${String(index + 1).padStart(2, "0")}</text>
+      <text class="pid-source-label" x="112" y="${y - 4}">${actualText(source.code)}</text>
+      <text class="pid-source-name" x="112" y="${y + 12}">${actualText(source.name)}</text>
+      <path class="pid-pipe" d="M232 ${y} H392"/>
+      ${valve(306, y, `XV-${String(101 + index)}`, valveCode)}
+      <circle class="pid-junction" cx="392" cy="${y}" r="5"/>
+    </g>`;
   }).join("");
-  const inletRight = [0, 1, 2, 3].map((index) => {
-    const y = 170 + index * 36;
-    return `<g><line class="pid-pipe" x1="610" y1="${y}" x2="925" y2="${y}"/>${valve(730, y, `XV-10${index + 5}`)}<text class="pid-source-label" x="908" y="${y - 9}" text-anchor="end">INLET ${index + 5}</text></g>`;
-  }).join("");
+  const destinationGap = 64;
+  const destinationStart = 548 - ((Math.max(destinations.length, 1) - 1) * destinationGap) / 2;
+  const destinationYs = destinations.length ? destinations.map((_, index) => destinationStart + index * destinationGap) : [548];
   const branches = destinations.map((calator, index) => {
     const y = destinationYs[index];
-    return `<g class="pid-destination"><line class="pid-pipe pid-discharge" x1="715" y1="${y}" x2="805" y2="${y}"/><circle cx="715" cy="${y}" r="4"/><rect x="805" y="${y - 22}" width="245" height="44" rx="8"/><text class="pid-destination-id" x="824" y="${y - 2}">${calator.id}</text><text class="pid-destination-name" x="824" y="${y + 14}">${calator.name}</text></g>`;
+    const routeCode = `ROUTE_CL_${String(index + 1).padStart(2, "0")}`;
+    return `<g class="pid-destination pid-state-ready" data-element-code="${routeCode}" data-destination-asset="${actualText(calator.id)}">
+      <path class="pid-pipe pid-discharge" d="M1060 ${y} H1134"/>
+      ${valve(1100, y, `XV-${String(301 + index)}`, routeCode, "route")}
+      <circle class="pid-junction" cx="1060" cy="${y}" r="5"/>
+      <rect class="pid-destination-card" x="1134" y="${y - 27}" width="242" height="54" rx="9"/>
+      <rect class="pid-destination-status" x="1134" y="${y - 27}" width="7" height="54" rx="3"/>
+      <text class="pid-destination-id" x="1158" y="${y - 3}">${actualText(calator.id)}</text>
+      <text class="pid-destination-name" x="1158" y="${y + 15}">${actualText(calator.name)}</text>
+    </g>`;
   }).join("");
   return `<section class="card pid-card">
-    <div class="pid-head"><div><span class="eyebrow">P&amp;ID CONCEPT</span><h2>Chemical Dispensing Flow · ${machine.id}</h2><p>Diagram proses read-only: delapan inlet menuju Tank 1, transfer ke Tank 2, lalu distribusi ke Calator area ${machine.areaLabel}.</p></div><div class="pid-legend"><span><i class="pid-legend-valve"></i>Valve open</span><span><i class="pid-legend-line"></i>Process line</span></div></div>
+    <div class="pid-head"><div><span class="eyebrow">LIVE PROCESS SCHEMATIC</span><h2>Chemical Dispensing Skid · ${actualText(machine.id)}</h2><p>Delapan supply line masuk ke common manifold, ditimbang pada Tank 1, ditransfer ke Tank 2, lalu dialirkan melalui distribution header ke Calator area ${actualText(machine.areaLabel)}.</p></div><div class="pid-legend"><span><i class="pid-legend-dot ready"></i>No live data / binding ready</span><span><i class="pid-legend-valve"></i>Actuated valve</span><span><i class="pid-legend-line"></i>Process pipe</span></div></div>
     <div class="pid-scroll" tabindex="0" aria-label="P and ID chemical dispensing ${machine.id}">
-      <svg class="chemical-dispensing-pid" viewBox="0 0 1120 ${diagramHeight}" role="img" aria-label="P and ID dispensing chemical: 8 valve ke Tank 1, loadcell, valve transfer, Tank 2, dan distribusi ke Calator">
-        <defs><linearGradient id="pidTankFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d8f2ed"/><stop offset="100%" stop-color="#eff8f6"/></linearGradient><marker id="pidArrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#078eaa"/></marker></defs>
-        <text class="pid-section-label" x="104" y="112">CHEMICAL SUPPLY INLETS</text>
-        ${inletLeft}${inletRight}
-        <g class="pid-tank"><ellipse cx="515" cy="160" rx="95" ry="20"/><path d="M420 160 V303 C420 331 610 331 610 303 V160"/><ellipse cx="515" cy="303" rx="95" ry="20"/><rect x="431" y="239" width="168" height="61" rx="0"/><text class="pid-tank-title" x="515" y="226">TANK 1</text><text class="pid-tank-sub" x="515" y="247">WEIGHING / BUFFER TANK</text><text class="pid-tank-value" x="515" y="281">Level 68.4%</text></g>
-        <g class="pid-loadcells"><text x="515" y="362" text-anchor="middle">LOADCELL · LC-101 / LC-102 / LC-103</text><path d="M450 327 L464 350 H436 Z"/><path d="M515 327 L529 350 H501 Z"/><path d="M580 327 L594 350 H566 Z"/><line class="pid-pipe thin" x1="448" y1="353" x2="582" y2="353"/></g>
-        <g><line class="pid-pipe pid-transfer-line" x1="515" y1="323" x2="515" y2="420" marker-end="url(#pidArrow)"/>${valve(515, 382, "XV-201", "transfer")}<text class="pid-flow-label" x="535" y="391">TRANSFER TO TANK 2</text></g>
-        <g class="pid-tank pid-tank-2"><ellipse cx="515" cy="432" rx="88" ry="18"/><path d="M427 432 V535 C427 559 603 559 603 535 V432"/><ellipse cx="515" cy="535" rx="88" ry="18"/><rect x="438" y="486" width="154" height="46" rx="0"/><text class="pid-tank-title" x="515" y="471">TANK 2</text><text class="pid-tank-sub" x="515" y="490">DISTRIBUTION TANK</text><text class="pid-tank-value" x="515" y="517">Ready to dose</text></g>
-        <g><line class="pid-pipe pid-discharge" x1="603" y1="484" x2="715" y2="484" marker-end="url(#pidArrow)"/><line class="pid-pipe pid-discharge" x1="715" y1="${destinationYs[0]}" x2="715" y2="${destinationYs[destinationYs.length - 1]}"/><text class="pid-section-label" x="804" y="315">CALATOR DESTINATIONS</text>${branches}</g>
+      <svg class="chemical-dispensing-pid" viewBox="0 0 1440 ${diagramHeight}" role="img" aria-label="P and ID dispensing chemical: supply rack 8 valve, common manifold, Tank 1 dengan loadcell, transfer valve dan pump, Tank 2, serta distribution header ke Calator">
+        <title>Chemical dispensing process schematic ${actualText(machine.id)}</title>
+        <defs>
+          <linearGradient id="${gradientId}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#f9fcfc"/><stop offset="100%" stop-color="#e6f1f3"/></linearGradient>
+          <pattern id="${patternId}" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#dce7e9" stroke-width="1"/></pattern>
+          <marker id="${arrowId}" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L0,8 L9,4 z" class="pid-arrow-head"/></marker>
+        </defs>
+        <rect class="pid-canvas-grid" x="28" y="28" width="1384" height="704" rx="16" fill="url(#${patternId})"/>
+        <g class="pid-zone"><rect x="44" y="54" width="374" height="650" rx="14"/><text class="pid-zone-index" x="66" y="84">01</text><text class="pid-section-label" x="104" y="84">SUPPLY &amp; VALVE RACK</text><text class="pid-section-note" x="66" y="101">8 dedicated inlet lines</text></g>
+        <g class="pid-zone"><rect x="438" y="54" width="510" height="650" rx="14"/><text class="pid-zone-index" x="460" y="84">02</text><text class="pid-section-label" x="498" y="84">WEIGHING &amp; TRANSFER</text><text class="pid-section-note" x="460" y="101">Tank 1 → transfer → Tank 2</text></g>
+        <g class="pid-zone"><rect x="968" y="54" width="428" height="650" rx="14"/><text class="pid-zone-index" x="990" y="84">03</text><text class="pid-section-label" x="1028" y="84">CALATOR DISTRIBUTION</text><text class="pid-section-note" x="990" y="101">Header and destination routes</text></g>
+
+        ${inlets}
+        <g class="pid-manifold" data-element-code="SUPPLY_MANIFOLD">
+          <path class="pid-pipe pid-header-pipe" d="M392 142 V632"/>
+          <path class="pid-pipe pid-active-pipe" d="M392 184 H520 Q536 184 536 168 V154 H566" marker-end="url(#${arrowId})"/>
+          <rect class="pid-line-tag" x="346" y="92" width="92" height="24" rx="12"/><text x="392" y="108" text-anchor="middle">MH-101</text>
+          <text class="pid-flow-label" x="438" y="171">COMMON INLET</text>
+        </g>
+
+        <g class="pid-vessel" data-element-code="TANK_01" role="img" aria-label="Tank 1 weighing and buffer tank">
+          <path class="pid-vessel-shadow" d="M568 139 Q568 116 684 116 Q800 116 800 139 V294 Q800 326 684 326 Q568 326 568 294 Z"/>
+          <path class="pid-vessel-shell" d="M568 132 Q568 110 684 110 Q800 110 800 132 V288 Q800 320 684 320 Q568 320 568 288 Z" fill="url(#${gradientId})"/>
+          <ellipse class="pid-vessel-top" cx="684" cy="132" rx="116" ry="22"/>
+          <path class="pid-vessel-band" d="M568 265 H800"/>
+          <rect class="pid-equipment-plate" x="605" y="181" width="158" height="70" rx="10"/>
+          <text class="pid-tank-title" x="684" y="205">TANK 1 · TK-101</text>
+          <text class="pid-tank-sub" x="684" y="225">WEIGHING / BUFFER</text>
+          <text class="pid-tank-value" x="684" y="245">LC-101 · LIVE TAG READY</text>
+          <path class="pid-vessel-leg" d="M606 314 V337 M762 314 V337"/>
+        </g>
+        <g class="pid-loadcells" data-element-code="TANK_01_LOADCELL">
+          <rect x="591" y="337" width="30" height="17" rx="3"/><rect x="747" y="337" width="30" height="17" rx="3"/>
+          <path class="pid-signal-line" d="M591 346 H526"/>
+          <circle class="pid-instrument" cx="501" cy="346" r="25"/><text class="pid-instrument-code" x="501" y="343" text-anchor="middle">WT</text><text class="pid-instrument-no" x="501" y="356" text-anchor="middle">101</text>
+        </g>
+
+        <g class="pid-transfer-skid" data-element-code="TRANSFER_LINE">
+          <path class="pid-pipe pid-active-pipe" d="M684 320 V458" marker-end="url(#${arrowId})"/>
+          ${valve(684, 397, "XV-201", "TRANSFER_VALVE", "transfer")}
+          <g class="pid-pump pid-state-ready" data-element-code="TRANSFER_PUMP"><title>P-201 transfer pump · live state ready</title><circle cx="684" cy="432" r="23"/><path d="M675 420 L699 432 L675 444 Z"/><circle class="pid-status-dot" cx="708" cy="413" r="4"/><text class="pid-equipment-tag" x="728" y="436">P-201</text></g>
+          <rect class="pid-line-tag" x="744" y="377" width="122" height="24" rx="12"/><text x="805" y="393" text-anchor="middle">TRANSFER SKID</text>
+        </g>
+
+        <g class="pid-vessel pid-vessel-secondary" data-element-code="TANK_02" role="img" aria-label="Tank 2 distribution tank">
+          <path class="pid-vessel-shadow" d="M578 489 Q578 468 684 468 Q790 468 790 489 V612 Q790 642 684 642 Q578 642 578 612 Z"/>
+          <path class="pid-vessel-shell" d="M578 482 Q578 462 684 462 Q790 462 790 482 V606 Q790 636 684 636 Q578 636 578 606 Z" fill="url(#${gradientId})"/>
+          <ellipse class="pid-vessel-top" cx="684" cy="482" rx="106" ry="20"/>
+          <path class="pid-vessel-band" d="M578 590 H790"/>
+          <rect class="pid-equipment-plate" x="608" y="520" width="152" height="65" rx="10"/>
+          <text class="pid-tank-title" x="684" y="543">TANK 2 · TK-201</text>
+          <text class="pid-tank-sub" x="684" y="562">DISTRIBUTION TANK</text>
+          <text class="pid-tank-value" x="684" y="581">ROUTE HEADER READY</text>
+          <path class="pid-vessel-leg" d="M618 631 V658 M750 631 V658"/>
+          <path class="pid-pipe thin" d="M602 658 H766"/>
+        </g>
+
+        <g class="pid-distribution-header" data-element-code="DISTRIBUTION_MANIFOLD">
+          <path class="pid-pipe pid-active-pipe pid-discharge" d="M790 548 H1060" marker-end="url(#${arrowId})"/>
+          <path class="pid-pipe pid-header-pipe pid-discharge" d="M1060 ${Math.min(548, destinationYs[0])} V${Math.max(548, destinationYs[destinationYs.length - 1])}"/>
+          <rect class="pid-line-tag" x="808" y="510" width="142" height="24" rx="12"/><text x="879" y="526" text-anchor="middle">DH-201 · OUTLET</text>
+          ${branches || `<text class="pid-empty-note" x="1134" y="553">No Calator destination mapped</text>`}
+        </g>
       </svg>
     </div>
-    <div class="pid-foot"><span><strong>8</strong> inlet valve · <strong>1</strong> transfer valve · <strong>${destinations.length}</strong> Calator destination</span><small>Konsep visual; tag, interlock, valve state, dan route aktual harus diverifikasi dari P&amp;ID/SOP engineering.</small></div>
+    <div class="pid-foot"><span><strong>8</strong> inlet valves · <strong>1</strong> common manifold · <strong>2</strong> tanks · <strong>${destinations.length}</strong> Calator routes</span><small>Setiap group SVG memiliki <span class="mono">data-element-code</span> agar state valve, pump, loadcell, tank, dan route dapat di-binding ke <span class="mono">instrument_state</span>.</small></div>
+  </section>`;
+}
+
+function kalenderPidPanelLegacy(machine) {
+  const assetCode = actualText(machine.id);
+  const isCollapsed = Boolean(state.pidPanel.kalender);
+  const safeId = String(machine.id).replace(/[^a-z0-9]/gi, "-").toLowerCase();
+  const gridId = `kalender-grid-${safeId}`;
+  const metalId = `kalender-metal-${safeId}`;
+  const steamArrowId = `kalender-steam-arrow-${safeId}`;
+  const fabricArrowId = `kalender-fabric-arrow-${safeId}`;
+  const valve = (x, y, label, elementCode, orientation = "horizontal") => {
+    const transform = orientation === "vertical" ? `translate(${x} ${y}) rotate(90)` : `translate(${x} ${y})`;
+    const tagX = orientation === "vertical" ? x + 24 : x;
+    const tagY = orientation === "vertical" ? y + 4 : y + 30;
+    const anchor = orientation === "vertical" ? "start" : "middle";
+    return `<g class="kalender-pid-valve pid-state-binding" data-element-code="${elementCode}" role="img" aria-label="${label}">
+      <title>${label} · live state binding ready</title>
+      <g transform="${transform}"><path d="M -14 -10 L 0 0 L -14 10 Z M 14 -10 L 0 0 L 14 10 Z"/><line x1="0" y1="0" x2="0" y2="-18"/><rect x="-8" y="-29" width="16" height="11" rx="2"/></g>
+      <circle class="kalender-pid-state-dot" cx="${orientation === "vertical" ? x + 19 : x + 21}" cy="${y - 20}" r="4"/>
+      <text class="kalender-pid-tag" x="${tagX}" y="${tagY}" text-anchor="${anchor}">${label}</text>
+    </g>`;
+  };
+  const motor = (x, y, label, elementCode) => `<g class="kalender-pid-motor pid-state-binding" data-element-code="${elementCode}" role="img" aria-label="Motor ${label}">
+    <title>${label} motor · live state binding ready</title><circle cx="${x}" cy="${y}" r="18"/><text x="${x}" y="${y + 4}" text-anchor="middle">M</text><circle class="kalender-pid-state-dot" cx="${x + 15}" cy="${y - 15}" r="4"/><text class="kalender-pid-motor-label" x="${x}" y="${y + 34}" text-anchor="middle">${label}</text>
+  </g>`;
+  return `<section class="card pid-card kalender-pid-card ${isCollapsed ? "is-collapsed" : ""}" data-pid-panel="kalender">
+    <div class="pid-head"><div><span class="eyebrow">LIVE PROCESS SCHEMATIC</span><h2>Kalender Process P&amp;ID · ${assetCode}</h2><p>Alur kain dari inlet dan expander menuju upper/lower heated roll, cooling belt, dancing roller, conveyor, lalu pelipatan di plaiter table.</p></div><div class="pid-head-actions"><div class="pid-legend kalender-pid-legend"><span><i class="kalender-legend-fabric"></i>Fabric path</span><span><i class="kalender-legend-steam"></i>Steam heating</span><span><i class="pid-legend-dot binding"></i>Live binding ready</span></div><button class="pid-collapse-button" type="button" data-pid-toggle="kalender" aria-expanded="${isCollapsed ? "false" : "true"}" aria-controls="kalender-pid-content-${safeId}"><span>${isCollapsed ? "Expand P&amp;ID" : "Minimize P&amp;ID"}</span><i aria-hidden="true"></i></button></div></div>
+    <div class="kalender-pid-body" id="kalender-pid-content-${safeId}" ${isCollapsed ? "aria-hidden=\"true\"" : ""}>
+    <div class="pid-scroll kalender-pid-scroll" tabindex="0" aria-label="P and ID process Kalender ${assetCode}">
+      <svg class="kalender-process-pid" viewBox="0 0 1600 700" role="img" aria-label="P and ID Kalender: fabric supply, inlet, expander, heated upper lower roll, cooling belt, dancing roller, conveyor, folder, dan plaiter table">
+        <title>Kalender process schematic ${assetCode}</title>
+        <defs>
+          <pattern id="${gridId}" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#dce7e9" stroke-width="1"/></pattern>
+          <linearGradient id="${metalId}" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="52%" stop-color="#edf4f5"/><stop offset="100%" stop-color="#cbdde1"/></linearGradient>
+          <marker id="${steamArrowId}" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0L0 8L9 4Z" class="kalender-steam-arrow"/></marker>
+          <marker id="${fabricArrowId}" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0L0 8L9 4Z" class="kalender-fabric-arrow"/></marker>
+        </defs>
+        <rect class="kalender-pid-canvas" x="24" y="24" width="1552" height="652" rx="18" fill="url(#${gridId})"/>
+        <g class="kalender-pid-zone"><rect x="42" y="48" width="300" height="604" rx="14"/><text class="kalender-zone-index" x="64" y="78">01</text><text class="kalender-zone-title" x="102" y="78">FABRIC INFEED</text><text class="kalender-zone-note" x="64" y="98">Supply, inlet roller and width sensing</text></g>
+        <g class="kalender-pid-zone"><rect x="358" y="48" width="650" height="604" rx="14"/><text class="kalender-zone-index" x="380" y="78">02</text><text class="kalender-zone-title" x="418" y="78">EXPANDING · HEATING · PRESSURE</text><text class="kalender-zone-note" x="380" y="98">Open-width alignment and upper/lower heated cylinders</text></g>
+        <g class="kalender-pid-zone"><rect x="1024" y="48" width="272" height="604" rx="14"/><text class="kalender-zone-index" x="1046" y="78">03</text><text class="kalender-zone-title" x="1084" y="78">COOLING &amp; TENSION</text><text class="kalender-zone-note" x="1046" y="98">Cooling belt and dancing roller</text></g>
+        <g class="kalender-pid-zone"><rect x="1312" y="48" width="246" height="604" rx="14"/><text class="kalender-zone-index" x="1334" y="78">04</text><text class="kalender-zone-title" x="1372" y="78">FOLDING OUTPUT</text><text class="kalender-zone-note" x="1334" y="98">Conveyor, folder and plaiter table</text></g>
+
+        <g class="kalender-steam-system" data-element-code="STEAM_HEATING_HEADER">
+          <path class="kalender-utility-pipe" d="M214 132H948" marker-end="url(#${steamArrowId})"/>
+          <rect class="kalender-line-tag" x="218" y="104" width="84" height="22" rx="11"/><text x="260" y="119" text-anchor="middle">STEAM</text>
+          <path class="kalender-utility-pipe" d="M286 132V177"/>
+          ${valve(286, 166, "TCV-401", "HEATING_INLET_VALVE", "vertical")}
+          <path class="kalender-utility-pipe" d="M286 177V220" marker-end="url(#${steamArrowId})"/>
+          <path class="kalender-utility-pipe" d="M700 132V187"/>
+          ${valve(700, 166, "TCV-402", "UPPER_HEATING_VALVE", "vertical")}
+          <path class="kalender-utility-pipe" d="M700 187V210" marker-end="url(#${steamArrowId})"/>
+          <path class="kalender-utility-pipe" d="M948 132V344Q948 365 926 381" marker-end="url(#${steamArrowId})"/>
+          ${valve(948, 166, "TCV-403", "LOWER_HEATING_VALVE", "vertical")}
+          <text class="kalender-utility-label" x="286" y="118" text-anchor="middle">INLET HEAT</text><text class="kalender-utility-label" x="700" y="118" text-anchor="middle">UPPER HEAT</text><text class="kalender-utility-label" x="948" y="118" text-anchor="middle">LOWER HEAT</text>
+        </g>
+
+        <g class="kalender-fabric-supply" data-element-code="FABRIC_SUPPLY">
+          <rect class="kalender-source-rack" x="66" y="492" width="150" height="112" rx="7"/>
+          <path class="kalender-source-rack" d="M58 604H224M76 492V472H206V492"/>
+          <path class="kalender-fabric-stack" d="M82 576H198M82 562H198M82 548H198M82 534H198M82 520H198"/>
+          <text class="kalender-equipment-title" x="76" y="628">FABRIC SUPPLY</text>
+        </g>
+        <g class="kalender-inlet" data-element-code="INLET_ROLLER">
+          <path class="kalender-machine-stand" d="M84 454V214Q84 184 114 184H292V468H326"/>
+          <rect class="kalender-machine-frame" x="108" y="202" width="164" height="42" rx="5"/>
+          <circle class="kalender-guide-roll" cx="132" cy="184" r="20"/><circle class="kalender-guide-roll" cx="270" cy="184" r="20"/><circle class="kalender-guide-roll" cx="274" cy="458" r="20"/>
+          <rect class="kalender-machine-frame" x="118" y="212" width="126" height="20" rx="3"/>
+          <text class="kalender-equipment-title" x="112" y="168">INLET / PRE-HEATING</text>${motor(228, 278, "INLET", "INLET_MOTOR")}
+        </g>
+        <g class="kalender-width-sensor" data-element-code="FABRIC_WIDTH_SENSOR">
+          <path class="kalender-signal-line" d="M288 468H368"/><path class="kalender-width-beam" d="M314 446V494M352 432V478"/><circle class="kalender-instrument" cx="340" cy="408" r="22"/><text class="kalender-instrument-code" x="340" y="405" text-anchor="middle">WIT</text><text class="kalender-instrument-no" x="340" y="417" text-anchor="middle">401</text><text class="kalender-sensor-label" x="306" y="386">FABRIC WIDTH · cm</text>
+        </g>
+        <g class="kalender-expander" data-element-code="EXPANDER_LR">
+          <path class="kalender-expander-bed" d="M326 472L518 330"/><path class="kalender-expander-bed kalender-expander-axis" d="M350 469L494 362"/><circle class="kalender-expander-roll" cx="378" cy="434" r="18"/><circle class="kalender-expander-roll" cx="438" cy="389" r="18"/><circle class="kalender-expander-roll" cx="496" cy="346" r="18"/>
+          <text class="kalender-equipment-title" x="374" y="330">EXPANDER L / R</text>${motor(392, 530, "EXP L", "EXPANDER_L_MOTOR")}${motor(454, 530, "EXP R", "EXPANDER_R_MOTOR")}
+        </g>
+
+        <rect class="kalender-process-frame" x="548" y="174" width="428" height="408" rx="9"/>
+        <g class="kalender-roll kalender-upper-roll" data-element-code="UPPER_FELT">
+          <circle class="kalender-roll-shadow" cx="718" cy="288" r="86"/><circle class="kalender-heated-roll" cx="718" cy="280" r="86" fill="url(#${metalId})"/><circle class="kalender-roll-hub" cx="718" cy="280" r="26"/><text class="kalender-roll-title" x="718" y="275" text-anchor="middle">UPPER FELT</text><text class="kalender-roll-sub" x="718" y="294" text-anchor="middle">CYLINDER · CR-401</text>${motor(602, 220, "UPPER", "UPPER_FELT_MOTOR")}
+        </g>
+        <g class="kalender-roll kalender-lower-roll" data-element-code="LOWER_FELT">
+          <circle class="kalender-roll-shadow" cx="842" cy="470" r="82"/><circle class="kalender-heated-roll" cx="842" cy="462" r="82" fill="url(#${metalId})"/><circle class="kalender-roll-hub" cx="842" cy="462" r="25"/><text class="kalender-roll-title" x="842" y="457" text-anchor="middle">LOWER FELT</text><text class="kalender-roll-sub" x="842" y="476" text-anchor="middle">CYLINDER · CR-402</text>${motor(760, 605, "LOWER", "LOWER_FELT_MOTOR")}
+        </g>
+        <g class="kalender-guide-system" data-element-code="GUIDE_ROLLERS">
+          <circle class="kalender-guide-roll" cx="572" cy="348" r="18"/><circle class="kalender-guide-roll" cx="618" cy="314" r="18"/><circle class="kalender-guide-roll" cx="632" cy="392" r="18"/><circle class="kalender-guide-roll" cx="650" cy="445" r="18"/><circle class="kalender-guide-roll" cx="936" cy="348" r="18"/>
+        </g>
+        <g class="kalender-temperature-sensors">
+          <g data-element-code="UPPER_TEMPERATURE"><circle class="kalender-instrument" cx="576" cy="260" r="22"/><text class="kalender-instrument-code" x="576" y="257" text-anchor="middle">TT</text><text class="kalender-instrument-no" x="576" y="270" text-anchor="middle">401</text><path class="kalender-signal-line" d="M598 260L632 266"/><text class="kalender-sensor-label" x="552" y="294">TEMP UPPER · °C</text></g>
+          <g data-element-code="LOWER_TEMPERATURE"><circle class="kalender-instrument" cx="608" cy="538" r="22"/><text class="kalender-instrument-code" x="608" y="535" text-anchor="middle">TT</text><text class="kalender-instrument-no" x="608" y="548" text-anchor="middle">402</text><path class="kalender-signal-line" d="M630 532L765 494"/><text class="kalender-sensor-label" x="572" y="575">TEMP LOWER · °C</text></g>
+        </g>
+        <g class="kalender-loadcell kalender-loadcell-upper" data-element-code="LOADCELL_UPPER"><path class="kalender-signal-line" d="M790 302L858 320"/><circle class="kalender-loadcell-roll" cx="805" cy="306" r="13"/><circle class="kalender-instrument" cx="880" cy="326" r="22"/><text class="kalender-instrument-code" x="880" y="323" text-anchor="middle">LC</text><text class="kalender-instrument-no" x="880" y="336" text-anchor="middle">401</text><text class="kalender-sensor-label" x="848" y="362">LOADCELL UPPER · kg</text></g>
+        <g class="kalender-loadcell kalender-loadcell-lower" data-element-code="LOADCELL_LOWER"><path class="kalender-signal-line" d="M910 492L930 548"/><circle class="kalender-loadcell-roll" cx="912" cy="492" r="13"/><circle class="kalender-instrument" cx="938" cy="570" r="22"/><text class="kalender-instrument-code" x="938" y="567" text-anchor="middle">LC</text><text class="kalender-instrument-no" x="938" y="580" text-anchor="middle">402</text><text class="kalender-sensor-label" x="888" y="610">LOADCELL LOWER · kg</text></g>
+
+        <g class="kalender-cooling-belt" data-element-code="COOLING_BELT">
+          <rect class="kalender-belt-body" x="1044" y="208" width="190" height="66" rx="13"/><circle class="kalender-belt-roll" cx="1070" cy="241" r="18"/><circle class="kalender-belt-roll" cx="1208" cy="241" r="18"/><path class="kalender-belt-line" d="M1070 223H1208M1070 259H1208"/><text class="kalender-equipment-title" x="1090" y="190">COOLING BELT</text>${motor(1138, 314, "COOLING", "COOLING_BELT_MOTOR")}
+        </g>
+        <g class="kalender-dancing" data-element-code="DANCING_ROLLER"><path class="kalender-dancer-arm" d="M1246 278L1274 344"/><circle class="kalender-guide-roll" cx="1276" cy="350" r="23"/><path class="kalender-signal-line" d="M1276 373V405"/><circle class="kalender-instrument" cx="1276" cy="427" r="22"/><text class="kalender-instrument-code" x="1276" y="424" text-anchor="middle">ZT</text><text class="kalender-instrument-no" x="1276" y="437" text-anchor="middle">401</text><text class="kalender-sensor-label" x="1240" y="466">DANCING · %</text></g>
+
+        <g class="kalender-conveyor" data-element-code="CONVEYOR_BELT">
+          <rect class="kalender-belt-body" x="1334" y="208" width="192" height="66" rx="13"/><circle class="kalender-belt-roll" cx="1360" cy="241" r="18"/><circle class="kalender-belt-roll" cx="1498" cy="241" r="18"/><path class="kalender-belt-line" d="M1360 223H1498M1360 259H1498"/><path class="kalender-conveyor-chute" d="M1498 241L1540 340L1518 350L1480 270"/><text class="kalender-equipment-title" x="1390" y="190">CONVEYOR BELT</text>${motor(1370, 314, "CONVEYOR", "CONVEYOR_BELT_MOTOR")}
+        </g>
+        <g class="kalender-plaiter" data-element-code="PLAITER">
+          <path class="kalender-plaiter-arm" d="M1528 346V410L1478 448"/><circle class="kalender-plaiter-pivot" cx="1528" cy="346" r="12"/><rect class="kalender-machine-frame kalender-plaiter-body" x="1338" y="478" width="198" height="126" rx="8"/><path class="kalender-table" d="M1354 478H1520M1354 491H1520"/>
+          <path class="kalender-folded-fabric" d="M1370 468Q1390 446 1410 468T1450 468T1490 468T1520 468"/>
+          <text class="kalender-equipment-title" x="1360" y="535">PLAITER &amp; OUTPUT TABLE</text>${motor(1380, 574, "PLAIT", "PLAITER_MOTOR")}${motor(1490, 574, "TABLE", "CONVEYOR_TABLE_MOTOR")}
+        </g>
+
+        <g class="kalender-fabric-flow" data-element-code="FABRIC_PATH">
+          <path class="kalender-fabric-shadow" d="M82 518Q98 490 112 466L112 218Q112 184 138 184H268Q292 184 292 208V430Q292 462 320 470L346 477Q370 482 392 466L510 376Q528 363 548 348H572Q598 348 618 326L640 302Q654 286 654 260C654 214 680 188 718 188C768 188 804 226 804 276C804 310 788 332 764 352L742 370Q724 386 724 416V444C724 494 758 530 812 530C866 530 902 498 902 450C902 410 882 382 852 362L878 374Q910 388 936 356L1010 264Q1028 241 1058 241H1206Q1228 241 1238 268L1260 328Q1266 350 1276 350Q1288 350 1294 328L1312 266Q1320 241 1348 241H1492Q1510 241 1518 261L1540 330L1528 346V410L1478 448V456"/>
+          <path class="kalender-fabric-path" d="M82 518Q98 490 112 466L112 218Q112 184 138 184H268Q292 184 292 208V430Q292 462 320 470L346 477Q370 482 392 466L510 376Q528 363 548 348H572Q598 348 618 326L640 302Q654 286 654 260C654 214 680 188 718 188C768 188 804 226 804 276C804 310 788 332 764 352L742 370Q724 386 724 416V444C724 494 758 530 812 530C866 530 902 498 902 450C902 410 882 382 852 362L878 374Q910 388 936 356L1010 264Q1028 241 1058 241H1206Q1228 241 1238 268L1260 328Q1266 350 1276 350Q1288 350 1294 328L1312 266Q1320 241 1348 241H1492Q1510 241 1518 261L1540 330L1528 346V410L1478 448V456" marker-end="url(#${fabricArrowId})"/>
+          <rect class="kalender-flow-label" x="58" y="434" width="126" height="26" rx="13"/><text x="121" y="451" text-anchor="middle">FABRIC IN</text>
+          <g class="kalender-flow-directions" aria-hidden="true"><path d="M224 184h34" marker-end="url(#${fabricArrowId})"/><path d="M410 448l28-21" marker-end="url(#${fabricArrowId})"/><path d="M972 316l24-30" marker-end="url(#${fabricArrowId})"/><path d="M1120 241h38" marker-end="url(#${fabricArrowId})"/><path d="M1398 241h38" marker-end="url(#${fabricArrowId})"/></g>
+        </g>
+      </svg>
+    </div>
+    <div class="pid-foot"><span><strong>4</strong> process zones · <strong>3</strong> heating valves · <strong>2</strong> heated rolls · <strong>2</strong> loadcells · <strong>1</strong> continuous fabric path</span><small>Element code disiapkan untuk live status. Steam pressure, condensate return, fail-safe valve, dan instrument loop final wajib divalidasi dari P&amp;ID engineering mesin aktual.</small></div>
+    </div>
+  </section>`;
+}
+
+function kalenderPidPanel(machine) {
+  const assetCode = actualText(machine.id);
+  const isCollapsed = Boolean(state.pidPanel.kalender);
+  const safeId = String(machine.id).replace(/[^a-z0-9]/gi, "-").toLowerCase();
+  const gridId = `kalender-simple-grid-${safeId}`;
+  const metalId = `kalender-simple-metal-${safeId}`;
+  const steamArrowId = `kalender-simple-steam-${safeId}`;
+  const fabricArrowId = `kalender-simple-fabric-${safeId}`;
+  const valve = (x, label, elementCode) => `<g class="kalender-pid-valve kalender-simple-valve pid-state-binding" data-element-code="${elementCode}" role="img" aria-label="${label}">
+    <title>${label} · live state binding ready</title>
+    <path d="M${x - 14} 134L${x} 146L${x - 14} 158ZM${x + 14} 134L${x} 146L${x + 14} 158Z"/><line x1="${x}" y1="146" x2="${x}" y2="126"/><rect x="${x - 8}" y="115" width="16" height="11" rx="2"/>
+    <circle class="kalender-pid-state-dot" cx="${x + 20}" cy="120" r="4"/><text class="kalender-pid-tag" x="${x}" y="174" text-anchor="middle">${label}</text>
+  </g>`;
+  const monitor = (x, y, width, label, elementCode, detail = "LIVE") => `<g class="kalender-monitor-chip pid-state-binding" data-element-code="${elementCode}" role="img" aria-label="${label}">
+    <title>${label} · ${detail} · live state binding ready</title><rect x="${x}" y="${y}" width="${width}" height="38" rx="8"/><circle class="kalender-pid-state-dot" cx="${x + 15}" cy="${y + 19}" r="4"/><text class="kalender-monitor-label" x="${x + 28}" y="${y + 16}">${label}</text><text class="kalender-monitor-detail" x="${x + 28}" y="${y + 29}">${detail}</text>
+  </g>`;
+  return `<section class="card pid-card kalender-pid-card kalender-pid-simple-card ${isCollapsed ? "is-collapsed" : ""}" data-pid-panel="kalender">
+    <div class="pid-head"><div><span class="eyebrow">LIVE PROCESS SCHEMATIC</span><h2>Kalender Process Flow · ${assetCode}</h2><p>Alur kain dan titik monitoring utama. Warna indikator mengikuti status aktual dari instrument state.</p></div><div class="pid-head-actions"><div class="pid-legend kalender-pid-legend"><span><i class="kalender-legend-fabric"></i>Fabric flow</span><span><i class="kalender-legend-steam"></i>Steam</span><span><i class="pid-legend-dot binding"></i>Live status</span></div><button class="pid-collapse-button" type="button" data-pid-toggle="kalender" aria-expanded="${isCollapsed ? "false" : "true"}" aria-controls="kalender-pid-content-${safeId}"><span>${isCollapsed ? "Expand P&amp;ID" : "Minimize P&amp;ID"}</span><i aria-hidden="true"></i></button></div></div>
+    <div class="kalender-pid-body" id="kalender-pid-content-${safeId}" ${isCollapsed ? "aria-hidden=\"true\"" : ""}>
+      <div class="pid-scroll kalender-pid-scroll" tabindex="0" aria-label="Kalender process flow ${assetCode}">
+        <svg class="kalender-process-pid kalender-process-pid-simple" viewBox="0 0 1600 650" role="img" aria-label="Simplified Kalender process flow from fabric supply to plaiter output">
+          <title>Kalender simplified live process flow ${assetCode}</title>
+          <defs>
+            <pattern id="${gridId}" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#dce7e9" stroke-width="1"/></pattern>
+            <linearGradient id="${metalId}" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#edf4f5"/><stop offset="100%" stop-color="#cbdde1"/></linearGradient>
+            <marker id="${steamArrowId}" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0L0 8L9 4Z" class="kalender-steam-arrow"/></marker>
+            <marker id="${fabricArrowId}" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0L0 8L9 4Z" class="kalender-fabric-arrow"/></marker>
+          </defs>
+          <rect class="kalender-pid-canvas" x="24" y="24" width="1552" height="602" rx="18" fill="url(#${gridId})"/>
+
+          <g class="kalender-simple-zone kalender-simple-zone-1"><rect x="42" y="44" width="286" height="580" rx="14"/><text class="kalender-zone-index" x="62" y="73">01</text><text class="kalender-zone-title" x="98" y="73">INFEED</text><text class="kalender-zone-note" x="62" y="93">Supply · inlet · width · expander</text></g>
+          <g class="kalender-simple-zone kalender-simple-zone-2"><rect x="344" y="44" width="620" height="580" rx="14"/><text class="kalender-zone-index" x="364" y="73">02</text><text class="kalender-zone-title" x="400" y="73">HEATING &amp; PRESSURE</text><text class="kalender-zone-note" x="364" y="93">Upper/lower felt and steam control</text></g>
+          <g class="kalender-simple-zone kalender-simple-zone-3"><rect x="980" y="44" width="278" height="580" rx="14"/><text class="kalender-zone-index" x="1000" y="73">03</text><text class="kalender-zone-title" x="1036" y="73">COOLING &amp; TENSION</text><text class="kalender-zone-note" x="1000" y="93">Cooling belt · dancing roller</text></g>
+          <g class="kalender-simple-zone kalender-simple-zone-4"><rect x="1274" y="44" width="284" height="580" rx="14"/><text class="kalender-zone-index" x="1294" y="73">04</text><text class="kalender-zone-title" x="1330" y="73">FOLDING OUTPUT</text><text class="kalender-zone-note" x="1294" y="93">Conveyor · folder · plaiter</text></g>
+
+          <g class="kalender-simple-steam" data-element-code="STEAM_HEATING_HEADER">
+            <rect class="kalender-line-tag" x="366" y="112" width="78" height="22" rx="11"/><text x="405" y="127" text-anchor="middle">STEAM</text>
+            <path class="kalender-utility-pipe" d="M446 123H918" marker-end="url(#${steamArrowId})"/>
+            <path class="kalender-utility-pipe kalender-steam-drop" d="M500 123V176M655 123V176M858 123V176"/>
+            ${valve(500, "INLET HEAT", "HEATING_INLET_VALVE")}${valve(655, "UPPER HEAT", "UPPER_HEATING_VALVE")}${valve(858, "LOWER HEAT", "LOWER_HEATING_VALVE")}
+          </g>
+
+          <g class="kalender-simple-supply" data-element-code="FABRIC_SUPPLY">
+            <rect class="kalender-source-rack" x="62" y="366" width="112" height="102" rx="7"/><path class="kalender-fabric-stack" d="M76 444H160M76 430H160M76 416H160M76 402H160M76 388H160"/><text class="kalender-equipment-title" x="72" y="490">FABRIC SUPPLY</text>
+          </g>
+          <g class="kalender-simple-inlet" data-element-code="INLET_ROLLER">
+            <path class="kalender-machine-stand" d="M94 350V224Q94 202 116 202H252V354"/><rect class="kalender-machine-frame" x="112" y="216" width="118" height="28" rx="4"/><circle class="kalender-guide-roll" cx="116" cy="202" r="17"/><circle class="kalender-guide-roll" cx="248" cy="202" r="17"/><circle class="kalender-guide-roll" cx="248" cy="354" r="17"/><text class="kalender-equipment-title" x="116" y="184">INLET</text>
+          </g>
+          <g class="kalender-simple-expander" data-element-code="EXPANDER_LR">
+            <g transform="translate(276 344) rotate(-27)"><rect class="kalender-expander-bar" x="0" y="-18" width="152" height="18" rx="7"/><rect class="kalender-expander-bar" x="0" y="8" width="152" height="18" rx="7"/><path class="kalender-expander-axis" d="M8 4H144"/></g>
+            <circle class="kalender-expander-roll" cx="282" cy="356" r="14"/><circle class="kalender-expander-roll" cx="414" cy="290" r="14"/>
+            <text class="kalender-equipment-title" x="282" y="273">EXPANDER L / R</text><text class="kalender-function-label" x="282" y="286">OPEN WIDTH &amp; ALIGNMENT</text>
+          </g>
+
+          <rect class="kalender-simple-process-frame" x="420" y="194" width="518" height="290" rx="10"/>
+          <g class="kalender-felt-loop kalender-upper-felt-loop" data-element-code="UPPER_FELT">
+            <path d="M530 210L710 250L560 330Z"/><circle class="kalender-felt-guide" cx="530" cy="210" r="17"/><circle class="kalender-felt-drive" cx="710" cy="250" r="19"/><path class="kalender-drive-cross" d="M699 239L721 261M721 239L699 261"/><circle class="kalender-felt-guide" cx="560" cy="330" r="17"/>
+            <circle class="kalender-roll-shadow" cx="620" cy="271" r="61"/><circle class="kalender-heated-roll" cx="620" cy="266" r="61" fill="url(#${metalId})"/><circle class="kalender-roll-hub" cx="620" cy="266" r="18"/><text class="kalender-roll-title" x="620" y="262" text-anchor="middle">UPPER FELT</text><text class="kalender-roll-sub" x="620" y="278" text-anchor="middle">CR-401</text>
+          </g>
+          <g class="kalender-felt-loop kalender-lower-felt-loop" data-element-code="LOWER_FELT">
+            <path d="M700 395L680 470L865 440Z"/><circle class="kalender-felt-guide" cx="700" cy="395" r="17"/><circle class="kalender-felt-guide" cx="680" cy="470" r="17"/><circle class="kalender-felt-drive" cx="865" cy="440" r="19"/><path class="kalender-drive-cross" d="M854 429L876 451M876 429L854 451"/>
+            <circle class="kalender-roll-shadow" cx="770" cy="428" r="57"/><circle class="kalender-heated-roll" cx="770" cy="423" r="57" fill="url(#${metalId})"/><circle class="kalender-roll-hub" cx="770" cy="423" r="17"/><text class="kalender-roll-title" x="770" y="419" text-anchor="middle">LOWER FELT</text><text class="kalender-roll-sub" x="770" y="435" text-anchor="middle">CR-402</text>
+          </g>
+          <g class="kalender-simple-guides" data-element-code="GUIDE_ROLLERS">
+            <circle class="kalender-guide-roll" cx="448" cy="304" r="15"/><text class="kalender-function-label" x="426" y="278">ENTRY GUIDE</text>
+            <circle class="kalender-guide-roll" cx="900" cy="306" r="15"/><text class="kalender-function-label" x="874" y="280">EXIT GUIDE</text>
+          </g>
+          <g class="kalender-loadcell-roller" data-element-code="LOADCELL_UPPER" role="img" aria-label="Loadcell upper roller"><title>Loadcell Upper · small measuring roller after Upper Felt</title><circle class="kalender-loadcell-roll" cx="716" cy="350" r="14"/><circle class="kalender-pid-state-dot" cx="728" cy="338" r="3.5"/><text class="kalender-loadcell-code" x="734" y="354">LC UPPER</text></g>
+          <g class="kalender-loadcell-roller" data-element-code="LOADCELL_LOWER" role="img" aria-label="Loadcell lower roller"><title>Loadcell Lower · small measuring roller after Lower Felt</title><circle class="kalender-loadcell-roll" cx="850" cy="374" r="14"/><circle class="kalender-pid-state-dot" cx="862" cy="362" r="3.5"/><text class="kalender-loadcell-code" x="846" y="350" text-anchor="middle">LC LOWER</text></g>
+
+          <g class="kalender-cooling-belt" data-element-code="COOLING_BELT"><rect class="kalender-belt-body" x="1004" y="222" width="190" height="58" rx="12"/><circle class="kalender-belt-roll" cx="1028" cy="251" r="16"/><circle class="kalender-belt-roll" cx="1170" cy="251" r="16"/><path class="kalender-belt-line" d="M1028 235H1170M1028 267H1170"/><text class="kalender-equipment-title" x="1050" y="203">COOLING BELT</text></g>
+          <g class="kalender-dancing" data-element-code="DANCING_ROLLER"><path class="kalender-dancer-arm" d="M1190 282L1216 344"/><circle class="kalender-guide-roll" cx="1218" cy="350" r="20"/><text class="kalender-equipment-title" x="1163" y="390">DANCING ROLLER</text></g>
+
+          <g class="kalender-conveyor" data-element-code="CONVEYOR_BELT"><rect class="kalender-belt-body" x="1298" y="222" width="212" height="58" rx="12"/><circle class="kalender-belt-roll" cx="1322" cy="251" r="16"/><circle class="kalender-belt-roll" cx="1486" cy="251" r="16"/><path class="kalender-belt-line" d="M1322 235H1486M1322 267H1486"/><path class="kalender-conveyor-chute" d="M1486 251L1524 342L1506 351L1470 278"/><text class="kalender-equipment-title" x="1362" y="203">CONVEYOR</text></g>
+          <g class="kalender-plaiter" data-element-code="PLAITER"><path class="kalender-plaiter-arm" d="M1515 350V401L1474 430"/><circle class="kalender-plaiter-pivot" cx="1515" cy="350" r="10"/><rect class="kalender-machine-frame kalender-plaiter-body" x="1320" y="466" width="212" height="58" rx="7"/><path class="kalender-table" d="M1336 466H1516M1336 477H1516"/><path class="kalender-folded-fabric" d="M1350 456Q1370 436 1390 456T1430 456T1470 456T1510 456"/><text class="kalender-equipment-title" x="1375" y="510">PLAITER TABLE</text></g>
+
+          <g class="kalender-fabric-flow" data-element-code="FABRIC_PATH">
+            <path class="kalender-fabric-shadow" d="M80 390Q96 370 105 344V228Q105 202 128 202H238Q260 202 260 224V328Q260 354 282 356L414 290Q432 298 448 304L560 330C544 300 548 258 570 230C592 202 632 192 666 206C704 222 722 256 716 290C712 318 696 338 672 352L696 346Q708 344 716 350L700 395C688 424 696 454 720 472C748 494 790 490 818 466C844 444 854 408 840 382L850 374Q864 368 876 348L900 306L966 252Q982 241 1006 251H1170Q1194 251 1202 278L1210 328Q1214 350 1218 350Q1224 350 1228 328L1240 278Q1248 251 1278 251H1484Q1500 251 1508 270L1524 330L1515 350V401L1474 430V446"/>
+            <path class="kalender-fabric-path" d="M80 390Q96 370 105 344V228Q105 202 128 202H238Q260 202 260 224V328Q260 354 282 356L414 290Q432 298 448 304L560 330C544 300 548 258 570 230C592 202 632 192 666 206C704 222 722 256 716 290C712 318 696 338 672 352L696 346Q708 344 716 350L700 395C688 424 696 454 720 472C748 494 790 490 818 466C844 444 854 408 840 382L850 374Q864 368 876 348L900 306L966 252Q982 241 1006 251H1170Q1194 251 1202 278L1210 328Q1214 350 1218 350Q1224 350 1228 328L1240 278Q1248 251 1278 251H1484Q1500 251 1508 270L1524 330L1515 350V401L1474 430V446" marker-end="url(#${fabricArrowId})"/>
+            <g class="kalender-flow-directions" aria-hidden="true"><path d="M174 202H216" marker-end="url(#${fabricArrowId})"/><path d="M348 326L378 304" marker-end="url(#${fabricArrowId})"/><path d="M930 276L954 259" marker-end="url(#${fabricArrowId})"/><path d="M1078 251H1122" marker-end="url(#${fabricArrowId})"/><path d="M1378 251H1422" marker-end="url(#${fabricArrowId})"/></g>
+          </g>
+
+          <text class="kalender-monitor-heading" x="62" y="524">MONITORED POINTS</text>
+          ${monitor(62, 536, 124, "INLET DRIVE", "INLET_MOTOR", "RUN / STOP")}${monitor(194, 536, 116, "FABRIC WIDTH", "FABRIC_WIDTH_SENSOR", "cm")}
+          ${monitor(62, 578, 124, "EXPANDER L", "EXPANDER_L_MOTOR", "RUN / STOP")}${monitor(194, 578, 116, "EXPANDER R", "EXPANDER_R_MOTOR", "RUN / STOP")}
+
+          <text class="kalender-monitor-heading" x="364" y="504">MONITORED POINTS</text>
+          ${monitor(364, 516, 184, "TEMP UPPER", "UPPER_TEMPERATURE", "PV / SV · °C")}${monitor(556, 516, 184, "LOADCELL UPPER", "LOADCELL_UPPER", "PV / SV · kg")}${monitor(748, 516, 194, "UPPER FELT DRIVE", "UPPER_FELT_MOTOR", "RUN / STOP")}
+          ${monitor(364, 558, 184, "TEMP LOWER", "LOWER_TEMPERATURE", "PV / SV · °C")}${monitor(556, 558, 184, "LOADCELL LOWER", "LOADCELL_LOWER", "PV / SV · kg")}${monitor(748, 558, 194, "LOWER FELT DRIVE", "LOWER_FELT_MOTOR", "RUN / STOP")}
+
+          <text class="kalender-monitor-heading" x="1000" y="504">MONITORED POINTS</text>
+          ${monitor(1000, 516, 238, "COOLING BELT DRIVE", "COOLING_BELT_MOTOR", "RUN / STOP")}${monitor(1000, 558, 238, "DANCING ROLLER", "DANCING_ROLLER", "POSITION · %")}
+
+          <text class="kalender-monitor-heading" x="1294" y="524">MONITORED POINTS</text>
+          ${monitor(1294, 536, 246, "CONVEYOR DRIVE", "CONVEYOR_BELT_MOTOR", "RUN / STOP")}${monitor(1294, 578, 119, "PLAITER", "PLAITER_MOTOR", "RUN / STOP")}${monitor(1421, 578, 119, "TABLE", "CONVEYOR_TABLE_MOTOR", "RUN / STOP")}
+        </svg>
+      </div>
+      <div class="pid-foot"><span><strong>Fabric flow</strong> menunjukkan urutan proses; status strip menunjukkan titik yang dipantau secara live.</span><small>Hijau: running/active · abu-abu: stopped/inactive · merah: fault/alarm · amber: stale. Detail PV/SV tetap tersedia pada live sensor dan historical trend.</small></div>
+    </div>
   </section>`;
 }
 
@@ -1256,7 +2032,7 @@ function processAreaPage(type) {
     <div class="fleet-machine-top"><span class="machine-code ranking-badge ${machine.state === "fault" ? "fault" : machine.state === "warning" ? "warning" : ""}">#${index + 1}</span><div><strong>${machine.id}</strong><span>${machine.name}</span></div>${statusPill(machine.state)}</div>
     <div class="fleet-machine-reading"><span>${machineSnapshot(type, machine, index)}</span><small>Batch <strong>${machine.batch}</strong></small></div>
     <div class="fleet-machine-meta"><span>${metric.short}<strong>${formatManagementValue(machineMetricValue(type, machine, metricKey), metric.unit)} ${metric.unit}</strong></span><span>Runtime<strong>${formatManagementValue(machineRuntime(type, machine), "h")} h</strong></span><span>State<strong>${machine.state}</strong></span></div>
-    <div class="fleet-machine-foot"><span>${machine.connected ? "● Connected" : "○ Offline"}</span><strong>Machine detail →</strong></div>
+    <div class="fleet-machine-foot">${machineConnectionBadge(machine)}<strong>Machine detail →</strong></div>
   </article>`).join("");
   return `
     ${processBreadcrumb(type)}
@@ -1809,6 +2585,7 @@ function kalenderDetailPage() {
     ${processBreadcrumb("kalender", machine)}
     ${pageHead("kalender", selector(kalenders.filter((item) => item.area === machine.area), "kalender"))}
     ${machineHero(machine, "KL", `${machine.setup} · Dryer source DR-02 · Cotton 220 GSM`)}
+    ${kalenderPidPanel(machine)}
     <section class="kpi-grid">
       ${kpi("Energy Consumption", "1,284", "kWh", "EN", "<strong>Current shift</strong>· total consumption")}
       ${kpi("Power Demand", liveValue(86.4, "", .35, 1), "kW", "PW", "<strong>72% load</strong>· within capacity", "success")}
@@ -2521,6 +3298,7 @@ function actualAssetTable(assets) {
         <span class="machine-area-badge">${actualText(asset.areaLabel || asset.area)}</span>
       </td>
       <td>${statusPill(asset.state)}</td>
+      <td>${machineAlarmNote(asset.id, true)}</td>
       <td class="mono"><strong>${actualText(asset.batch)}</strong></td>
       <td>
         <div class="machine-progress-wrap">
@@ -2531,7 +3309,7 @@ function actualAssetTable(assets) {
       <td class="mono">${actualTime(asset.sourceTs)}</td>
       <td><span class="quality-pill ${String(asset.quality).toLowerCase() === "good" ? "good" : "stale"}">${actualText(asset.quality)}</span></td>
     </tr>
-  `).join("") : `<tr><td colspan="7" class="table-empty-row">Tidak ada mesin yang sesuai dengan filter yang dipilih.</td></tr>`;
+  `).join("") : `<tr><td colspan="8" class="table-empty-row">Tidak ada mesin yang sesuai dengan filter yang dipilih.</td></tr>`;
 
   const paginationFooter = `
     <div class="machine-table-pagination">
@@ -2560,6 +3338,7 @@ function actualAssetTable(assets) {
               <th>Asset</th>
               <th>Area</th>
               <th>Status</th>
+              <th>Active alarm</th>
               <th>Batch</th>
               <th>Progress</th>
               <th>Source time</th>
@@ -2696,9 +3475,10 @@ function actualHistorianDisplayValue(value, unit = "") {
 }
 
 function requestHistorianRender() {
-  const historianControlActive = document.activeElement?.matches?.("select, input, textarea");
-  if (historianControlActive) deferredRealtimeRender = true;
-  else renderPage({ preserveScroll: true });
+  const alarmRuleForm = document.querySelector("[data-alarm-rule-form]");
+  if (alarmRuleForm) captureAlarmRuleDraft(alarmRuleForm);
+  deferredRealtimeRender = true;
+  scheduleSafeRealtimeRender();
 }
 
 async function loadActualHistorian(machine) {
@@ -2831,9 +3611,10 @@ function drawActualMachineHistorian() {
   if (!data || data.error) return;
   const { parameter } = selectedActualParameter(machine, data);
   const parameterTrend = alignedActualParameterTrend(parameter, machine);
-  if (parameterTrend.timestamps.length) drawLineChart(`actual-sensor-trend-${machine.id}`, parameterTrend.series.map((series) => ({ data: series.data, color: series.kind === "SV" ? "#d68b05" : "#078eaa", dash: series.kind === "SV", fill: series.kind === "PV" })), parameterTrend.timestamps, { labelFormatter: historicalAxisLabel });
+  const sensorUnit = parameter?.tags?.find((tag) => tag.engineering_unit)?.engineering_unit || "";
+  if (parameterTrend.timestamps.length) drawLineChart(`actual-sensor-trend-${machine.id}`, parameterTrend.series.map((series) => ({ data: series.data, color: series.kind === "SV" ? "#d68b05" : "#078eaa", dash: series.kind === "SV", fill: series.kind === "PV", label: series.kind === "SV" ? "SV · Setpoint" : "PV · Actual", unit: sensorUnit })), parameterTrend.timestamps, { labelFormatter: historicalAxisLabel });
   const selectedMotor = data.motors.find((item) => item.id === (actualHistorian.selectedEquipment.get(machine.id) || data.motors.find((candidate) => candidate.points.length)?.id));
-  if (selectedMotor?.points.length) drawLineChart(`actual-motor-trend-${machine.id}`, [{ data: selectedMotor.points.map((point) => Number(point.current_r_avg_a)), color: "#0072b2", width: 2.4 }, { data: selectedMotor.points.map((point) => Number(point.current_s_avg_a)), color: "#d55e00", width: 2.4 }, { data: selectedMotor.points.map((point) => Number(point.current_t_avg_a)), color: "#009e73", width: 2.4 }], selectedMotor.points.map((point) => new Date(point.bucket_start).getTime()), { labelFormatter: historicalAxisLabel, axisDecimals: 2 });
+  if (selectedMotor?.points.length) drawLineChart(`actual-motor-trend-${machine.id}`, [{ data: selectedMotor.points.map((point) => Number(point.current_r_avg_a)), color: "#0072b2", width: 2.4, label: "Phase R", unit: "A" }, { data: selectedMotor.points.map((point) => Number(point.current_s_avg_a)), color: "#d55e00", width: 2.4, label: "Phase S", unit: "A" }, { data: selectedMotor.points.map((point) => Number(point.current_t_avg_a)), color: "#009e73", width: 2.4, label: "Phase T", unit: "A" }], selectedMotor.points.map((point) => new Date(point.bucket_start).getTime()), { labelFormatter: historicalAxisLabel, axisDecimals: 2 });
 }
 
 function actualOverviewPage() {
@@ -3012,11 +3793,370 @@ function actualChemicalPage() {
   `;
 }
 
+async function requestAlarmConfiguration(force = false) {
+  if (alarmConfiguration.loading || (alarmConfiguration.loaded && !force)) return;
+  alarmConfiguration.loading = true;
+  alarmConfiguration.error = null;
+  try {
+    const [alarmResponse, deviationResponse] = await Promise.all([
+      fetch("/api/v1/alarm-rules", { cache: "no-store" }),
+      fetch("/api/v1/process-deviation-rules", { cache: "no-store" }),
+    ]);
+    if (!alarmResponse.ok) throw new Error("Alarm rule API belum tersedia.");
+    if (!deviationResponse.ok) throw new Error("Process deviation rule API belum tersedia.");
+    alarmConfiguration.rules = (await alarmResponse.json()).rules || [];
+    alarmConfiguration.deviationRules = (await deviationResponse.json()).rules || [];
+    alarmConfiguration.loaded = true;
+  } catch (error) {
+    alarmConfiguration.error = error instanceof Error ? error.message : "Alarm rule configuration unavailable";
+  } finally {
+    alarmConfiguration.loading = false;
+    if (state.page === "alarms") requestHistorianRender();
+  }
+}
+
+async function requestAlarmTags(assetId) {
+  if (!assetId || alarmConfiguration.tagsByAsset.has(assetId) || alarmConfiguration.tagLoading.has(assetId)) return;
+  alarmConfiguration.tagLoading.add(assetId);
+  alarmConfiguration.tagErrors.delete(assetId);
+  try {
+    const response = await fetch(`/api/v1/alarm-rules/tags?asset_id=${encodeURIComponent(assetId)}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("Tag registry asset tidak dapat dimuat.");
+    alarmConfiguration.tagsByAsset.set(assetId, (await response.json()).tags || []);
+  } catch (error) {
+    alarmConfiguration.tagsByAsset.set(assetId, []);
+    alarmConfiguration.tagErrors.set(assetId, error instanceof Error ? error.message : "Tag registry unavailable");
+  } finally {
+    alarmConfiguration.tagLoading.delete(assetId);
+    if (state.page === "alarms") requestHistorianRender();
+  }
+}
+
+function alarmRuleOperator(ruleType) {
+  return ["HIGH", "HIGH_HIGH"].includes(ruleType) ? "≥" : "≤";
+}
+
+function captureAlarmRuleDraft(form) {
+  if (!form) return;
+  const data = new FormData(form);
+  const current = state.alarmConfig.draft || {};
+  const valueOrCurrent = (key, fallback = "") => data.has(key) ? data.get(key) : (current[key] ?? fallback);
+  state.alarmConfig.draft = {
+    ...current,
+    rule_name: valueOrCurrent("rule_name"),
+    asset_id: valueOrCurrent("asset_id", state.alarmConfig.assetId),
+    tag_code: valueOrCurrent("tag_code", state.alarmConfig.tagCode),
+    rule_type: valueOrCurrent("rule_type", "HIGH"),
+    severity: valueOrCurrent("severity", "WARNING"),
+    threshold_value: valueOrCurrent("threshold_value"),
+    hysteresis_value: valueOrCurrent("hysteresis_value", "0"),
+    delay_seconds: valueOrCurrent("delay_seconds", "0"),
+    alarm_message: valueOrCurrent("alarm_message"),
+    recommendation: valueOrCurrent("recommendation"),
+    enabled: Boolean(form.elements.enabled?.checked),
+  };
+}
+
+function alarmDecimal(value) {
+  const normalized = String(value ?? "").trim().replace(",", ".");
+  return normalized ? Number(normalized) : Number.NaN;
+}
+
+function alarmRuleConfigPanel() {
+  if (!alarmConfiguration.loaded && !alarmConfiguration.loading) void requestAlarmConfiguration();
+  const assets = actualFleet().slice().sort((left, right) => `${left.process}-${left.id}`.localeCompare(`${right.process}-${right.id}`));
+  const editing = alarmConfiguration.rules.find((rule) => rule.rule_id === state.alarmConfig.editingRuleId) || null;
+  const draft = state.alarmConfig.draft || {};
+  const requestedAssetId = draft.asset_id || editing?.asset_id || state.alarmConfig.assetId;
+  if (!assets.some((asset) => asset.id === requestedAssetId)) state.alarmConfig.assetId = assets[0]?.id || null;
+  else state.alarmConfig.assetId = requestedAssetId;
+  const assetId = state.alarmConfig.assetId;
+  if (assetId && !alarmConfiguration.tagsByAsset.has(assetId) && !alarmConfiguration.tagLoading.has(assetId)) void requestAlarmTags(assetId);
+  const tags = alarmConfiguration.tagsByAsset.get(assetId) || [];
+  const selectedTag = draft.tag_code || editing?.tag_code || state.alarmConfig.tagCode || tags[0]?.tag_code || "";
+  if (!editing && selectedTag && state.alarmConfig.tagCode !== selectedTag) state.alarmConfig.tagCode = selectedTag;
+  const fieldValue = (key, fallback = "") => actualText(draft[key] ?? editing?.[key] ?? fallback);
+  const selectedOption = (value, current) => value === current ? "selected" : "";
+  const ruleType = draft.rule_type || editing?.rule_type || "HIGH";
+  const severity = draft.severity || editing?.severity || "WARNING";
+  const enabled = draft.enabled ?? (editing ? Boolean(editing.enabled) : true);
+  const tagError = alarmConfiguration.tagErrors.get(assetId);
+  const form = assets.length ? `<form class="alarm-rule-form" data-alarm-rule-form data-rule-id="${actualText(editing?.rule_id || "")}">
+    <div class="alarm-rule-form-head"><div><span class="eyebrow">${editing ? "EDIT RULE" : "NEW RULE"}</span><h3>${editing ? actualText(editing.rule_name) : "Configure sensor alarm"}</h3><p>Rule disimpan di PostgreSQL dan dievaluasi 24/7 oleh NestJS alarm engine.</p></div><label class="alarm-enabled-control"><input type="checkbox" name="enabled" ${enabled ? "checked" : ""}/><span>Rule enabled</span></label></div>
+    <div class="alarm-rule-form-grid">
+      <label class="field-group"><span>Machine / Asset</span><select class="select-control" name="asset_id" data-alarm-rule-asset required>${assets.map((asset) => `<option value="${actualText(asset.id)}" ${selectedOption(asset.id, assetId)}>${actualText(asset.id)} · ${actualText(asset.name)}</option>`).join("")}</select></label>
+      <label class="field-group alarm-tag-field"><span>Tag monitored</span><select class="select-control" name="tag_code" data-alarm-rule-tag required ${alarmConfiguration.tagLoading.has(assetId) ? "disabled" : ""}>${tags.length ? tags.map((tag) => `<option value="${actualText(tag.tag_code)}" ${selectedOption(tag.tag_code, selectedTag)}>${actualText(tag.signal_role)}${tag.engineering_unit ? ` · ${actualText(tag.engineering_unit)}` : ""}</option>`).join("") : `<option value="">${alarmConfiguration.tagLoading.has(assetId) ? "Loading tags…" : "No active tag"}</option>`}</select>${tagError ? `<small class="field-error">${actualText(tagError)}</small>` : ""}</label>
+      <label class="field-group"><span>Rule type</span><select class="select-control" name="rule_type">${["HIGH", "HIGH_HIGH", "LOW", "LOW_LOW"].map((value) => `<option value="${value}" ${selectedOption(value, ruleType)}>${value.replace("_", "-")}</option>`).join("")}</select></label>
+      <label class="field-group"><span>Severity</span><select class="select-control" name="severity">${["INFO", "WARNING", "CRITICAL"].map((value) => `<option value="${value}" ${selectedOption(value, severity)}>${value}</option>`).join("")}</select></label>
+      <label class="field-group"><span>Threshold</span><input class="search-control" name="threshold_value" type="text" inputmode="decimal" value="${fieldValue("threshold_value")}" placeholder="Contoh: 170 atau 170,5" required/></label>
+      <label class="field-group"><span>Hysteresis</span><input class="search-control" name="hysteresis_value" type="text" inputmode="decimal" value="${fieldValue("hysteresis_value", 0)}" placeholder="Contoh: 2 atau 2,5" required/></label>
+      <label class="field-group"><span>Activation delay</span><div class="alarm-input-unit"><input class="search-control" name="delay_seconds" type="number" min="0" max="86400" step="1" value="${fieldValue("delay_seconds", 0)}" required/><span>sec</span></div></label>
+      <label class="field-group alarm-name-field"><span>Alarm name</span><input class="search-control" name="rule_name" value="${fieldValue("rule_name")}" maxlength="160" placeholder="Contoh: Upper temperature high" required/></label>
+      <label class="field-group alarm-message-field"><span>Alarm message</span><textarea class="search-control" name="alarm_message" maxlength="500" placeholder="Keterangan yang muncul pada popup">${fieldValue("alarm_message")}</textarea></label>
+      <label class="field-group alarm-message-field"><span>Operator recommendation</span><textarea class="search-control" name="recommendation" maxlength="1000" placeholder="Tindakan pemeriksaan yang direkomendasikan">${fieldValue("recommendation")}</textarea></label>
+    </div>
+    <div class="alarm-rule-form-foot"><span>Safety trip dan interlock tetap berada di PLC. Rule ini khusus monitoring SCADA/MES.</span><div>${editing ? `<button class="button ghost" type="button" data-alarm-rule-cancel>Cancel</button>` : ""}<button class="button primary" type="submit" ${!tags.length ? "disabled" : ""}>${editing ? "Update rule" : "Save alarm rule"}</button></div></div>
+  </form>` : actualEmpty("Belum ada asset aktif untuk membuat alarm rule.");
+  const ruleRows = alarmConfiguration.rules.length ? alarmConfiguration.rules.map((rule) => {
+    const stateTone = rule.evaluation_state === "ACTIVE" ? "warning" : rule.evaluation_state === "PENDING" ? "neutral" : "good";
+    return `<tr><td><strong>${actualText(rule.rule_name)}</strong><small>${actualText(rule.process_type)} · ${actualText(rule.area_code)}</small></td><td><strong>${actualText(rule.asset_id)}</strong><small class="mono">${actualText(rule.tag_code)}</small></td><td><span class="data-pill neutral">${actualText(rule.rule_type)}</span></td><td class="mono"><strong>${alarmRuleOperator(rule.rule_type)} ${actualText(rule.threshold_value)}</strong> ${actualText(rule.engineering_unit || "")}</td><td class="mono">${actualText(rule.hysteresis_value)} ${actualText(rule.engineering_unit || "")}<small>${actualText(rule.delay_seconds)} sec delay</small></td><td><span class="data-pill ${String(rule.severity).toLowerCase() === "critical" ? "warning" : "neutral"}">${actualText(rule.severity)}</span></td><td><span class="data-pill ${stateTone}">${actualText(rule.evaluation_state || "NOT EVALUATED")}</span><small>${rule.last_value == null ? "No sample" : `Last ${actualText(Number(rule.last_value).toLocaleString("id-ID", { maximumFractionDigits: 2 }))}`}</small></td><td><div class="alarm-rule-row-actions"><button class="button small" data-alarm-rule-edit="${actualText(rule.rule_id)}">Edit</button><button class="button small ${rule.enabled ? "ghost" : "primary"}" data-alarm-rule-toggle="${actualText(rule.rule_id)}" data-rule-enabled="${rule.enabled}">${rule.enabled ? "Disable" : "Enable"}</button></div></td></tr>`;
+  }).join("") : `<tr><td colspan="8">${actualEmpty(alarmConfiguration.loading ? "Loading alarm rules…" : "Belum ada alarm rule. Gunakan form di atas untuk membuat rule pertama.")}</td></tr>`;
+  const staticRulePanel = `<section class="card alarm-rule-configuration" id="alarm-rule-configuration">
+    <div class="alarm-rule-config-header"><div><span class="eyebrow">ALARM CONFIGURATION</span><h2>Tag Threshold & Severity Rules</h2><p>Frontend mengatur rule; backend mengevaluasi telemetry dan mencatat lifecycle alarm.</p></div><span class="range-badge">${alarmConfiguration.rules.length} RULES</span></div>
+    ${alarmConfiguration.error ? `<div class="alarm-config-error">${actualText(alarmConfiguration.error)}</div>` : form}
+    <div class="table-wrap alarm-rule-table-wrap"><table class="data-table alarm-rule-table"><thead><tr><th>Rule</th><th>Asset / Tag</th><th>Type</th><th>Threshold</th><th>Stability</th><th>Severity</th><th>Engine State</th><th>Action</th></tr></thead><tbody>${ruleRows}</tbody></table></div>
+  </section>`;
+  return `${staticRulePanel}${processDeviationRuleConfigPanel()}`;
+}
+
+async function saveAlarmRule(form) {
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
+  captureAlarmRuleDraft(form);
+  const draft = state.alarmConfig.draft;
+  const thresholdValue = alarmDecimal(draft.threshold_value);
+  const hysteresisValue = alarmDecimal(draft.hysteresis_value);
+  const delaySeconds = Number(draft.delay_seconds);
+  if (!Number.isFinite(thresholdValue) || !Number.isFinite(hysteresisValue) || !Number.isFinite(delaySeconds)) {
+    showToast("Nilai belum valid", "Threshold, hysteresis, dan activation delay harus berupa angka.");
+    if (submit) submit.disabled = false;
+    return;
+  }
+  const payload = {
+    rule_name: draft.rule_name, asset_id: draft.asset_id, tag_code: draft.tag_code,
+    rule_type: draft.rule_type, severity: draft.severity, threshold_value: thresholdValue,
+    hysteresis_value: hysteresisValue, delay_seconds: delaySeconds,
+    alarm_message: draft.alarm_message, recommendation: draft.recommendation, enabled: draft.enabled,
+  };
+  const ruleId = form.dataset.ruleId;
+  try {
+    const response = await fetch(ruleId ? `/api/v1/alarm-rules/${encodeURIComponent(ruleId)}` : "/api/v1/alarm-rules", {
+      method: ruleId ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json", "X-Operator-Name": "Dashboard Engineer" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(Array.isArray(result.message) ? result.message.join(" · ") : result.message || "Alarm rule gagal disimpan.");
+    state.alarmConfig.editingRuleId = null;
+    state.alarmConfig.draft = {};
+    alarmConfiguration.loaded = false;
+    showToast(ruleId ? "Alarm rule updated" : "Alarm rule created", `${payload.rule_name} disimpan dan akan dievaluasi backend.`);
+    await requestAlarmConfiguration(true);
+  } catch (error) {
+    showToast("Save failed", error instanceof Error ? error.message : "Alarm rule gagal disimpan.");
+    if (submit) submit.disabled = false;
+  }
+}
+
+async function toggleAlarmRule(ruleId, enabled) {
+  try {
+    const response = await fetch(`/api/v1/alarm-rules/${encodeURIComponent(ruleId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-Operator-Name": "Dashboard Engineer" },
+      body: JSON.stringify({ enabled }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.message || "Rule status gagal diubah.");
+    alarmConfiguration.loaded = false;
+    showToast(enabled ? "Rule enabled" : "Rule disabled", "Perubahan disimpan di PostgreSQL.");
+    await requestAlarmConfiguration(true);
+  } catch (error) {
+    showToast("Update failed", error instanceof Error ? error.message : "Rule status gagal diubah.");
+  }
+}
+
+function captureDeviationRuleDraft(form) {
+  if (!form) return;
+  const data = new FormData(form);
+  const current = state.alarmConfig.deviationDraft || {};
+  const valueOrCurrent = (key, fallback = "") => data.has(key) ? data.get(key) : (current[key] ?? fallback);
+  state.alarmConfig.deviationDraft = {
+    ...current,
+    rule_code: valueOrCurrent("rule_code"),
+    rule_name: valueOrCurrent("rule_name"),
+    asset_id: valueOrCurrent("asset_id", state.alarmConfig.deviationAssetId),
+    pv_tag_code: valueOrCurrent("pv_tag_code", state.alarmConfig.deviationPvTagCode),
+    sv_tag_code: valueOrCurrent("sv_tag_code", state.alarmConfig.deviationSvTagCode),
+    sv_signal_role: valueOrCurrent("sv_signal_role"),
+    setpoint_key: valueOrCurrent("setpoint_key"),
+    step_code: valueOrCurrent("step_code"),
+    deviation_mode: valueOrCurrent("deviation_mode", "ABSOLUTE"),
+    tolerance_low: valueOrCurrent("tolerance_low", "0"),
+    tolerance_high: valueOrCurrent("tolerance_high", "0"),
+    startup_grace_seconds: valueOrCurrent("startup_grace_seconds", "0"),
+    expected_reach_time_seconds: valueOrCurrent("expected_reach_time_seconds"),
+    stable_confirmation_seconds: valueOrCurrent("stable_confirmation_seconds", "0"),
+    deviation_delay_seconds: valueOrCurrent("deviation_delay_seconds", "0"),
+    clear_confirmation_seconds: valueOrCurrent("clear_confirmation_seconds", "0"),
+    hysteresis_value: valueOrCurrent("hysteresis_value", "0"),
+    minimum_sv_change: valueOrCurrent("minimum_sv_change", "0"),
+    change_confirmation_seconds: valueOrCurrent("change_confirmation_seconds", "0"),
+    severity: valueOrCurrent("severity", "WARNING"),
+    impact_code: valueOrCurrent("impact_code", "PROCESS"),
+    alarm_message: valueOrCurrent("alarm_message"),
+    recommendation: valueOrCurrent("recommendation"),
+    monitor_reach: Boolean(form.elements.monitor_reach?.checked),
+    monitor_hold: Boolean(form.elements.monitor_hold?.checked),
+    pause_on_machine_hold: Boolean(form.elements.pause_on_machine_hold?.checked),
+    enabled: Boolean(form.elements.enabled?.checked),
+  };
+}
+
+function processDeviationRuleConfigPanel() {
+  const assets = actualFleet().filter((asset) => asset.process !== "chemical").slice().sort((left, right) => `${left.process}-${left.id}`.localeCompare(`${right.process}-${right.id}`));
+  const editing = alarmConfiguration.deviationRules.find((rule) => rule.rule_id === state.alarmConfig.editingDeviationRuleId) || null;
+  const draft = state.alarmConfig.deviationDraft || {};
+  const requestedAssetId = draft.asset_id || editing?.asset_id || state.alarmConfig.deviationAssetId;
+  state.alarmConfig.deviationAssetId = assets.some((asset) => asset.id === requestedAssetId) ? requestedAssetId : assets[0]?.id || null;
+  const assetId = state.alarmConfig.deviationAssetId;
+  if (assetId && !alarmConfiguration.tagsByAsset.has(assetId) && !alarmConfiguration.tagLoading.has(assetId)) void requestAlarmTags(assetId);
+  const tags = alarmConfiguration.tagsByAsset.get(assetId) || [];
+  const pvTags = tags.filter((tag) => /(^|[._])PV($|[._])|_PV$/i.test(tag.signal_role) || /_PV$/i.test(tag.tag_code));
+  const svTags = tags.filter((tag) => /(^|[._])SV($|[._])|_SV$/i.test(tag.signal_role) || /_SV$/i.test(tag.tag_code));
+  const selectedPv = draft.pv_tag_code || editing?.pv_tag_code || state.alarmConfig.deviationPvTagCode || pvTags[0]?.tag_code || "";
+  const selectedSv = draft.sv_tag_code || editing?.sv_tag_code || state.alarmConfig.deviationSvTagCode || "";
+  const fieldValue = (key, fallback = "") => actualText(draft[key] ?? editing?.[key] ?? fallback);
+  const selectedOption = (value, current) => value === current ? "selected" : "";
+  const checked = (key, fallback = true) => (draft[key] ?? (editing ? Boolean(editing[key]) : fallback)) ? "checked" : "";
+  const deviationMode = draft.deviation_mode || editing?.deviation_mode || "ABSOLUTE";
+  const severity = draft.severity || editing?.severity || "WARNING";
+  const impactCode = draft.impact_code || editing?.impact_code || "PROCESS";
+  const form = assets.length ? `<form class="alarm-rule-form process-deviation-rule-form" data-deviation-rule-form data-rule-id="${actualText(editing?.rule_id || "")}">
+    <div class="alarm-rule-form-head"><div><span class="eyebrow">${editing ? "EDIT PROCESS DEVIATION" : "NEW PROCESS DEVIATION"}</span><h3>${editing ? actualText(editing.rule_name) : "Configure PV / SV target monitoring"}</h3><p>Rule hanya dievaluasi ketika process run aktif. Fase RAMPING tetap normal sampai reach-time terlampaui.</p></div><label class="alarm-enabled-control"><input type="checkbox" name="enabled" ${checked("enabled")}/><span>Rule enabled</span></label></div>
+    <div class="alarm-rule-form-grid deviation-rule-form-grid">
+      <label class="field-group"><span>Machine / Asset</span><select class="select-control" name="asset_id" data-deviation-rule-asset required>${assets.map((asset) => `<option value="${actualText(asset.id)}" ${selectedOption(asset.id, assetId)}>${actualText(asset.id)} · ${actualText(asset.name)}</option>`).join("")}</select></label>
+      <label class="field-group"><span>PV parameter</span><select class="select-control" name="pv_tag_code" data-deviation-pv-tag required>${pvTags.length ? pvTags.map((tag) => `<option value="${actualText(tag.tag_code)}" ${selectedOption(tag.tag_code, selectedPv)}>${actualText(tag.signal_role)}${tag.engineering_unit ? ` · ${actualText(tag.engineering_unit)}` : ""}</option>`).join("") : `<option value="">No PV tag registered</option>`}</select></label>
+      <label class="field-group"><span>SV telemetry tag (optional)</span><select class="select-control" name="sv_tag_code" data-deviation-sv-tag><option value="">Use signal role / process setpoint</option>${svTags.map((tag) => `<option value="${actualText(tag.tag_code)}" ${selectedOption(tag.tag_code, selectedSv)}>${actualText(tag.signal_role)}${tag.engineering_unit ? ` · ${actualText(tag.engineering_unit)}` : ""}</option>`).join("")}</select></label>
+      <label class="field-group"><span>SV signal role (optional)</span><input class="search-control" name="sv_signal_role" value="${fieldValue("sv_signal_role")}" placeholder="TEMPERATURE_UPPER_SV"/></label>
+      <label class="field-group"><span>Process setpoint key (optional)</span><input class="search-control" name="setpoint_key" value="${fieldValue("setpoint_key")}" placeholder="temperature_upper_c"/></label>
+      <label class="field-group"><span>Jetflow step code (optional)</span><input class="search-control" name="step_code" value="${fieldValue("step_code")}" placeholder="TEMPERATURE_CONTROL"/></label>
+      <label class="field-group"><span>Rule code</span><input class="search-control" name="rule_code" value="${fieldValue("rule_code")}" maxlength="120" placeholder="KL_TEMP_UPPER_TARGET" required/></label>
+      <label class="field-group alarm-name-field"><span>Rule name</span><input class="search-control" name="rule_name" value="${fieldValue("rule_name")}" maxlength="160" placeholder="Upper temperature target" required/></label>
+      <label class="field-group"><span>Tolerance mode</span><select class="select-control" name="deviation_mode"><option value="ABSOLUTE" ${selectedOption("ABSOLUTE", deviationMode)}>Absolute unit</option><option value="PERCENT" ${selectedOption("PERCENT", deviationMode)}>Percent of SV</option></select></label>
+      <label class="field-group"><span>Tolerance below SV</span><input class="search-control" name="tolerance_low" type="text" inputmode="decimal" value="${fieldValue("tolerance_low", 0)}" required/></label>
+      <label class="field-group"><span>Tolerance above SV</span><input class="search-control" name="tolerance_high" type="text" inputmode="decimal" value="${fieldValue("tolerance_high", 0)}" required/></label>
+      <label class="field-group"><span>Startup grace</span><div class="alarm-input-unit"><input class="search-control" name="startup_grace_seconds" type="number" min="0" max="86400" value="${fieldValue("startup_grace_seconds", 0)}"/><span>sec</span></div></label>
+      <label class="field-group"><span>Expected reach time</span><div class="alarm-input-unit"><input class="search-control" name="expected_reach_time_seconds" type="number" min="0" max="604800" value="${fieldValue("expected_reach_time_seconds")}" placeholder="Optional"/><span>sec</span></div></label>
+      <label class="field-group"><span>Stable confirmation</span><div class="alarm-input-unit"><input class="search-control" name="stable_confirmation_seconds" type="number" min="0" max="86400" value="${fieldValue("stable_confirmation_seconds", 0)}"/><span>sec</span></div></label>
+      <label class="field-group"><span>Deviation delay</span><div class="alarm-input-unit"><input class="search-control" name="deviation_delay_seconds" type="number" min="0" max="86400" value="${fieldValue("deviation_delay_seconds", 0)}"/><span>sec</span></div></label>
+      <label class="field-group"><span>Clear confirmation</span><div class="alarm-input-unit"><input class="search-control" name="clear_confirmation_seconds" type="number" min="0" max="86400" value="${fieldValue("clear_confirmation_seconds", 0)}"/><span>sec</span></div></label>
+      <label class="field-group"><span>Clear hysteresis</span><input class="search-control" name="hysteresis_value" type="text" inputmode="decimal" value="${fieldValue("hysteresis_value", 0)}"/></label>
+      <label class="field-group"><span>Minimum SV change</span><input class="search-control" name="minimum_sv_change" type="text" inputmode="decimal" value="${fieldValue("minimum_sv_change", 0)}"/></label>
+      <label class="field-group"><span>SV change confirmation</span><div class="alarm-input-unit"><input class="search-control" name="change_confirmation_seconds" type="number" min="0" max="86400" value="${fieldValue("change_confirmation_seconds", 0)}"/><span>sec</span></div></label>
+      <label class="field-group"><span>Severity</span><select class="select-control" name="severity">${["INFO", "WARNING", "CRITICAL"].map((value) => `<option value="${value}" ${selectedOption(value, severity)}>${value}</option>`).join("")}</select></label>
+      <label class="field-group"><span>Production impact</span><select class="select-control" name="impact_code">${["PROCESS", "QUALITY", "OUTPUT", "DOWNTIME", "UTILITY", "EQUIPMENT"].map((value) => `<option value="${value}" ${selectedOption(value, impactCode)}>${value}</option>`).join("")}</select></label>
+      <label class="field-group alarm-message-field"><span>Alarm message</span><textarea class="search-control" name="alarm_message" maxlength="500">${fieldValue("alarm_message")}</textarea></label>
+      <label class="field-group alarm-message-field"><span>Recommendation</span><textarea class="search-control" name="recommendation" maxlength="1000">${fieldValue("recommendation")}</textarea></label>
+    </div>
+    <div class="deviation-monitor-options"><label><input type="checkbox" name="monitor_reach" ${checked("monitor_reach")}/> Monitor time-to-target</label><label><input type="checkbox" name="monitor_hold" ${checked("monitor_hold")}/> Monitor hold-target</label><label><input type="checkbox" name="pause_on_machine_hold" ${checked("pause_on_machine_hold")}/> Pause timer when machine HOLD</label></div>
+    <div class="alarm-rule-form-foot"><span>WARNING/CRITICAL diteruskan ke header alarm; seluruh severity tetap masuk Batch Abnormal Log.</span><div>${editing ? `<button class="button ghost" type="button" data-deviation-rule-cancel>Cancel</button>` : ""}<button class="button primary" type="submit" ${!pvTags.length ? "disabled" : ""}>${editing ? "Update deviation rule" : "Save deviation rule"}</button></div></div>
+  </form>` : actualEmpty("Belum ada asset proses aktif.");
+  const rows = alarmConfiguration.deviationRules.length ? alarmConfiguration.deviationRules.map((rule) => `<tr>
+    <td><strong>${actualText(rule.rule_name)}</strong><small class="mono">${actualText(rule.rule_code)}</small></td>
+    <td><strong>${actualText(rule.asset_id || rule.process_type)}</strong><small class="mono">${actualText(rule.pv_tag_code || rule.pv_signal_role)}</small></td>
+    <td>${actualText(rule.sv_tag_code || rule.sv_signal_role || rule.setpoint_key)}<small>${actualText(rule.step_code || "Continuous target")}</small></td>
+    <td class="mono">-${actualText(rule.tolerance_low)} / +${actualText(rule.tolerance_high)}<small>${actualText(rule.deviation_mode)}</small></td>
+    <td class="mono">Reach ${actualText(rule.expected_reach_time_seconds ?? "—")}s<small>Stable ${actualText(rule.stable_confirmation_seconds)}s · Hold ${actualText(rule.deviation_delay_seconds)}s</small></td>
+    <td><span class="data-pill ${String(rule.severity).toLowerCase() === "critical" ? "warning" : "neutral"}">${actualText(rule.severity)}</span><small>${actualText(rule.impact_code)}</small></td>
+    <td><span class="data-pill ${Number(rule.deviating_count) ? "warning" : "good"}">${Number(rule.deviating_count) ? `${actualText(rule.deviating_count)} DEVIATING` : `${actualText(rule.active_tracker_count)} TRACKERS`}</span></td>
+    <td><div class="alarm-rule-row-actions"><button class="button small" data-deviation-rule-edit="${actualText(rule.rule_id)}">Edit</button><button class="button small ${rule.enabled ? "ghost" : "primary"}" data-deviation-rule-toggle="${actualText(rule.rule_id)}" data-rule-enabled="${rule.enabled}">${rule.enabled ? "Disable" : "Enable"}</button></div></td>
+  </tr>`).join("") : `<tr><td colspan="8">${actualEmpty("Belum ada process deviation rule.")}</td></tr>`;
+  return `<section class="card alarm-rule-configuration process-deviation-configuration" id="process-deviation-configuration">
+    <div class="alarm-rule-config-header"><div><span class="eyebrow">BATCH PROCESS DEVIATION</span><h2>PV / SV Target Achievement Rules</h2><p>Konfigurasi reach-time, stable confirmation, hold-target, tolerance, dan revision ketika SV berubah.</p></div><span class="range-badge">${alarmConfiguration.deviationRules.length} RULES</span></div>
+    ${form}
+    <div class="table-wrap alarm-rule-table-wrap"><table class="data-table alarm-rule-table deviation-rule-table"><thead><tr><th>Rule</th><th>Scope / PV</th><th>SV / Step</th><th>Tolerance</th><th>Timing</th><th>Severity</th><th>Engine State</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>
+  </section>`;
+}
+
+async function saveDeviationRule(form) {
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
+  captureDeviationRuleDraft(form);
+  const draft = state.alarmConfig.deviationDraft;
+  const numericFields = ["tolerance_low", "tolerance_high", "startup_grace_seconds", "stable_confirmation_seconds", "deviation_delay_seconds", "clear_confirmation_seconds", "hysteresis_value", "minimum_sv_change", "change_confirmation_seconds"];
+  const payload = { ...draft };
+  for (const field of numericFields) {
+    payload[field] = alarmDecimal(draft[field]);
+    if (!Number.isFinite(payload[field])) {
+      showToast("Nilai belum valid", `${field} harus berupa angka.`);
+      if (submit) submit.disabled = false;
+      return;
+    }
+  }
+  payload.expected_reach_time_seconds = String(draft.expected_reach_time_seconds || "").trim() === "" ? null : Number(draft.expected_reach_time_seconds);
+  payload.sv_tag_code = draft.sv_tag_code || null;
+  payload.sv_signal_role = draft.sv_signal_role || null;
+  payload.setpoint_key = draft.setpoint_key || null;
+  payload.step_code = draft.step_code || null;
+  if (!payload.sv_tag_code && !payload.sv_signal_role && !payload.setpoint_key) {
+    showToast("SV source required", "Pilih SV tag atau isi SV signal role/process setpoint key.");
+    if (submit) submit.disabled = false;
+    return;
+  }
+  const ruleId = form.dataset.ruleId;
+  try {
+    const response = await fetch(ruleId ? `/api/v1/process-deviation-rules/${encodeURIComponent(ruleId)}` : "/api/v1/process-deviation-rules", {
+      method: ruleId ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json", "X-Operator-Name": "Dashboard Engineer" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.message || "Process deviation rule gagal disimpan.");
+    state.alarmConfig.editingDeviationRuleId = null;
+    state.alarmConfig.deviationDraft = {};
+    alarmConfiguration.loaded = false;
+    showToast(ruleId ? "Deviation rule updated" : "Deviation rule created", `${payload.rule_name} akan dievaluasi pada process run aktif.`);
+    await requestAlarmConfiguration(true);
+  } catch (error) {
+    showToast("Save failed", error instanceof Error ? error.message : "Process deviation rule gagal disimpan.");
+    if (submit) submit.disabled = false;
+  }
+}
+
+async function toggleDeviationRule(ruleId, enabled) {
+  try {
+    const response = await fetch(`/api/v1/process-deviation-rules/${encodeURIComponent(ruleId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-Operator-Name": "Dashboard Engineer" },
+      body: JSON.stringify({ enabled }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.message || "Deviation rule status gagal diubah.");
+    alarmConfiguration.loaded = false;
+    showToast(enabled ? "Deviation rule enabled" : "Deviation rule disabled", "Perubahan disimpan di PostgreSQL.");
+    await requestAlarmConfiguration(true);
+  } catch (error) {
+    showToast("Update failed", error instanceof Error ? error.message : "Deviation rule status gagal diubah.");
+  }
+}
+
+async function acknowledgeActualAlarm(alarmEventId) {
+  try {
+    const response = await fetch(`/api/v1/alarm-events/${encodeURIComponent(alarmEventId)}/acknowledge`, { method: "PATCH", headers: { "X-Operator-Name": "Dashboard Operator" } });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.message || "Acknowledge gagal.");
+    showToast("Alarm acknowledged", `${result.alarm?.title || "Alarm"} dicatat oleh Dashboard Operator.`);
+    await connectNonJetflowBackend();
+  } catch (error) {
+    showToast("Acknowledge failed", error instanceof Error ? error.message : "Acknowledge gagal.");
+  }
+}
+
+function actualAlarmTable(events, emptyLabel) {
+  if (!events.length) return actualEmpty(emptyLabel);
+  return `<div class="table-wrap active-alarm-table-wrap"><table class="data-table active-alarm-table"><thead><tr><th>Time</th><th>Severity</th><th>Area</th><th>Asset</th><th>Batch</th><th>Alarm condition</th><th>Trigger / Limit</th><th>State</th><th>Action</th></tr></thead><tbody>${events.map((item) => {
+    const asset = actualFleet().find((machine) => machine.id === item.asset_id);
+    const severity = String(item.severity || "WARNING").toLowerCase();
+    const assetLabel = asset ? `<button class="alarm-asset-link" type="button" data-machine-target="${actualText(asset.process)}|${actualText(asset.id)}">${actualText(item.asset_id)}</button>` : actualText(item.asset_id);
+    return `<tr class="alarm-condition-row ${severity}"><td class="mono">${actualTime(item.occurred_at)}</td><td><span class="data-pill ${severity === "critical" ? "danger" : severity === "warning" ? "warning" : "neutral"}">${actualText(item.severity)}</span></td><td>${actualText(item.area_code || "—")}</td><td>${assetLabel}</td><td>${actualText(item.batch_no || "—")}</td><td><strong>${actualText(item.title)}</strong><br><small>${actualText(item.detail)}</small>${item.recommendation ? `<small class="alarm-recommendation">Action: ${actualText(item.recommendation)}</small>` : ""}</td><td class="mono">${item.trigger_value == null ? "—" : `${actualText(Number(item.trigger_value).toLocaleString("id-ID", { maximumFractionDigits: 2 }))} / ${actualText(Number(item.threshold_value).toLocaleString("id-ID", { maximumFractionDigits: 2 }))}`}</td><td><span class="data-pill ${item.event_state === "CLEARED" ? "good" : "warning"}">${actualText(item.event_state)}</span></td><td>${item.acknowledged_at ? `<span class="data-pill neutral">ACK</span><small>${actualText(item.acknowledged_by || "Operator")}</small>` : item.event_state !== "CLEARED" ? `<button class="button small" data-alarm-event-ack="${actualText(item.alarm_event_id)}">Acknowledge</button>` : "—"}</td></tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+
 function actualAlarmsPage() {
   const scopedEvents = backendAlarmEvents.filter((item) => state.alarms.area === "all" || item.area_code === state.alarms.area);
-  const content = scopedEvents.length
-    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Severity</th><th>Area</th><th>Asset</th><th>Batch</th><th>Alarm</th><th>State</th></tr></thead><tbody>${scopedEvents.map((item) => `<tr><td class="mono">${actualTime(item.occurred_at)}</td><td>${actualText(item.severity)}</td><td>${actualText(item.area_code || "—")}</td><td>${actualText(item.asset_id)}</td><td>${actualText(item.batch_no)}</td><td><strong>${actualText(item.title)}</strong><br><small>${actualText(item.detail)}</small></td><td>${actualText(item.event_state)}</td></tr>`).join("")}</tbody></table></div>`
-    : actualEmpty("Belum ada event alarm aktual");
+  const scopedActiveEvents = backendActiveAlarmEvents.filter((item) => state.alarms.area === "all" || item.area_code === state.alarms.area);
+  const content = actualAlarmTable(scopedEvents, "Belum ada event alarm aktual");
+  const activeContent = actualAlarmTable(scopedActiveEvents, "Tidak ada alarm aktif pada scope ini");
   const areaGroups = new Map();
   backendAlarmEvents.forEach((event) => {
     const key = event.area_code || "UNMAPPED";
@@ -3028,12 +4168,14 @@ function actualAlarmsPage() {
   scopedEvents.forEach((event) => assetGroups.set(event.asset_id, (assetGroups.get(event.asset_id) || 0) + 1));
   const rankedAssets = [...assetGroups].sort((left, right) => right[1] - left[1]);
   const ranking = rankedAssets.length ? `<div class="ranking-list">${rankedAssets.map(([assetId, count], index) => { const asset = actualFleet().find((item) => item.id === assetId); return `<button class="ranking-row" ${asset ? `data-machine-target="${asset.process}|${asset.id}"` : ""}><span class="ranking-number">${index + 1}</span><span class="ranking-copy"><strong>${actualText(assetId)}</strong><small>${actualText(asset?.areaLabel || "Area belum dimapping")}</small><i><b style="width:${count / rankedAssets[0][1] * 100}%"></b></i></span><span class="ranking-value">${count}<small>events</small></span></button>`; }).join("")}</div>` : actualEmpty("Tidak ada alarm pada area terpilih.");
-  const active = backendAlarmEvents.filter((item) => item.event_state !== "CLEARED").length;
-  const critical = backendAlarmEvents.filter((item) => String(item.severity).toLowerCase() === "critical" && item.event_state !== "CLEARED").length;
-  return `${pageHead("alarms", `<span class="range-badge">ACTUAL DATABASE</span>`)}
-    <section class="kpi-grid">${actualMetric("Active alarms", active, "events", "event_state bukan CLEARED")}${actualMetric("Critical active", critical, "events", "severity = critical")}${actualMetric("Affected machines", new Set(backendAlarmEvents.map((item) => item.asset_id)).size, "asset", "alarm_event aktual")}${actualMetric("Alarm records", backendAlarmEvents.length, "rows", "loaded from PostgreSQL")}</section>
+  const active = backendActiveAlarmEvents.length;
+  const critical = backendActiveAlarmEvents.filter((item) => String(item.severity).toLowerCase() === "critical").length;
+  return `${pageHead("alarms", `<button class="button ghost" data-alarm-config-jump>Configure alarm</button><span class="range-badge">ACTUAL DATABASE</span>`)}
+    <section class="kpi-grid">${actualMetric("Active alarms", active, "events", "tetap dihitung meskipun sudah ACK")}${actualMetric("Critical active", critical, "events", "popup persisten sampai kondisi clear")}${actualMetric("Affected machines", new Set(backendActiveAlarmEvents.map((item) => item.asset_id)).size, "asset", "mesin dengan alarm aktif")}${actualMetric("Alarm records", backendAlarmEvents.length, "rows", "recent history dari PostgreSQL")}</section>
+    <section id="active-alarm-conditions" class="active-alarm-section">${panel("Active Alarm Conditions", "Kondisi yang masih aktif saat ini. Acknowledge tidak menghapus alarm; event selesai ketika nilai kembali sesuai rule dan hysteresis.", activeContent, `<span class="range-badge ${critical ? "critical" : ""}">${scopedActiveEvents.length} ACTIVE</span>`)}</section>
     <section class="management-analysis-grid">${panel("Alarm Distribution by Area", "Klik segmen untuk memfilter ranking dan log alarm.", actualDonutMarkup([...areaGroups.values()].map((item) => ({ ...item, key: item.key, selected: item.key === state.alarms.area })), "alarm events", "events", "data-alarm-downtime-area"), state.alarms.area !== "all" ? `<button class="button ghost small" data-alarm-downtime-area="all">All areas</button>` : `<span class="data-pill good">ACTUAL</span>`)}${panel(`Top Affected Machines${state.alarms.area !== "all" ? ` · ${actualText(state.alarms.area)}` : ""}`, "Ranking jumlah alarm aktual; durasi downtime ditampilkan setelah event clear/downtime mapping tersedia.", ranking)}</section>
-    ${panel("Alarm & Event Log", "Data aktual dari alarm_event", content)}
+    ${panel("Alarm & Event History", "Event terbaru dari alarm_event, termasuk alarm yang sudah clear", content)}
+    <div class="alarm-configuration-bottom" id="alarm-configuration-bottom">${alarmRuleConfigPanel()}</div>
   `;
 }
 
@@ -3084,7 +4226,8 @@ function drawActualHistoryExplorer() {
   const endIndex = Math.min(trend.timestamps.length, startIndex + visibleCount);
   const visibleTimestamps = trend.timestamps.slice(startIndex, endIndex);
   const visibleSeries = trend.series.map((series) => ({ ...series, data: series.data.slice(startIndex, endIndex) }));
-  drawLineChart("actual-history-explorer-chart", visibleSeries.map((series) => ({ data: series.data, color: series.kind === "SV" ? "#d68b05" : "#078eaa", dash: series.kind === "SV", fill: series.kind === "PV" })), visibleTimestamps, { labelFormatter: historicalAxisLabel });
+  const unit = parameter?.tags?.find((tag) => tag.engineering_unit)?.engineering_unit || "";
+  drawLineChart("actual-history-explorer-chart", visibleSeries.map((series) => ({ data: series.data, color: series.kind === "SV" ? "#d68b05" : "#078eaa", dash: series.kind === "SV", fill: series.kind === "PV", label: series.kind === "SV" ? "SV · Setpoint" : "PV · Actual", unit })), visibleTimestamps, { labelFormatter: historicalAxisLabel });
   const selection = document.getElementById("actual-history-navigator-selection");
   if (selection) {
     selection.style.left = `${actualHistorian.viewStart * (1 - actualHistorian.viewFraction) * 100}%`;
@@ -3594,8 +4737,9 @@ function databaseAreaPage(type) {
   const cards = machines.length ? machines.map((machine, index) => `<article class="card fleet-machine-card" data-machine-target="${type}|${machine.id}" data-machine-state="${machine.state}" data-machine-search="${actualText(machine.id).toLowerCase()} ${actualText(machine.name).toLowerCase()}" role="button" tabindex="0">
     <div class="fleet-machine-top"><span class="machine-code ranking-badge">#${index + 1}</span><div><strong>${actualText(machine.id)}</strong><span>${actualText(machine.name)}</span></div>${statusPill(machine.state)}</div>
     <div class="fleet-machine-reading"><span>${actualText(databaseMachineReading(machine))}</span><small>Batch <strong>${actualText(machine.batch)}</strong></small></div>
+    ${machineAlarmNote(machine.id, true)}
     <div class="fleet-machine-meta"><span>Progress<strong>${actualText(machine.progress)}%</strong></span><span>Quality<strong>${actualText(machine.quality)}</strong></span><span>Update<strong>${actualTime(machine.sourceTs)}</strong></span></div>
-    <div class="fleet-machine-foot"><span>${machine.connected ? "● Connected" : "○ Offline"}</span><strong>Machine detail →</strong></div>
+    <div class="fleet-machine-foot">${machineConnectionBadge(machine)}<strong>Machine detail →</strong></div>
   </article>`).join("") : actualEmpty("Belum ada asset di area ini");
   return `
     ${processBreadcrumb(type)}
@@ -3645,7 +4789,7 @@ function actualBatchLookupPanel(machine, runs) {
       <div class="batch-investigation-copy"><span class="eyebrow">Batch historian lookup</span><h2>Search Production Batch</h2><p>Load batch untuk mengikat parameter setting, trend telemetry aktual, process step, dan abnormal log pada satu rentang waktu.</p></div>
       <form class="batch-search-form" data-actual-batch-form="${actualText(machine.id)}">
         <label for="actual-batch-search-${actualText(machine.id)}">Batch number</label>
-        <div class="batch-search-row"><input class="search-control batch-search-input" id="actual-batch-search-${actualText(machine.id)}" data-actual-batch-input value="${actualText(selectedBatch)}" placeholder="Contoh: BATCH-KL5-20260821-001" autocomplete="off" maxlength="64"/><button class="button primary" type="submit">Load batch</button>${selectedRun ? `<button class="button ghost" type="button" data-actual-batch-clear="${actualText(machine.process)}">Clear</button>` : ""}</div>
+        <div class="batch-search-row"><input class="search-control batch-search-input" id="actual-batch-search-${actualText(machine.id)}" data-actual-batch-input value="${actualText(selectedBatch)}" placeholder="Contoh: BATCH-KL5-20260821-001" autocomplete="off" maxlength="64"/><button class="button primary" type="submit">Load batch</button>${selectedRun ? `<div class="batch-export-actions" aria-label="Export detail batch"><button class="button batch-export-button pdf" type="button" data-actual-batch-export="${actualText(selectedRun.process_run_id)}" data-export-format="pdf">Export PDF</button><button class="button batch-export-button excel" type="button" data-actual-batch-export="${actualText(selectedRun.process_run_id)}" data-export-format="xlsx">Export Excel</button></div><button class="button ghost" type="button" data-actual-batch-clear="${actualText(machine.process)}">Clear</button>` : ""}</div>
       </form>
     </div>
     <div class="batch-recent-head"><span>Recent batches</span><small>${runs.length} record aktual · scroll untuk melihat lainnya</small></div>
@@ -3717,10 +4861,64 @@ function actualBatchProcessPanel(context) {
   return panel("Process Sequence", "Urutan aktual, start/end time, setpoint, dan hasil per step", `<div class="table-wrap actual-batch-process-wrap"><table class="data-table"><thead><tr><th>Step</th><th>Process</th><th>Start</th><th>End</th><th>Status</th><th>Setpoint</th><th>Actual</th></tr></thead><tbody>${rows}</tbody></table></div>`, `<span class="range-badge">${context.steps.length} STEPS</span>`);
 }
 
+function actualBatchTargetPanel(context) {
+  const targets = context.targets || [];
+  if (!targets.length) return "";
+  const rows = targets.map((target) => {
+    const unit = target.engineering_unit || "";
+    const tone = ["STABLE", "COMPLETED"].includes(String(target.target_state).toUpperCase()) ? "good" : ["DEVIATING", "CLEARING"].includes(String(target.target_state).toUpperCase()) ? "warning" : "neutral";
+    const timeToTarget = target.time_to_target_seconds == null ? "—" : `${Math.floor(Number(target.time_to_target_seconds) / 60)}m ${Number(target.time_to_target_seconds) % 60}s`;
+    return `<tr>
+      <td><strong>${actualText(target.parameter_code)}</strong><small>${actualText(target.rule_name || target.rule_code)}</small></td>
+      <td class="mono">R${actualText(target.revision_no)}</td>
+      <td class="mono"><strong>${actualText(Number(target.sv_value).toLocaleString("id-ID", { maximumFractionDigits: 2 }))}</strong> ${actualText(unit)}<small>-${actualText(target.tolerance_low)} / +${actualText(target.tolerance_high)}</small></td>
+      <td class="mono">${actualTime(target.tracking_started_at)}</td>
+      <td class="mono">${actualTime(target.first_reached_at)}</td>
+      <td class="mono">${actualTime(target.stable_at)}</td>
+      <td class="mono">${actualText(timeToTarget)}</td>
+      <td><span class="data-pill ${tone}">${actualText(target.target_state)}</span></td>
+    </tr>`;
+  }).join("");
+  return panel("Target Achievement Log", "Pencapaian SV paralel per parameter; fase RAMPING tidak otomatis dianggap abnormal.", `<div class="table-wrap actual-batch-target-wrap"><table class="data-table"><thead><tr><th>Parameter</th><th>Revision</th><th>SV / Tolerance</th><th>Tracking Start</th><th>First Reached</th><th>Stable At</th><th>Time to Target</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`, `<span class="range-badge">${targets.length} TARGETS</span>`);
+}
+
+function actualBatchSetpointChangePanel(context) {
+  const changes = context.setpoint_changes || [];
+  if (!changes.length) return "";
+  const rows = changes.map((item) => `<tr>
+    <td class="mono">${actualTime(item.changed_at)}</td>
+    <td><strong>${actualText(item.parameter_code)}</strong><small>${actualText(item.step_code || item.step_name || "Run level")}</small></td>
+    <td class="mono">${item.old_sv_value == null ? "Initial" : actualText(Number(item.old_sv_value).toLocaleString("id-ID", { maximumFractionDigits: 2 }))}</td>
+    <td class="mono"><strong>${actualText(Number(item.new_sv_value).toLocaleString("id-ID", { maximumFractionDigits: 2 }))}</strong> ${actualText(item.engineering_unit || "")}</td>
+    <td>${actualText(item.change_source)}</td>
+    <td>${actualText(item.changed_by || "System")}</td>
+    <td>${actualText(item.change_reason || "—")}</td>
+  </tr>`).join("");
+  return panel("Setpoint Change Log", "Setiap perubahan SV membuat target revision baru dan tidak menimpa histori sebelumnya.", `<div class="table-wrap actual-batch-setpoint-wrap"><table class="data-table"><thead><tr><th>Changed At</th><th>Parameter</th><th>Old SV</th><th>New SV</th><th>Source</th><th>Changed By</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table></div>`, `<span class="range-badge">${changes.length} CHANGES</span>`);
+}
+
 function actualBatchAlarmPanel(context) {
   const alarms = context.alarms || [];
-  const rows = alarms.length ? alarms.map((alarm) => `<tr><td class="mono">${actualTime(alarm.occurred_at)}</td><td>${actualText(alarm.severity)}</td><td><strong>${actualText(alarm.title)}</strong><br><small>${actualText(alarm.detail || "—")}</small></td><td class="mono">${actualText(alarm.tag_code || "—")}</td><td>${actualText(alarm.event_state)}</td><td>${alarm.batch_no === context.run.batch_no ? "Batch linked" : "Time correlated"}</td></tr>`).join("") : `<tr><td colspan="6">${actualEmpty("Tidak ada abnormal event aktual pada interval batch ini.")}</td></tr>`;
-  return panel("Batch Abnormality Log", "Alarm terhubung batch atau berkorelasi dengan asset dan interval proses", `<div class="table-wrap actual-batch-alarm-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Severity</th><th>Event</th><th>Tag</th><th>State</th><th>Relation</th></tr></thead><tbody>${rows}</tbody></table></div>`, `<span class="range-badge">${alarms.length} EVENTS</span>`);
+  const deviations = context.deviations || [];
+  const linkedAlarmIds = new Set(deviations.map((item) => item.alarm_event_id).filter(Boolean));
+  const staticAlarms = alarms.filter((alarm) => !linkedAlarmIds.has(alarm.alarm_event_id));
+  const deviationRows = deviations.map((item) => {
+    const unit = item.engineering_unit || "";
+    const duration = item.duration_seconds == null ? "Active" : `${Math.floor(Number(item.duration_seconds) / 60)}m ${Number(item.duration_seconds) % 60}s`;
+    return `<tr class="alarm-condition-row ${String(item.severity).toLowerCase()}">
+      <td class="mono">${actualTime(item.started_at)}<small>${actualTime(item.ended_at)}</small></td>
+      <td><span class="data-pill ${String(item.severity).toUpperCase() === "CRITICAL" ? "danger" : "warning"}">${actualText(item.severity)}</span></td>
+      <td><strong>${actualText(item.event_class)}</strong><small>${actualText(item.step_code || item.step_name || "Continuous target")}</small></td>
+      <td><strong>${actualText(item.parameter_code)}</strong><small class="mono">${actualText(item.pv_tag_code)}</small></td>
+      <td class="mono">SV ${actualText(Number(item.sv_value).toLocaleString("id-ID", { maximumFractionDigits: 2 }))} ${actualText(unit)}<small>Trigger ${actualText(Number(item.trigger_pv).toLocaleString("id-ID", { maximumFractionDigits: 2 }))} · Worst ${actualText(Number(item.worst_pv).toLocaleString("id-ID", { maximumFractionDigits: 2 }))}</small></td>
+      <td class="mono">${actualText(Number(item.max_abs_deviation).toLocaleString("id-ID", { maximumFractionDigits: 2 }))} ${actualText(unit)}<small>${actualText(duration)}</small></td>
+      <td><span class="data-pill ${item.event_state === "CLEARED" ? "good" : "warning"}">${actualText(item.event_state)}</span><small>${actualText(item.impact_code)}</small></td>
+    </tr>`;
+  });
+  const alarmRows = staticAlarms.map((alarm) => `<tr><td class="mono">${actualTime(alarm.occurred_at)}<small>${actualTime(alarm.cleared_at)}</small></td><td><span class="data-pill neutral">${actualText(alarm.severity)}</span></td><td><strong>${actualText(alarm.event_class || "STATIC_THRESHOLD")}</strong><small>${actualText(alarm.title)}</small></td><td class="mono">${actualText(alarm.tag_code || "—")}</td><td>${actualText(alarm.trigger_value ?? "—")}<small>Threshold ${actualText(alarm.threshold_value ?? "—")}</small></td><td>—</td><td><span class="data-pill ${alarm.event_state === "CLEARED" ? "good" : "warning"}">${actualText(alarm.event_state)}</span><small>${alarm.batch_no === context.run.batch_no ? "Batch linked" : "Time correlated"}</small></td></tr>`);
+  const rows = [...deviationRows, ...alarmRows];
+  const content = rows.length ? rows.join("") : `<tr><td colspan="7">${actualEmpty("Tidak ada abnormal event aktual pada interval batch ini.")}</td></tr>`;
+  return panel("Batch Abnormality Log", "Process deviation PV/SV dan alarm threshold yang terhubung ke process run.", `<div class="table-wrap actual-batch-alarm-wrap"><table class="data-table"><thead><tr><th>Start / End</th><th>Severity</th><th>Class / Step</th><th>Parameter</th><th>SV / PV</th><th>Deviation / Duration</th><th>Status / Impact</th></tr></thead><tbody>${content}</tbody></table></div>`, `<span class="range-badge">${rows.length} EVENTS</span>`);
 }
 
 function actualBatchWorkspace(machine, runs) {
@@ -3732,7 +4930,7 @@ function actualBatchWorkspace(machine, runs) {
     const error = actualBatchProgramErrors.get(run.process_run_id);
     return panel("Batch Investigation", `${actualText(run.batch_no)} · ${actualText(machine.id)}`, error ? actualEmpty(error) : `<div class="actual-historian-loading">Memuat context batch aktual dari PostgreSQL…</div>`, `<span class="range-badge">${error ? "ERROR" : "LOADING"}</span>`, "actual-batch-workspace");
   }
-  return `<div class="actual-batch-workspace">${actualBatchContextPanel(context)}${actualBatchParameterPanel(context)}${databaseActualHistorianPanel(machine)}${actualBatchProcessPanel(context)}${actualBatchAlarmPanel(context)}</div>`;
+  return `<div class="actual-batch-workspace">${actualBatchContextPanel(context)}${actualBatchParameterPanel(context)}${databaseActualHistorianPanel(machine)}${actualBatchProcessPanel(context)}${actualBatchTargetPanel(context)}${actualBatchSetpointChangePanel(context)}${actualBatchAlarmPanel(context)}</div>`;
 }
 
 function databaseMachineDetailPage(type) {
@@ -3745,6 +4943,7 @@ function databaseMachineDetailPage(type) {
     ${processBreadcrumb(type, machine)}
     ${pageHead(type, `<button class="button" data-process-level="area" data-process-type="${type}">← ${actualText(machine.areaLabel || machine.area)}</button><span class="range-badge">ACTUAL</span>`)}
     ${machineHero(machine, processConfig[type].code, `${actualText(machine.subtype || "—")} · ${actualText(machine.recipe || "Recipe belum dimapping")} · source ${actualText(machine.quality)}`)}
+    ${type === "kalender" ? kalenderPidPanel(machine) : ""}
     ${machinePerformanceSummary(machine, runs)}
     ${panel("Live sensor measurements", "Seluruh nilai dari asset_snapshot.values_json dan unit dari tag_definition", actualSensorValues([machine]))}
     ${actualBatchLookupPanel(machine, runs)}
@@ -3789,14 +4988,56 @@ function updateNavigationCounts() {
     const count = document.querySelector(`.nav-item[data-page="${page}"] .nav-count`);
     if (count) count.textContent = fleet.length;
   });
-  document.getElementById("nav-alarm-count").textContent = backendAlarmEvents.filter((item) => !item.acknowledged_at && item.event_state !== "CLEARED").length;
+  setActiveAlarmCount(backendActiveAlarmEvents.length);
+}
+
+function setActiveAlarmCount(count) {
+  const value = Math.max(0, Number(count) || 0);
+  const navCount = document.getElementById("nav-alarm-count");
+  const headerCount = document.getElementById("header-alarm-count");
+  if (navCount) navCount.textContent = value;
+  if (headerCount) headerCount.textContent = value;
+  document.getElementById("alarm-shortcut")?.classList.toggle("has-active-alarm", value > 0);
+}
+
+function upsertActiveAlarm(alarm) {
+  if (!alarm?.alarm_event_id) return;
+  const index = backendActiveAlarmEvents.findIndex((item) => String(item.alarm_event_id) === String(alarm.alarm_event_id));
+  if (index >= 0) backendActiveAlarmEvents[index] = { ...backendActiveAlarmEvents[index], ...alarm };
+  else backendActiveAlarmEvents.unshift(alarm);
+}
+
+function removeActiveAlarm(alarmEventId) {
+  if (!alarmEventId) return;
+  backendActiveAlarmEvents = backendActiveAlarmEvents.filter((item) => String(item.alarm_event_id) !== String(alarmEventId));
+  if (String(alarmPopupUi.selectedAlarmId) === String(alarmEventId)) alarmPopupUi.selectedAlarmId = null;
+}
+
+function openActiveAlarmPage() {
+  state.alarms.area = "all";
+  navigate("alarms");
+  window.requestAnimationFrame(() => document.getElementById("active-alarm-conditions")?.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
 
 function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
+  deferredRealtimeRender = false;
+  realtimeUiRefresh.pending = false;
+  if (realtimeUiRefresh.timer) {
+    clearTimeout(realtimeUiRefresh.timer);
+    realtimeUiRefresh.timer = null;
+  }
   const previousScroll = Number.isFinite(window.scrollY) ? window.scrollY : 0;
   const anchorViewportTop = preserveAnchor ? document.querySelector(preserveAnchor)?.getBoundingClientRect().top : null;
   const content = document.getElementById("page-content");
   const hasActualAssets = actualFleet().length > 0;
+  if (backendConnection.status === "connected" && processNavigationPages.includes(state.page)) {
+    const fleet = fleetFor(state.page);
+    const drill = state.drill[state.page];
+    if (drill?.machine && !fleet.some((machine) => machine.id === drill.machine)) drill.machine = null;
+    if (drill?.area && !fleet.some((machine) => machine.area === drill.area)) drill.area = null;
+    if (state.selected[state.page] && !fleet.some((machine) => machine.id === state.selected[state.page])) state.selected[state.page] = fleet[0]?.id || null;
+  }
+  persistDashboardNavigation();
   content.innerHTML = (backendConnection.status !== "connected" || !hasActualAssets)
     ? databaseIntegrationPage()
     : databaseDashboardPage();
@@ -3805,6 +5046,7 @@ function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
   bindPageEvents();
   requestAnimationFrame(() => {
     initPageCharts();
+    void activatePidBindingForCurrentView();
     const nextAnchor = preserveAnchor ? document.querySelector(preserveAnchor) : null;
     if (nextAnchor && Number.isFinite(anchorViewportTop)) {
       const anchorDocumentTop = nextAnchor.getBoundingClientRect().top + window.scrollY;
@@ -3894,7 +5136,66 @@ function trackDatabaseProcessRun(processRunId) {
   renderPage({ preserveScroll: true });
 }
 
+async function exportActualBatchProcessRun(processRunId, format, button) {
+  if (!processRunId || !["pdf", "xlsx"].includes(format)) return;
+  const originalLabel = button?.textContent || "Export";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Preparing…";
+    button.setAttribute("aria-busy", "true");
+  }
+  try {
+    const endpoint = `/api/v1/batch/process-runs/${encodeURIComponent(processRunId)}/export?format=${encodeURIComponent(format)}`;
+    const response = await fetch(endpoint, { cache: "no-store" });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.message || "Batch export gagal dibuat.");
+    }
+    const disposition = response.headers.get("content-disposition") || "";
+    const headerFilename = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+    const fallbackRun = backendProcessRuns.find((run) => run.process_run_id === processRunId);
+    const fallbackFilename = `${fallbackRun?.batch_no || "batch"}-process-detail.${format}`;
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = headerFilename || fallbackFilename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+    showToast("Batch export ready", `${fallbackRun?.batch_no || "Batch"} berhasil diekspor ke ${format === "pdf" ? "PDF" : "Excel"}.`);
+  } catch (error) {
+    showToast("Export failed", error instanceof Error ? error.message : "Batch export gagal dibuat.");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+      button.removeAttribute("aria-busy");
+    }
+  }
+}
+
 function bindPageEvents() {
+  document.querySelectorAll("[data-pid-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const panelType = button.dataset.pidToggle;
+      if (!(panelType in state.pidPanel)) return;
+      const isCollapsed = !state.pidPanel[panelType];
+      state.pidPanel[panelType] = isCollapsed;
+      persistDashboardNavigation();
+      const card = button.closest("[data-pid-panel]");
+      const body = card?.querySelector(".kalender-pid-body");
+      card?.classList.toggle("is-collapsed", isCollapsed);
+      button.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+      const label = button.querySelector("span");
+      if (label) label.textContent = isCollapsed ? "Expand P&ID" : "Minimize P&ID";
+      if (body) {
+        if (isCollapsed) body.setAttribute("aria-hidden", "true");
+        else body.removeAttribute("aria-hidden");
+      }
+    });
+  });
   document.querySelectorAll("[data-chemical-unit]").forEach((card) => {
     const openUnit = () => {
       const machine = dispensers.find((item) => item.id === card.dataset.chemicalUnit);
@@ -3994,8 +5295,7 @@ function bindPageEvents() {
     select.addEventListener("blur", () => {
       window.setTimeout(() => {
         if (!deferredRealtimeRender) return;
-        deferredRealtimeRender = false;
-        renderPage({ preserveScroll: true });
+        scheduleSafeRealtimeRender();
       }, 0);
     });
   };
@@ -4185,6 +5485,9 @@ function bindPageEvents() {
   });
   document.querySelectorAll("[data-track-process-run]").forEach((button) => {
     button.addEventListener("click", () => trackDatabaseProcessRun(button.dataset.trackProcessRun));
+  });
+  document.querySelectorAll("[data-actual-batch-export]").forEach((button) => {
+    button.addEventListener("click", () => void exportActualBatchProcessRun(button.dataset.actualBatchExport, button.dataset.exportFormat, button));
   });
 
   // Historical Telemetry Table Controls
@@ -4525,6 +5828,119 @@ function bindPageEvents() {
   const alarmSearch = document.getElementById("alarm-search");
   const alarmSeverity = document.getElementById("alarm-severity");
   const alarmArea = document.getElementById("alarm-area-filter");
+  document.querySelector("[data-alarm-config-jump]")?.addEventListener("click", () => document.getElementById("alarm-rule-configuration")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  document.querySelectorAll("[data-open-active-alarms]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openActiveAlarmPage();
+    });
+  });
+  const alarmRuleForm = document.querySelector("[data-alarm-rule-form]");
+  alarmRuleForm?.addEventListener("input", () => captureAlarmRuleDraft(alarmRuleForm));
+  alarmRuleForm?.addEventListener("change", () => captureAlarmRuleDraft(alarmRuleForm));
+  alarmRuleForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void saveAlarmRule(event.currentTarget);
+  });
+  document.querySelector("[data-alarm-rule-asset]")?.addEventListener("change", (event) => {
+    event.stopPropagation();
+    captureAlarmRuleDraft(alarmRuleForm);
+    state.alarmConfig.assetId = event.target.value;
+    state.alarmConfig.tagCode = null;
+    state.alarmConfig.draft = { ...state.alarmConfig.draft, asset_id: event.target.value, tag_code: null };
+    void requestAlarmTags(event.target.value);
+    renderPage({ preserveScroll: true });
+  });
+  document.querySelector("[data-alarm-rule-tag]")?.addEventListener("change", (event) => {
+    state.alarmConfig.tagCode = event.target.value;
+    state.alarmConfig.draft = { ...state.alarmConfig.draft, tag_code: event.target.value };
+  });
+  document.querySelector("[data-alarm-rule-cancel]")?.addEventListener("click", () => {
+    state.alarmConfig.editingRuleId = null;
+    state.alarmConfig.draft = {};
+    renderPage({ preserveScroll: true });
+  });
+  document.querySelectorAll("[data-alarm-rule-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const rule = alarmConfiguration.rules.find((item) => item.rule_id === button.dataset.alarmRuleEdit);
+      if (!rule) return;
+      state.alarmConfig.editingRuleId = rule.rule_id;
+      state.alarmConfig.assetId = rule.asset_id;
+      state.alarmConfig.tagCode = rule.tag_code;
+      state.alarmConfig.draft = {
+        rule_name: rule.rule_name,
+        asset_id: rule.asset_id,
+        tag_code: rule.tag_code,
+        rule_type: rule.rule_type,
+        severity: rule.severity,
+        threshold_value: String(rule.threshold_value),
+        hysteresis_value: String(rule.hysteresis_value),
+        delay_seconds: String(rule.delay_seconds),
+        alarm_message: rule.alarm_message || "",
+        recommendation: rule.recommendation || "",
+        enabled: Boolean(rule.enabled),
+      };
+      void requestAlarmTags(rule.asset_id);
+      renderPage({ preserveScroll: true });
+      document.getElementById("alarm-rule-configuration")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+  document.querySelectorAll("[data-alarm-rule-toggle]").forEach((button) => {
+    button.addEventListener("click", () => void toggleAlarmRule(button.dataset.alarmRuleToggle, button.dataset.ruleEnabled !== "true"));
+  });
+  const deviationRuleForm = document.querySelector("[data-deviation-rule-form]");
+  deviationRuleForm?.addEventListener("input", () => captureDeviationRuleDraft(deviationRuleForm));
+  deviationRuleForm?.addEventListener("change", () => captureDeviationRuleDraft(deviationRuleForm));
+  deviationRuleForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void saveDeviationRule(event.currentTarget);
+  });
+  document.querySelector("[data-deviation-rule-asset]")?.addEventListener("change", (event) => {
+    captureDeviationRuleDraft(deviationRuleForm);
+    state.alarmConfig.deviationAssetId = event.target.value;
+    state.alarmConfig.deviationPvTagCode = null;
+    state.alarmConfig.deviationSvTagCode = null;
+    state.alarmConfig.deviationDraft = { ...state.alarmConfig.deviationDraft, asset_id: event.target.value, pv_tag_code: null, sv_tag_code: null };
+    void requestAlarmTags(event.target.value);
+    renderPage({ preserveScroll: true });
+  });
+  document.querySelector("[data-deviation-pv-tag]")?.addEventListener("change", (event) => {
+    state.alarmConfig.deviationPvTagCode = event.target.value;
+    state.alarmConfig.deviationDraft = { ...state.alarmConfig.deviationDraft, pv_tag_code: event.target.value };
+  });
+  document.querySelector("[data-deviation-sv-tag]")?.addEventListener("change", (event) => {
+    state.alarmConfig.deviationSvTagCode = event.target.value;
+    state.alarmConfig.deviationDraft = { ...state.alarmConfig.deviationDraft, sv_tag_code: event.target.value };
+  });
+  document.querySelector("[data-deviation-rule-cancel]")?.addEventListener("click", () => {
+    state.alarmConfig.editingDeviationRuleId = null;
+    state.alarmConfig.deviationDraft = {};
+    renderPage({ preserveScroll: true });
+  });
+  document.querySelectorAll("[data-deviation-rule-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const rule = alarmConfiguration.deviationRules.find((item) => item.rule_id === button.dataset.deviationRuleEdit);
+      if (!rule) return;
+      state.alarmConfig.editingDeviationRuleId = rule.rule_id;
+      state.alarmConfig.deviationAssetId = rule.asset_id;
+      state.alarmConfig.deviationPvTagCode = rule.pv_tag_code;
+      state.alarmConfig.deviationSvTagCode = rule.sv_tag_code;
+      state.alarmConfig.deviationDraft = {
+        ...rule,
+        expected_reach_time_seconds: rule.expected_reach_time_seconds ?? "",
+      };
+      void requestAlarmTags(rule.asset_id);
+      renderPage({ preserveScroll: true });
+      document.getElementById("process-deviation-configuration")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+  document.querySelectorAll("[data-deviation-rule-toggle]").forEach((button) => {
+    button.addEventListener("click", () => void toggleDeviationRule(button.dataset.deviationRuleToggle, button.dataset.ruleEnabled !== "true"));
+  });
+  document.querySelectorAll("[data-alarm-event-ack]").forEach((button) => {
+    button.addEventListener("click", () => void acknowledgeActualAlarm(button.dataset.alarmEventAck));
+  });
   if (alarmSearch) alarmSearch.addEventListener("input", filterAlarms);
   if (alarmSeverity) alarmSeverity.addEventListener("change", filterAlarms);
   if (alarmArea) alarmArea.addEventListener("change", (event) => {
@@ -4674,9 +6090,12 @@ function filterAlarms() {
 }
 
 function updateAlarmCounts() {
+  if (backendConnection.status === "connected") {
+    setActiveAlarmCount(backendActiveAlarmEvents.length);
+    return;
+  }
   const count = alarms.filter((a) => !a.ack).length;
-  document.getElementById("nav-alarm-count").textContent = count;
-  document.getElementById("header-alarm-count").textContent = count;
+  setActiveAlarmCount(count);
 }
 
 function showToast(title, detail) {
@@ -4686,6 +6105,88 @@ function showToast(title, detail) {
   toast.innerHTML = `<strong>${title}</strong>${detail}`;
   root.appendChild(toast);
   window.setTimeout(() => toast.remove(), 3200);
+}
+
+function alarmPopupId(alarm) {
+  return String(alarm?.alarm_event_id || `${alarm?.asset_id || "asset"}-${alarm?.rule_id || alarm?.title || "alarm"}`);
+}
+
+function activeAlarmCarouselItems() {
+  const priority = { critical: 0, warning: 1, info: 2 };
+  return backendActiveAlarmEvents
+    .filter((alarm) => alarm.event_state !== "CLEARED")
+    .slice()
+    .sort((left, right) => {
+      const severityOrder = (priority[String(left.severity || "warning").toLowerCase()] ?? 3) - (priority[String(right.severity || "warning").toLowerCase()] ?? 3);
+      return severityOrder || new Date(right.occurred_at || 0) - new Date(left.occurred_at || 0);
+    });
+}
+
+function openAlarmMachineDetail(alarm) {
+  const machine = actualFleet().find((item) => item.id === alarm?.asset_id);
+  if (machine) {
+    openMachineDetail(machine.process, machine.id);
+    return;
+  }
+  showToast("Machine mapping unavailable", `${alarm?.asset_id || "Alarm"} belum terhubung ke master asset dashboard.`);
+  openActiveAlarmPage();
+}
+
+function shiftActiveAlarmCarousel(direction) {
+  const alarms = activeAlarmCarouselItems();
+  if (alarms.length < 2) return;
+  const currentIndex = Math.max(0, alarms.findIndex((alarm) => alarmPopupId(alarm) === String(alarmPopupUi.selectedAlarmId)));
+  const nextIndex = (currentIndex + direction + alarms.length) % alarms.length;
+  alarmPopupUi.selectedAlarmId = alarmPopupId(alarms[nextIndex]);
+  renderActiveAlarmCarousel();
+}
+
+function renderActiveAlarmCarousel(preferredAlarmId = null) {
+  const root = document.getElementById("alarm-popup-root");
+  if (!root) return;
+  const alarms = activeAlarmCarouselItems();
+  if (!alarms.length) {
+    root.replaceChildren();
+    alarmPopupUi.selectedAlarmId = null;
+    return;
+  }
+  if (preferredAlarmId && alarms.some((alarm) => alarmPopupId(alarm) === String(preferredAlarmId))) alarmPopupUi.selectedAlarmId = String(preferredAlarmId);
+  let currentIndex = alarms.findIndex((alarm) => alarmPopupId(alarm) === String(alarmPopupUi.selectedAlarmId));
+  if (currentIndex < 0) currentIndex = 0;
+  const alarm = alarms[currentIndex];
+  alarmPopupUi.selectedAlarmId = alarmPopupId(alarm);
+  const severity = String(alarm.severity || "WARNING").toLowerCase();
+  const severityLabel = severity.toUpperCase();
+  root.innerHTML = `<div class="alarm-header-carousel ${actualText(severity)}" role="${severity === "critical" ? "alert" : "status"}">
+    <button class="alarm-carousel-main" type="button" data-alarm-carousel-detail title="Open machine ${actualText(alarm.asset_id)}">
+      <span class="alarm-carousel-severity">${actualText(severityLabel.slice(0, 1))}</span>
+      <span class="alarm-carousel-copy"><small>${actualText(severityLabel)} · ACTIVE</small><strong><b>${actualText(alarm.asset_id || "UNMAPPED")}</b><em>${actualText(alarm.title || "Process alarm")}</em></strong></span>
+    </button>
+    <span class="alarm-carousel-index">${currentIndex + 1}/${alarms.length}</span>
+    <div class="alarm-carousel-navigation" aria-label="Alarm navigation">
+      <button type="button" data-alarm-carousel-prev aria-label="Previous active alarm" ${alarms.length < 2 ? "disabled" : ""}>‹</button>
+      <button type="button" data-alarm-carousel-next aria-label="Next active alarm" ${alarms.length < 2 ? "disabled" : ""}>›</button>
+    </div>
+  </div>`;
+  root.querySelector("[data-alarm-carousel-detail]")?.addEventListener("click", () => openAlarmMachineDetail(alarm));
+  root.querySelector("[data-alarm-carousel-prev]")?.addEventListener("click", () => shiftActiveAlarmCarousel(-1));
+  root.querySelector("[data-alarm-carousel-next]")?.addEventListener("click", () => shiftActiveAlarmCarousel(1));
+  let touchStartX = null;
+  root.ontouchstart = (event) => { touchStartX = event.touches[0]?.clientX ?? null; };
+  root.ontouchend = (event) => {
+    if (touchStartX == null) return;
+    const delta = (event.changedTouches[0]?.clientX ?? touchStartX) - touchStartX;
+    if (Math.abs(delta) > 34) shiftActiveAlarmCarousel(delta < 0 ? 1 : -1);
+    touchStartX = null;
+  };
+}
+
+function syncActiveAlarmPopups() {
+  renderActiveAlarmCarousel();
+}
+
+function showAlarmPopup(alarm) {
+  renderActiveAlarmCarousel(alarmPopupId(alarm));
 }
 
 function initPageCharts() {
@@ -4761,8 +6262,8 @@ function drawSensorComparisonTrends(type) {
     const program = type === "jetflow" ? jetflowProgramForSensor(sensor) : null;
     const selectedProcesses = state.jetflowProgram.enabled;
     drawLineChart(`sensor-trend-${type}-${sensor.key}`, [
-      { data: series.pv, color: sensor.color, fill: true },
-      { data: series.sv, color: sensor.color, dash: true },
+      { data: series.pv, color: sensor.color, fill: true, label: "PV · Process Value", unit: sensor.unit },
+      { data: series.sv, color: sensor.color, dash: true, label: "SV · Set Value", unit: sensor.unit },
     ], series.timestamps, {
       topPad: program ? 42 : 18,
       annotations: program ? {
@@ -4795,7 +6296,7 @@ function drawMotorDriveTrend() {
   const end = Math.min(trend.values.length, start + Math.max(12, Math.round(trend.values.length * fraction)));
   const values = trend.values.slice(start, end);
   const timestamps = trend.timestamps.slice(start, end);
-  drawLineChart("motor-drive-trend", [{ data: values, color: trend.color, fill: true }], timestamps, {
+  drawLineChart("motor-drive-trend", [{ data: values, color: trend.color, fill: true, label: trend.label, unit: trend.unit }], timestamps, {
     labelFormatter: (timestamp) => new Date(timestamp).toLocaleTimeString("id-ID", state.motorDrive.range === "7D"
       ? { day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }
       : { hour: "2-digit", minute: "2-digit", hour12: false }),
@@ -4896,6 +6397,134 @@ function bindMotorDrivePan() {
 
 function wave(length, start, amplitude, trend = 0, phase = 0) {
   return Array.from({ length }, (_, i) => start + Math.sin(i * .42 + phase) * amplitude + Math.cos(i * .17 + phase) * amplitude * .28 + i * trend);
+}
+
+function trendTooltipTimeLabel(value, index, labels, options) {
+  if (options.tooltipTimeFormatter) return options.tooltipTimeFormatter(value, index, labels);
+  const timestamp = value instanceof Date
+    ? value.getTime()
+    : typeof value === "number" && value > 100000000000
+      ? value
+      : typeof value === "string" && /[-T:/]/.test(value)
+        ? Date.parse(value)
+        : Number.NaN;
+  if (Number.isFinite(timestamp)) {
+    return new Date(timestamp).toLocaleString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+  }
+  if (options.labelFormatter) return options.labelFormatter(value, index, labels);
+  return String(value ?? `Point ${index + 1}`);
+}
+
+function readChartTooltipState(canvasId, kind) {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(`smm.v2.chart-tooltip.${canvasId}`) || "null");
+    return saved?.kind === kind ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberChartTooltipState(canvasId, kind, index, label) {
+  try {
+    sessionStorage.setItem(`smm.v2.chart-tooltip.${canvasId}`, JSON.stringify({ kind, index, label }));
+  } catch {
+    // Dashboard tetap berjalan jika browser membatasi session storage.
+  }
+}
+
+function clearChartTooltipState(canvasId) {
+  try {
+    sessionStorage.removeItem(`smm.v2.chart-tooltip.${canvasId}`);
+  } catch {
+    // Tidak perlu memblokir interaksi chart.
+  }
+}
+
+function restoredChartTooltipIndex(values, saved) {
+  if (!saved || !values.length) return -1;
+  const exact = values.findIndex((value) => String(value) === String(saved.label));
+  if (exact >= 0) return exact;
+  const target = Number(saved.label);
+  if (Number.isFinite(target)) {
+    return values.reduce((nearest, value, index) => Math.abs(Number(value) - target) < Math.abs(Number(values[nearest]) - target) ? index : nearest, 0);
+  }
+  return Math.max(0, Math.min(values.length - 1, Number(saved.index) || 0));
+}
+
+function bindLineChartTooltip(canvas, series, labels, geometry, options = {}) {
+  const parent = canvas.parentElement;
+  if (!parent || !labels.length) return;
+  canvas._trendTooltipCleanup?.();
+  [...parent.children].filter((element) => element.classList?.contains("trend-hover-layer")).forEach((element) => element.remove());
+  parent.classList.add("has-trend-hover");
+  const layer = document.createElement("div");
+  layer.className = "trend-hover-layer";
+  layer.setAttribute("aria-hidden", "true");
+  layer.innerHTML = `<span class="trend-hover-line"></span><span class="trend-hover-points"></span><div class="trend-hover-tooltip"></div>`;
+  parent.appendChild(layer);
+  const guide = layer.querySelector(".trend-hover-line");
+  const pointsRoot = layer.querySelector(".trend-hover-points");
+  const tooltip = layer.querySelector(".trend-hover-tooltip");
+  const { pad, plotW, plotH, xAt, yAt } = geometry;
+  let currentIndex = -1;
+
+  const hide = () => {
+    layer.classList.remove("visible");
+    currentIndex = -1;
+    clearChartTooltipState(canvas.id);
+  };
+  const showIndex = (index) => {
+    const x = canvas.offsetLeft + xAt(index, labels.length);
+    guide.style.left = `${x}px`;
+    guide.style.top = `${canvas.offsetTop + pad.top}px`;
+    guide.style.height = `${plotH}px`;
+    const values = series.map((line, seriesIndex) => ({
+      label: line.label || `Series ${seriesIndex + 1}`,
+      unit: line.unit || options.unit || "",
+      color: line.color,
+      value: Number(line.data[index]),
+    })).filter((item) => Number.isFinite(item.value));
+    pointsRoot.innerHTML = values.map((item) => `<i style="left:${x}px;top:${canvas.offsetTop + yAt(item.value)}px;border-color:${actualText(item.color)}"></i>`).join("");
+    tooltip.innerHTML = `<strong>${actualText(trendTooltipTimeLabel(labels[index], index, labels, options))}</strong>${values.map((item) => `<span><i style="background:${actualText(item.color)}"></i><em>${actualText(item.label)}</em><b>${item.value.toLocaleString("id-ID", { maximumFractionDigits: options.tooltipDecimals ?? 2 })}${item.unit ? ` ${actualText(item.unit)}` : ""}</b></span>`).join("")}`;
+    layer.classList.add("visible");
+    const tooltipWidth = tooltip.offsetWidth;
+    const parentWidth = parent.clientWidth;
+    const preferredLeft = x + 12;
+    tooltip.style.left = `${preferredLeft + tooltipWidth <= parentWidth - 8 ? preferredLeft : Math.max(8, x - tooltipWidth - 12)}px`;
+    tooltip.style.top = `${Math.max(6, canvas.offsetTop + pad.top + 4)}px`;
+    if (currentIndex !== index) rememberChartTooltipState(canvas.id, "line", index, labels[index]);
+    currentIndex = index;
+  };
+  const move = (event) => {
+    const canvasRect = canvas.getBoundingClientRect();
+    const localX = event.clientX - canvasRect.left;
+    const localY = event.clientY - canvasRect.top;
+    if (localX < pad.left || localX > canvasRect.width - pad.right || localY < pad.top || localY > canvasRect.height - pad.bottom) {
+      hide();
+      return;
+    }
+    const index = Math.max(0, Math.min(labels.length - 1, Math.round(((localX - pad.left) / Math.max(1, plotW)) * (labels.length - 1))));
+    showIndex(index);
+  };
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerleave", hide);
+  canvas.addEventListener("pointercancel", hide);
+  canvas._trendTooltipCleanup = () => {
+    canvas.removeEventListener("pointermove", move);
+    canvas.removeEventListener("pointerleave", hide);
+    canvas.removeEventListener("pointercancel", hide);
+    layer.remove();
+  };
+  const restoredIndex = restoredChartTooltipIndex(labels, readChartTooltipState(canvas.id, "line"));
+  if (restoredIndex >= 0) showIndex(restoredIndex);
 }
 
 function drawLineChart(id, series, labels, options = {}) {
@@ -5011,6 +6640,7 @@ function drawLineChart(id, series, labels, options = {}) {
     ctx.fillText(label, x, height - 5);
   }
   ctx.textAlign = "left";
+  if (options.tooltip !== false) bindLineChartTooltip(canvas, series, labels, { pad, plotW, plotH, xAt, yAt }, options);
 }
 
 function drawChemicalConsumptionTrend() {
@@ -5085,6 +6715,95 @@ function drawChemicalConsumptionTrend() {
     ctx.fillText(label, pad.left + gap * bucketIndex + gap / 2, height - 8);
   });
   ctx.textAlign = "left";
+  const chemicalNames = new Map(available.map((item) => [item.chemical_code, item.chemical_name]));
+  bindBarChartTooltip(canvas, buckets.map((bucket, bucketIndex) => ({
+    label: bucket,
+    total: totals[bucketIndex],
+    segments: visibleCodes.map((code) => ({
+      label: `${code} · ${chemicalNames.get(code) || "Chemical"}`,
+      value: values.get(`${bucket}|${code}`) || 0,
+      color: chemicalColorFor(data, code),
+      unit: "kg",
+    })).filter((item) => item.value > 0),
+  })), { pad, plotW: plotWidth, plotH: plotHeight, gap, barW: barWidth, max }, {
+    unit: "kg",
+    showTotal: true,
+    tooltipLabelFormatter: (bucket) => {
+      const date = new Date(bucket);
+      if (!Number.isFinite(date.getTime())) return bucket;
+      if (data.range.granularity === "month") return date.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+      if (data.range.granularity === "hour") return date.toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+      return date.toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+    },
+  });
+}
+
+function bindBarChartTooltip(canvas, items, geometry, options = {}) {
+  const parent = canvas.parentElement;
+  if (!parent || !items.length) return;
+  canvas._barTooltipCleanup?.();
+  [...parent.children].filter((element) => element.classList?.contains("bar-hover-layer")).forEach((element) => element.remove());
+  parent.classList.add("has-trend-hover");
+  const layer = document.createElement("div");
+  layer.className = "trend-hover-layer bar-hover-layer";
+  layer.setAttribute("aria-hidden", "true");
+  layer.innerHTML = `<span class="bar-hover-highlight"></span><div class="trend-hover-tooltip"></div>`;
+  parent.appendChild(layer);
+  const highlight = layer.querySelector(".bar-hover-highlight");
+  const tooltip = layer.querySelector(".trend-hover-tooltip");
+  const { pad, plotW, plotH, gap, barW, max } = geometry;
+  let currentIndex = -1;
+  const hide = () => {
+    layer.classList.remove("visible");
+    currentIndex = -1;
+    clearChartTooltipState(canvas.id);
+  };
+  const showIndex = (index) => {
+    const item = items[index];
+    const x = canvas.offsetLeft + pad.left + gap * index + (gap - barW) / 2;
+    const total = Number(item.total || 0);
+    const barHeight = Math.max(2, total / Math.max(1, max) * plotH);
+    highlight.style.left = `${x}px`;
+    highlight.style.top = `${canvas.offsetTop + pad.top + plotH - barHeight}px`;
+    highlight.style.width = `${barW}px`;
+    highlight.style.height = `${barHeight}px`;
+    const segments = (item.segments || []).filter((segment) => Number.isFinite(Number(segment.value)));
+    const title = options.tooltipLabelFormatter ? options.tooltipLabelFormatter(item.label, index, items) : trendTooltipTimeLabel(item.label, index, items.map((entry) => entry.label), options);
+    const totalRow = options.showTotal && segments.length > 1 ? `<span class="trend-tooltip-total"><i></i><em>Total</em><b>${total.toLocaleString("id-ID", { maximumFractionDigits: options.tooltipDecimals ?? 2 })}${options.unit ? ` ${actualText(options.unit)}` : ""}</b></span>` : "";
+    tooltip.innerHTML = `<strong>${actualText(title)}</strong>${totalRow}${segments.map((segment) => `<span><i style="background:${actualText(segment.color || "#078eaa")}"></i><em>${actualText(segment.label)}</em><b>${Number(segment.value).toLocaleString("id-ID", { maximumFractionDigits: options.tooltipDecimals ?? 2 })}${segment.unit ? ` ${actualText(segment.unit)}` : ""}</b></span>`).join("")}`;
+    layer.classList.add("visible");
+    const tooltipWidth = tooltip.offsetWidth;
+    const barCenter = x + barW / 2;
+    const preferredLeft = barCenter + 12;
+    tooltip.style.left = `${preferredLeft + tooltipWidth <= parent.clientWidth - 8 ? preferredLeft : Math.max(8, barCenter - tooltipWidth - 12)}px`;
+    tooltip.style.top = `${Math.max(6, canvas.offsetTop + pad.top + 4)}px`;
+    if (currentIndex !== index) rememberChartTooltipState(canvas.id, "bar", index, item.label);
+    currentIndex = index;
+  };
+  const move = (event) => {
+    const canvasRect = canvas.getBoundingClientRect();
+    const localX = event.clientX - canvasRect.left;
+    const localY = event.clientY - canvasRect.top;
+    if (localX < pad.left || localX > canvasRect.width - pad.right || localY < pad.top || localY > canvasRect.height - pad.bottom) {
+      hide();
+      return;
+    }
+    const index = Math.max(0, Math.min(items.length - 1, Math.floor((localX - pad.left) / Math.max(1, gap))));
+    showIndex(index);
+  };
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerdown", move);
+  canvas.addEventListener("pointerleave", hide);
+  canvas.addEventListener("pointercancel", hide);
+  canvas._barTooltipCleanup = () => {
+    canvas.removeEventListener("pointermove", move);
+    canvas.removeEventListener("pointerdown", move);
+    canvas.removeEventListener("pointerleave", hide);
+    canvas.removeEventListener("pointercancel", hide);
+    layer.remove();
+  };
+  const restoredIndex = restoredChartTooltipIndex(items.map((item) => item.label), readChartTooltipState(canvas.id, "bar"));
+  if (restoredIndex >= 0) showIndex(restoredIndex);
 }
 
 function drawBarChart(id, data, labels, colors, options = {}) {
@@ -5156,6 +6875,11 @@ function drawBarChart(id, data, labels, colors, options = {}) {
     }
   });
   ctx.textAlign = "left";
+  if (options.tooltip !== false) bindBarChartTooltip(canvas, data.map((value, index) => ({
+    label: labels[index],
+    total: value,
+    segments: [{ label: options.seriesLabel || "Value", value, color: colors[index] || "#078eaa", unit: options.unit || "" }],
+  })), { pad, plotW, plotH, gap, barW, max }, options);
 }
 
 function drawElectricalDistributionChart() {
@@ -5329,10 +7053,10 @@ function drawHistoricalTrend() {
   const visibleValues = values.slice(startIndex, endIndex);
   const visibleSpan = visibleTimestamps.at(-1) - visibleTimestamps[0];
   drawLineChart("trends-chart", [
-    { data: visibleValues.map((item) => item.temperature), color: "#078eaa", fill: true },
-    { data: visibleValues.map((item) => item.setpoint), color: "#8b999f", dash: true },
-    { data: visibleValues.map((item) => item.level), color: "#119b70" },
-    { data: visibleValues.map((item) => item.steam), color: "#d68b05" },
+    { data: visibleValues.map((item) => item.temperature), color: "#078eaa", fill: true, label: "Temperature PV", unit: "°C" },
+    { data: visibleValues.map((item) => item.setpoint), color: "#8b999f", dash: true, label: "Temperature SV", unit: "°C" },
+    { data: visibleValues.map((item) => item.level), color: "#119b70", label: "Level", unit: "%" },
+    { data: visibleValues.map((item) => item.steam), color: "#d68b05", label: "Steam", unit: "%" },
   ], visibleTimestamps, { labelFormatter: (timestamp) => historicalAxisLabel(timestamp, visibleSpan) });
   updateHistoricalViewportUI(visibleTimestamps[0], visibleTimestamps.at(-1));
 }
@@ -5474,11 +7198,43 @@ document.getElementById("main-nav").addEventListener("click", (event) => {
   const button = event.target.closest("[data-page]");
   if (button) navigate(button.dataset.page);
 });
-document.getElementById("alarm-shortcut").addEventListener("click", () => navigate("alarms"));
+document.getElementById("alarm-shortcut").addEventListener("click", openActiveAlarmPage);
 document.getElementById("menu-button").addEventListener("click", openSidebar);
 document.getElementById("sidebar-close").addEventListener("click", closeSidebar);
 document.getElementById("sidebar-backdrop").addEventListener("click", closeSidebar);
 window.addEventListener("resize", () => requestAnimationFrame(initPageCharts));
+document.addEventListener("pointerdown", (event) => {
+  realtimeUiRefresh.activePointers.add(event.pointerId);
+  markRealtimeInteraction();
+}, true);
+document.addEventListener("pointerup", (event) => {
+  realtimeUiRefresh.activePointers.delete(event.pointerId);
+  markRealtimeInteraction();
+  if (realtimeUiRefresh.pending) scheduleSafeRealtimeRender();
+}, true);
+document.addEventListener("pointercancel", (event) => {
+  realtimeUiRefresh.activePointers.delete(event.pointerId);
+  markRealtimeInteraction();
+}, true);
+document.addEventListener("focusin", markRealtimeInteraction, true);
+document.addEventListener("focusout", () => {
+  markRealtimeInteraction();
+  if (realtimeUiRefresh.pending) scheduleSafeRealtimeRender();
+}, true);
+document.addEventListener("keydown", markRealtimeInteraction, true);
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  closeSidebar();
+  if (state.motorDrive.selected) {
+    state.motorDrive.selected = null;
+    state.motorDrive.source = null;
+    renderPage({ preserveScroll: true });
+  }
+}, true);
+document.addEventListener("wheel", markRealtimeInteraction, { capture: true, passive: true });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && realtimeUiRefresh.pending) scheduleSafeRealtimeRender();
+});
 
 updateAlarmCounts();
 updateClock();
@@ -5486,4 +7242,5 @@ renderPage();
 connectNonJetflowBackend();
 connectRealtimeChannel();
 window.setInterval(updateClock, 1000);
+window.setInterval(updateMachineConnectionIndicators, 1000);
 window.setInterval(updateLiveNumbers, 1800);

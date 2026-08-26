@@ -7,11 +7,16 @@ export class HistorianAggregationService implements OnModuleInit, OnModuleDestro
   private readonly logger = new Logger(HistorianAggregationService.name);
   private timer?: NodeJS.Timeout;
   private running = false;
+  private timescaleEnabled = false;
 
   constructor(private readonly database: DatabaseService) {}
 
   async onModuleInit() {
-    await this.refreshRollingWindow();
+    const extension = await this.database.query("SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'");
+    this.timescaleEnabled = Boolean(extension.rows[0]);
+    if (this.timescaleEnabled) {
+      this.logger.log(`TimescaleDB ${extension.rows[0].extversion} aktif; telemetry rollup dikelola continuous aggregate.`);
+    }
     this.timer = setInterval(() => void this.refreshRollingWindow(), 5 * 60_000);
     this.timer.unref();
   }
@@ -26,7 +31,9 @@ export class HistorianAggregationService implements OnModuleInit, OnModuleDestro
     try {
       const to = new Date();
       const from = new Date(to.getTime() - 48 * 60 * 60_000);
-      await this.database.query("SELECT refresh_telemetry_rollups($1::timestamptz, $2::timestamptz)", [from.toISOString(), to.toISOString()]);
+      if (!this.timescaleEnabled) {
+        await this.database.query("SELECT refresh_telemetry_rollups($1::timestamptz, $2::timestamptz)", [from.toISOString(), to.toISOString()]);
+      }
       await this.database.query("SELECT refresh_utility_rollups($1::timestamptz, $2::timestamptz)", [from.toISOString(), to.toISOString()]);
       await this.database.query("SELECT refresh_machine_state_rollups($1::timestamptz, $2::timestamptz)", [from.toISOString(), to.toISOString()]);
       await this.database.query("SELECT refresh_equipment_rollups($1::timestamptz, $2::timestamptz)", [from.toISOString(), to.toISOString()]);

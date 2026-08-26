@@ -4,6 +4,541 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## P&ID Live State Architecture v1.1 — 26 Agustus 2026
+
+**Status:** Asset heartbeat implemented
+
+### Ditambahkan
+
+- Satu canonical heartbeat untuk setiap 138 asset aktif.
+- `tag_definition.freshness_mode` untuk memisahkan freshness diskrit dan analog.
+- View `asset_communication_state` dan endpoint status komunikasi per asset.
+- WebSocket full-asset refresh hanya ketika kualitas heartbeat berubah.
+- Migration ledger `schema_migration` agar migration hanya dijalankan sekali dan aman saat backend restart.
+
+### Perilaku
+
+- Feedback diskrit menyimpan state terakhir selama heartbeat sehat.
+- PV/SV analog tetap wajib segar per timestamp tag.
+- Heartbeat timeout otomatis mengubah seluruh device asset menjadi stale tanpa menumpuk telemetry feedback.
+
+---
+
+## Chemical Dispensing Calator v1.10 — 26 Agustus 2026
+
+**Status:** Valve-only registry
+
+### Diubah
+
+- Scope dispensing disederhanakan menjadi live valve monitoring tanpa motor tag/diagnostic.
+- Registry area Belakang dan Timur diverifikasi lengkap sesuai jumlah route setiap unit.
+
+### Dihapus
+
+- 180 motor tag yang belum memiliki telemetry aktual.
+- 15 motor equipment master dan 75 equipment telemetry test row melalui cascade.
+
+### Hasil akhir
+
+- 63 valve element dan 126 tag `OPEN_FB`/`FAULT_FB` untuk lima dispensing unit.
+
+---
+
+## Chemical Dispensing Calator v1.9 — 26 Agustus 2026
+
+**Status:** Complete valve and motor registry
+
+### Ditambahkan
+
+- 8 inlet valve, transfer valve, dan route valve sesuai unit untuk seluruh lima dispensing.
+- Feedback `OPEN_FB` dan `FAULT_FB` pada setiap valve.
+- Master Inlet Pump, Tank 1 Mixer, dan Transfer Pump pada setiap dispensing.
+- Status, fault, 3-phase current/voltage, kW, Hz, runtime, dan energy untuk setiap motor.
+- Migration idempotent `0014_dispensing_calator_tag_registry.sql`.
+
+### Diubah
+
+- Initial SVG state tanpa telemetry menjadi netral; hijau hanya untuk state live aktual.
+
+---
+
+## Machine Kalender v1.20 — 26 Agustus 2026
+
+**Status:** Correct cylinder wrap and loadcell rollers
+
+### Diubah
+
+- Kain merah melingkari cylinder Upper Felt dan Lower Felt.
+- Felt tetap digambar sebagai loop segitiga yang membungkus cylinder.
+- LC Upper dan LC Lower menjadi small measuring roller setelah keluaran felt terkait.
+- Guide G1–G3 dihapus; proses berikutnya langsung menuju exit guide dan cooling belt.
+
+---
+
+## Machine Kalender v1.19 — 26 Agustus 2026
+
+**Status:** Reference-aligned felt-loop flow
+
+### Diubah
+
+- Upper dan lower felt menjadi dua loop segitiga terpisah dengan guide serta drive roller.
+- Expander menggunakan dua roller memanjang sesuai bentuk referensi.
+- Jalur kain melewati contact/transfer guide G1–G3 di antara kedua loop, bukan membungkus cylinder secara langsung.
+- Bagian proses lain dan seluruh live binding dipertahankan.
+
+---
+
+## Machine Kalender v1.18 — 26 Agustus 2026
+
+**Status:** Simplified and corrected Expander–Upper/Lower flow
+
+### Diubah
+
+- Instrument yang mengganggu jalur dipindahkan ke status strip per process zone.
+- Roller acak pada frame upper/lower dihapus dan diganti entry/exit guide yang memiliki fungsi jelas.
+- Expander disusun pada satu sumbu diagonal; upper felt di atas-kiri dan lower felt di bawah-kanan mengikuti referensi.
+- Jalur kain dibuat mengikuti upper dan lower felt sebelum keluar menuju cooling belt.
+- Titik loadcell ditampilkan sebagai bearing point `LC-U` dan `LC-L`.
+
+---
+
+## Machine Kalender v1.17 — 26 Agustus 2026
+
+**Status:** Corrected P&ID fabric flow
+
+### Diubah
+
+- Jalur kain dibuat satu arah dan kontinu dari fabric supply sampai plaiter output table.
+- Posisi inlet roller, expander, guide roller, upper/lower cylinder, loadcell, cooling belt, dancing roller, conveyor, dan folder disusun ulang mengikuti alur aktual.
+- Garis kain tidak lagi saling silang dan folded fabric ditempatkan di atas meja output.
+- Kanvas diperlebar dan diberi pembagian empat process zone agar label tidak bertabrakan.
+
+### Dipertahankan
+
+- Seluruh `data-element-code`, live-state binding PostgreSQL/WebSocket, dan fungsi minimize P&ID tetap kompatibel.
+
+---
+
+## Batch Abnormal Log Backend Implementation v1.1 — 26 Agustus 2026
+
+**Status:** Implemented foundation
+
+### Ditambahkan
+
+- Migration `0013_process_deviation_engine.sql` untuk rule, target revision, SV change, deviation event, dan durable state.
+- NestJS Process Deviation Engine dengan lifecycle RAMPING/STABLE/DEVIATING, time-to-target, hold-target, hysteresis, confirmation time, dan pause saat HOLD.
+- API konfigurasi serta endpoint target achievement, setpoint changes, abnormality pagination, dan acknowledgement.
+- Target Achievement Log, Setpoint Change Log, Batch Abnormality Log aktual, form konfigurasi PV/SV, serta tambahan export PDF/XLSX.
+
+### Diverifikasi
+
+- Build frontend/backend berhasil, migration aktif di TimescaleDB lokal, dan lifecycle target/SV/deviation lolos uji end-to-end tanpa meninggalkan data dummy.
+
+---
+
+## Batch Abnormal Log Backend Flow v1.0 — 26 Agustus 2026
+
+**Status:** Dokumentasi implementasi aktual dan target arsitektur
+
+### Ditambahkan
+
+- Dokumentasi alur Batch Abnormal Log dari telemetry, Alarm Engine, `alarm_event`, batch context, WebSocket, hingga export.
+- Pemetaan batas implementasi saat ini: rule statis HIGH/LOW sudah aktif, sedangkan evaluasi dinamis PV terhadap SV per process step belum tersedia sebagai event khusus.
+- Rancangan `process_deviation_rule`, `process_deviation_event`, state machine, API terpaging, korelasi langsung ke process run/step, dan roadmap implementasi.
+
+---
+
+## Machine Kalender v1.15 — 24 Agustus 2026
+
+**Status:** Top-positioned collapsible P&ID
+
+### Diubah
+
+- P&ID dipindahkan tepat setelah header identitas mesin, sebelum card summary dan live sensor.
+
+### Ditambahkan
+
+- Tombol Minimize/Expand pada header P&ID.
+- Toggle lokal tanpa page re-render sehingga scroll tidak berpindah dan panel tidak berkedip.
+- Penyimpanan preference P&ID pada local browser storage agar tetap konsisten setelah realtime refresh atau reload.
+
+### Dipertahankan
+
+- SVG, element code, dan integrasi data tidak berubah.
+
+---
+
+## Machine Kalender v1.14 — 24 Agustus 2026
+
+**Status:** Fabric path and collision refinement
+
+### Diperbaiki
+
+- Fabric path dibuat menjadi satu lintasan tanpa loop atau arah yang berulang.
+- Loadcell dipindahkan dari fabric path menjadi instrument callout pada roll.
+- Temperature Lower, Loadcell Lower, dan motor Lower dipisahkan agar tidak bertabrakan.
+- Lower steam branch dipindahkan keluar dari area nip fabric.
+- Ketebalan fabric path dan outline dikurangi untuk meningkatkan keterbacaan.
+
+### Dipertahankan
+
+- Seluruh `data-element-code` dan kesiapan binding ke `instrument_state` tidak berubah.
+
+---
+
+## Machine Kalender v1.13 — 24 Agustus 2026
+
+**Status:** P&ID process schematic implemented
+
+### Ditambahkan
+
+- P&ID Kalender pada detail setiap asset Kalender.
+- Empat zona proses: Infeed & Expander, Heating & Pressure, Cooling & Tension, serta Output.
+- Fabric path kontinu dari inlet sampai lipatan kain di atas plaiter table.
+- Steam header, inlet valve, upper/lower heating valve, temperature instrument, dan loadcell instrument.
+- Cooling belt, dancing roller, conveyor belt, chute, plaiter, dan motor equipment.
+- `data-element-code` untuk integrasi status melalui `instrument_state`.
+
+### Diperbaiki
+
+- Jalur fabric dan steam dipisahkan dengan warna serta hierarchy berbeda.
+- Posisi equipment dan pipa diberi ruang tepi yang konsisten agar tetap terbaca pada halaman detail mesin.
+
+---
+
+## Chemical Dispensing Calator v1.7 — 24 Agustus 2026
+
+**Status:** Modern industrial P&ID layout
+
+### Diperbaiki
+
+- Delapan inlet dipindahkan ke satu supply rack agar seluruh pipa masuk ke common manifold tanpa jalur silang.
+- Tank 1, loadcell, transfer valve, transfer pump, Tank 2, dan distribution header disusun mengikuti arah proses yang konsisten.
+- Cabang tujuan Calator dibuat sejajar dan diberi ruang tepi yang lebih lega.
+- Simbol valve, actuator, pump, instrument bubble, vessel, flow arrow, dan equipment tag diperbarui menjadi lebih industrial.
+
+### Ditambahkan
+
+- Tiga zona proses visual: Supply, Weighing & Transfer, dan Calator Distribution.
+- `data-element-code` pada valve, vessel, pump, manifold, loadcell, dan route untuk binding ke `instrument_state`.
+- Label supply chemical dinamis dari hasil analytics PostgreSQL dengan fallback line generik tanpa nilai proses palsu.
+
+---
+
+## P&ID Live State Architecture v1.0 — 24 Agustus 2026
+
+**Status:** Implemented live signal foundation
+
+### Ditambahkan
+
+- `tag_latest` sebagai generic latest-value store untuk seluruh canonical tag.
+- Trigger historian agar seluruh jalur ingest otomatis memperbarui live value tanpa query tambahan di Node-RED.
+- `instrument_state` sebagai operational view untuk element/parameter P&ID, effective quality, dan semantic state.
+- Konfigurasi `stale_after_seconds` per tag dengan default awal 30 detik.
+- REST API initial/delta state per asset dan filter element.
+- WebSocket room per asset dengan event `instrument:delta`.
+
+### Diverifikasi
+
+- Data aktual memperbarui latest state otomatis.
+- Legacy dan canonical tag terbaru sama-sama diparsing berdasarkan posisi `asset_id`.
+- Valve feedback transactional menghasilkan `OPEN` tanpa meninggalkan dummy data.
+- REST dan WebSocket asset-specific berhasil digunakan.
+
+---
+
+## TimescaleDB Historian Integration v1.0 — 22 Agustus 2026
+
+**Status:** Active high-volume telemetry historian
+
+### Ditambahkan
+
+- `telemetry_sample` dikonversi menjadi hypertable dengan chunk harian.
+- Continuous aggregate 1 menit, 15 menit, dan harian untuk query trend.
+- Background refresh, raw retention 30 hari, aggregate retention bertingkat, dan columnstore setelah 7 hari.
+- NestJS membaca continuous aggregate dan melaporkan versi TimescaleDB pada integration status.
+- Tabel aggregate native tetap dipertahankan sebagai rollback path.
+
+### Diverifikasi
+
+- Seluruh 1.505.011 raw sample tetap tersedia setelah konversi.
+- Hypertable terbagi menjadi 6 chunk dan tiga continuous aggregate aktif.
+
+---
+
+## External Batch Ingestion API v1.2 — 22 Agustus 2026
+
+**Status:** Active batch snapshot projection
+
+### Diperbaiki
+
+- `batch_process_run` menjadi source of truth untuk nomor batch dan progress aktif.
+- Progress disimpan langsung pada process run, bukan hanya pada snapshot.
+- Trigger PostgreSQL mencegah refresh telemetry menghapus konteks batch aktif.
+- API asset membaca active process run sebagai fallback snapshot.
+- Sinkronisasi `KL-DPN-05` diverifikasi tetap bertahan setelah refresh Node-RED.
+
+---
+
+## External Batch Ingestion API v1.1 — 22 Agustus 2026
+
+**Status:** Perbaikan process run progress desimal
+
+### Diperbaiki
+
+- `external_run_id` tetap diperlakukan sebagai text dan tidak memerlukan UUID.
+- `process_run_id` tetap menjadi UUID internal yang dibuat otomatis oleh backend.
+- Parameter `progress_percent` pada sinkronisasi `asset_snapshot` sekarang dicast sebagai numeric sehingga nilai desimal seperti `42.5` tidak lagi menghasilkan PostgreSQL `22P02`.
+- Payload aktual diverifikasi menghasilkan HTTP `201` dan record process run tersimpan.
+
+---
+
+## Dashboard V2.1 — 22 Agustus 2026
+
+**Status:** External production batch ingestion
+
+### Ditambahkan
+
+- `POST /api/v1/batch/production-batches` untuk upsert master batch.
+- `POST /api/v1/batch/process-runs` untuk upsert pelaksanaan batch pada asset.
+- Idempotency, stale-message protection, asset/process validation, dan active-run conflict protection.
+- Metadata sumber eksternal dan raw metadata JSON pada PostgreSQL.
+- Sinkronisasi batch context ke `asset_snapshot` serta WebSocket refresh.
+- Optional `X-API-Key` enforcement melalui `INGEST_API_KEY`.
+
+---
+
+## Dashboard V2.0 — 22 Agustus 2026
+
+**Status:** V2 development baseline
+
+### Diubah
+
+- Workspace aktif dinaikkan menjadi Dashboard V2.0.
+- Badge versi dan package semantic version diperbarui.
+- Namespace navigation, historian parameter, dan trend inspection state dipisahkan dari V1.
+- Seluruh fitur final V1.63 dipertahankan sebagai baseline awal V2.
+
+---
+
+## Dashboard V1.63 — 22 Agustus 2026
+
+**Status:** Final V1 presentation baseline
+
+### Diperbaiki
+
+- Tooltip dipulihkan pada siklus render yang sama sehingga tidak berkedip saat refresh real-time.
+- Badge versi ditambahkan pada header.
+- Source, build, backend, migrasi, dan dokumentasi dibekukan sebagai paket ZIP V1 terpisah tanpa credential.
+
+---
+
+## Dashboard V1.62 — 22 Agustus 2026
+
+**Status:** Persistent trend inspection state
+
+### Diperbaiki
+
+- Tooltip line dan bar tidak lagi menghilang saat chart dirender ulang oleh refresh real-time.
+- Titik waktu/kategori terakhir dipulihkan setelah reload halaman.
+- Timestamp terdekat digunakan jika bucket historian sudah bergeser.
+- Tooltip tetap ditutup saat pointer memang keluar dari grafik.
+
+---
+
+## Dashboard V1.61 — 22 Agustus 2026
+
+**Status:** Interactive bar-chart tooltip
+
+### Ditambahkan
+
+- Hover/touch tooltip pada seluruh grafik batang.
+- Highlight pada batang atau interval yang sedang dipilih.
+- Chemical stacked bar menampilkan waktu, total konsumsi, dan rincian setiap chemical aktif.
+
+---
+
+## Dashboard V1.60 — 22 Agustus 2026
+
+**Status:** Interactive trend value tooltip
+
+### Ditambahkan
+
+- Hover pointer, crosshair, dan marker titik pada line trend.
+- Tooltip berisi timestamp, nama series, nilai dua digit desimal, serta engineering unit.
+- Label khusus untuk PV/SV dan motor phase R/S/T.
+
+---
+
+## Dashboard V1.59 — 22 Agustus 2026
+
+**Status:** Read-only machine alarm context
+
+### Diubah
+
+- Tombol `View` pada alarm note detail mesin dihapus.
+- Note menampilkan waktu mulai, parameter/rule, threshold, unit, dan nilai aktual pemicu alarm.
+- Alarm API diperkaya menggunakan metadata `alarm_rule` dan `tag_definition`.
+- Layout note dirapikan untuk desktop, tablet, dan mobile.
+
+---
+
+## Dashboard V1.58 — 22 Agustus 2026
+
+**Status:** Header alarm asset emphasis
+
+### Diubah
+
+- Alarm carousel dipindahkan ke sebelah kiri indikator LIVE.
+- Asset ID dibuat lebih tebal dan kontras dibandingkan judul alarm.
+- Asset dengan critical alarm menggunakan warna danger.
+
+---
+
+## Dashboard V1.57 — 22 Agustus 2026
+
+**Status:** Compact active-alarm carousel
+
+### Diubah
+
+- Alarm banner besar diganti satu compact carousel di sebelah indikator LIVE.
+- Tampilan awal hanya berisi severity, asset ID, dan judul alarm.
+- Banyak alarm aktif tetap berada dalam satu container dengan previous/next dan swipe.
+- Klik alarm langsung membuka detail mesin terkait, bukan Alarm & Event Log.
+- Priority carousel mengikuti urutan critical, warning, lalu info.
+
+---
+
+## Dashboard V1.56 — 22 Agustus 2026
+
+**Status:** Inline header alarm banner
+
+### Diperbaiki
+
+- Floating alarm dropdown dihapus.
+- Alarm banner menjadi baris kedua di dalam container header.
+- Header bertambah tinggi dan mendorong konten halaman sehingga tidak ada card atau menu yang tertutup.
+- Isi alarm disusun horizontal dan responsif agar tinggi banner tetap ringkas.
+
+---
+
+## Dashboard V1.55 — 22 Agustus 2026
+
+**Status:** Header alarm notification panel
+
+### Diubah
+
+- Popup alarm dipindahkan ke panel yang terikat pada ikon alarm di header kanan atas.
+- Alarm notification dan general application toast menggunakan container terpisah.
+- Panel alarm memiliki batas tinggi dan scroll internal agar tidak menghalangi kontrol bagian bawah halaman.
+- Lifecycle critical, warning, minimize, close, badge, dan navigasi menuju tabel alarm aktif tetap dipertahankan.
+
+---
+
+## Dashboard V1.54 — 22 Agustus 2026
+
+**Status:** Active alarm operational awareness
+
+### Ditambahkan
+
+- Note alarm aktif pada Machine Directory, kartu mesin, dan header detail mesin.
+- Tabel Active Alarm Conditions sebagai bagian monitoring pertama pada halaman alarm.
+- Popup critical persisten sampai event clear.
+- Tombol minimize dan close untuk popup warning/info tanpa menghapus event.
+- Navigasi langsung dari badge, popup, dan note mesin menuju tabel alarm aktif.
+
+### Diubah
+
+- Badge sidebar dan topbar menghitung semua event aktif walaupun sudah acknowledged.
+- Alarm Configuration dipindahkan ke bagian paling bawah halaman.
+- API alarm memisahkan histori terbatas dari daftar alarm aktif lengkap.
+- Refresh rollup historian tidak lagi menahan startup NestJS.
+
+### Validasi
+
+- Endpoint mengembalikan `active_count = 2` dan dua row `active_alarms` aktual pada saat pengujian.
+- Frontend dan backend TypeScript berhasil dibangun.
+
+---
+
+## Dashboard V1.53 — 21 Agustus 2026
+
+**Status:** Alarm form input stability
+
+### Diperbaiki
+
+- Draft konfigurasi alarm dipertahankan saat refresh realtime dan pemuatan tag.
+- Asset, tag, threshold, severity, message, recommendation, serta enabled tidak lagi kembali ke nilai awal ketika form sedang diisi.
+- Input threshold dan hysteresis menerima desimal titik maupun koma.
+- Draft hanya dibersihkan setelah penyimpanan berhasil atau operator menekan Cancel.
+
+---
+
+## Dashboard V1.52 — 21 Agustus 2026
+
+**Status:** Configurable alarm rule engine
+
+### Ditambahkan
+
+- Frontend alarm configuration berdasarkan asset dan tag PostgreSQL aktual.
+- Threshold HIGH/HIGH-HIGH/LOW/LOW-LOW, delay, hysteresis, severity, message, recommendation, dan enable/disable.
+- NestJS alarm engine dengan state NORMAL/PENDING/ACTIVE.
+- Lifecycle alarm event aktif, acknowledgement, dan cleared tanpa row duplikat.
+- Popup alarm realtime melalui WebSocket.
+- Audit konfigurasi rule dan cursor telemetry yang bertahan saat backend restart.
+
+### Validasi
+
+- Nilai 1000 pada rule HIGH 999 mengaktifkan alarm.
+- Nilai 980 dengan hysteresis 10 menutup event dan mengembalikan engine ke NORMAL.
+- Record validasi sementara telah dibersihkan.
+
+---
+
+## Dashboard V1.51 — 21 Agustus 2026
+
+**Status:** Sidebar scrollbar refinement
+
+### Diubah
+
+- Scrollbar sidebar menggunakan track transparan dan thumb membulat sesuai tema gelap.
+- Area putih dan tombol panah scrollbar bawaan tidak lagi ditampilkan.
+- Overscroll pada navigasi sidebar tidak diteruskan ke halaman utama.
+
+---
+
+## Dashboard V1.50 — 21 Agustus 2026
+
+**Status:** Persistent navigation
+
+### Ditambahkan
+
+- Penyimpanan menu, area, detail mesin, batch tracking, dan scope summary terakhir pada browser.
+- Validasi fallback jika area atau asset tersimpan sudah tidak tersedia pada master PostgreSQL aktual.
+
+### Diubah
+
+- Refresh dashboard tidak lagi selalu kembali ke Plant Overview.
+
+---
+
+## Dashboard V1.49 — 21 Agustus 2026
+
+**Status:** Batch process export
+
+### Ditambahkan
+
+- Tombol Export PDF dan Export Excel di sebelah Load Batch.
+- Endpoint NestJS untuk membangun file export berdasarkan process run aktual.
+- PDF berisi konteks batch, process sequence, sensor summary, state, transition, dan abnormality.
+- Excel berisi delapan sheet termasuk parameter setting dan telemetry detail.
+
+### Validasi
+
+- Batch contoh Kalender menghasilkan PDF valid dan workbook Excel berisi 21.306 row telemetry aktual.
+
+---
+
 ## Dashboard V1.48 — 21 Agustus 2026
 
 **Status:** Dynamic peak parameter

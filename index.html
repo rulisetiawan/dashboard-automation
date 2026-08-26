@@ -63,7 +63,7 @@
           <div class="nav-group-label">Intelligence</div>
           <button class="nav-item" data-page="alarms">
             <span class="nav-icon">△</span><span class="nav-text">Alarms & Events</span>
-            <span class="nav-alert" id="nav-alarm-count">4</span>
+            <span class="nav-alert" id="nav-alarm-count">0</span>
           </button>
           <button class="nav-item" data-page="trends">
             <span class="nav-icon">⌗</span><span class="nav-text">Historical Trends</span>
@@ -86,21 +86,26 @@
 
       <main class="main-area">
         <header class="topbar">
-          <div class="topbar-left">
-            <button class="menu-button" id="menu-button" aria-label="Buka navigasi">☰</button>
-            <div class="breadcrumb">
-              <span>Digital Automation Dashboard</span><span class="crumb-separator">/</span><strong id="breadcrumb-page">Overview</strong>
+          <div class="topbar-main">
+            <div class="topbar-left">
+              <button class="menu-button" id="menu-button" aria-label="Buka navigasi">☰</button>
+              <div class="breadcrumb">
+                <span>Digital Automation Dashboard</span><span class="dashboard-version">V2.1</span><span class="crumb-separator">/</span><strong id="breadcrumb-page">Overview</strong>
+              </div>
             </div>
-          </div>
-          <div class="topbar-actions">
-            <div class="live-indicator"><span class="pulse-dot"></span><span>LIVE</span><strong id="header-clock">--:--:--</strong></div>
-            <button class="shift-button" id="shift-button"><span>Shift A</span><strong>06:00—14:00</strong></button>
-            <button class="icon-button" id="alarm-shortcut" aria-label="Buka alarm">
-              <span>△</span><i id="header-alarm-count">4</i>
-            </button>
-            <button class="user-button" aria-label="Profil pengguna">
-              <span class="avatar">AR</span><span class="user-copy"><strong>Adi Rahman</strong><small>Shift Leader</small></span>
-            </button>
+            <div class="topbar-actions">
+              <div id="alarm-popup-root" class="alarm-popup-root" aria-live="polite" aria-label="Active alarm notifications"></div>
+              <div class="live-indicator"><span class="pulse-dot"></span><span>LIVE</span><strong id="header-clock">--:--:--</strong></div>
+              <button class="shift-button" id="shift-button"><span>Shift A</span><strong>06:00—14:00</strong></button>
+              <div class="alarm-notification-anchor">
+                <button class="icon-button" id="alarm-shortcut" aria-label="Buka alarm">
+                  <span>△</span><i id="header-alarm-count">0</i>
+                </button>
+              </div>
+              <button class="user-button" aria-label="Profil pengguna">
+                <span class="avatar">AR</span><span class="user-copy"><strong>Adi Rahman</strong><small>Shift Leader</small></span>
+              </button>
+            </div>
           </div>
         </header>
 
