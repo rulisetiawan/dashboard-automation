@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.6 / NestJS PostgreSQL Integration V1.14 — 27 Agustus 2026
+
+**Status:** Pemilihan tanggal dan shift implemented
+
+### Ditambahkan
+
+- Filter `Production date` dan pilihan Shift A/B/C pada Machine Performance Summary.
+- Shift A `07.00–15.00`, Shift B `15.00–23.00`, dan Shift C `23.00–07.00` dalam zona `Asia/Jakarta`.
+- Query API `production_date` dan `shift_code` untuk membuka summary shift historis.
+- Shift C setelah tengah malam tetap menggunakan production date saat shift dimulai.
+- Cache frontend dipisahkan per asset, tanggal produksi, dan kode shift.
+
+### Validasi
+
+- Tanggal wajib `YYYY-MM-DD`, kode shift wajib A/B/C, dan keduanya harus dikirim bersama.
+- Shift masa depan ditolak; shift berjalan dihitung sampai waktu sekarang dan shift selesai memakai jendela delapan jam penuh.
+- Batch yang melintasi boundary tetap dihitung berdasarkan overlap event pada range shift terpilih.
+
+---
+
 ## Dashboard V2.5 / Chemical Dispensing Concept V1.13 — 27 Agustus 2026
 
 **Status:** Readout live loadcell diperjelas

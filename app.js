@@ -1,3 +1,25 @@
+function jakartaShiftSelection(timestamp = Date.now()) {
+  const values = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(timestamp)).filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  const year = Number(values.year);
+  const month = Number(values.month) - 1;
+  const day = Number(values.day);
+  const hour = Number(values.hour);
+  const calendarDate = `${values.year}-${values.month}-${values.day}`;
+  if (hour >= 23) return { productionDate: calendarDate, calendarDate, shiftCode: "C" };
+  if (hour >= 15) return { productionDate: calendarDate, calendarDate, shiftCode: "B" };
+  if (hour >= 7) return { productionDate: calendarDate, calendarDate, shiftCode: "A" };
+  return { productionDate: new Date(Date.UTC(year, month, day - 1)).toISOString().slice(0, 10), calendarDate, shiftCode: "C" };
+}
+
+const defaultMachineShift = jakartaShiftSelection();
+
 const state = {
   page: "overview",
   selected: {
@@ -81,6 +103,8 @@ const state = {
   },
   machineSummary: {
     scope: "shift",
+    productionDate: defaultMachineShift.productionDate,
+    shiftCode: defaultMachineShift.shiftCode,
   },
   pidPanel: {
     kalender: false,
@@ -154,6 +178,8 @@ function restoreDashboardNavigation() {
       }
     });
     if (["batch", "shift", "today"].includes(saved.machineSummaryScope)) state.machineSummary.scope = saved.machineSummaryScope;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(saved.machineSummaryProductionDate || "")) state.machineSummary.productionDate = saved.machineSummaryProductionDate;
+    if (["A", "B", "C"].includes(saved.machineSummaryShiftCode)) state.machineSummary.shiftCode = saved.machineSummaryShiftCode;
     if (typeof saved.pidPanel?.kalender === "boolean") state.pidPanel.kalender = saved.pidPanel.kalender;
   } catch {
     // Gunakan default navigation jika browser storage tidak tersedia atau rusak.
@@ -168,6 +194,8 @@ function persistDashboardNavigation() {
       drill: state.drill,
       batchInvestigation: state.batchInvestigation,
       machineSummaryScope: state.machineSummary.scope,
+      machineSummaryProductionDate: state.machineSummary.productionDate,
+      machineSummaryShiftCode: state.machineSummary.shiftCode,
       pidPanel: state.pidPanel,
     }));
   } catch {
@@ -4544,7 +4572,8 @@ function actualMachineSummaryRun(machine, runs = backendProcessRuns) {
 
 function actualMachineSummaryKey(machine, runs = backendProcessRuns) {
   const run = state.machineSummary.scope === "batch" ? actualMachineSummaryRun(machine, runs) : null;
-  return `${machine.id}:${state.machineSummary.scope}:${run?.process_run_id || "latest"}`;
+  const shiftSelection = state.machineSummary.scope === "shift" ? `${state.machineSummary.productionDate}:${state.machineSummary.shiftCode}` : "current";
+  return `${machine.id}:${state.machineSummary.scope}:${shiftSelection}:${run?.process_run_id || "latest"}`;
 }
 
 async function loadActualMachineSummary(machine, runs = backendProcessRuns) {
@@ -4558,8 +4587,21 @@ async function loadActualMachineSummary(machine, runs = backendProcessRuns) {
     const url = new URL(`/api/v1/assets/${encodeURIComponent(machine.id)}/performance-summary`, window.location.origin);
     url.searchParams.set("scope", state.machineSummary.scope);
     if (run?.process_run_id) url.searchParams.set("process_run_id", run.process_run_id);
+    if (state.machineSummary.scope === "shift") {
+      url.searchParams.set("production_date", state.machineSummary.productionDate);
+      url.searchParams.set("shift_code", state.machineSummary.shiftCode);
+    }
     const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) throw new Error(response.status === 404 ? "Belum ada range batch untuk summary mesin ini." : "Performance summary API unavailable.");
+    if (!response.ok) {
+      let message = response.status === 404 ? "Belum ada range batch untuk summary mesin ini." : "Performance summary API unavailable.";
+      try {
+        const errorPayload = await response.json();
+        if (errorPayload?.message) message = Array.isArray(errorPayload.message) ? errorPayload.message.join(" ") : errorPayload.message;
+      } catch {
+        // Gunakan fallback message jika response bukan JSON.
+      }
+      throw new Error(message);
+    }
     actualMachineSummaries.set(key, { data: await response.json(), loadedAt: Date.now() });
   } catch (error) {
     actualMachineSummaryErrors.set(key, error instanceof Error ? error.message : "Performance summary unavailable");
@@ -4590,9 +4632,11 @@ function machinePerformanceSummary(machine, runs) {
   const cached = actualMachineSummaries.get(key);
   const data = cached?.data;
   if (!actualMachineSummaryLoading.has(key) && (!cached || Date.now() - cached.loadedAt >= 30_000)) void loadActualMachineSummary(machine, runs);
-  const scopes = [["batch", "Current Batch"], ["shift", "Current Shift"], ["today", "Today"]];
+  const scopes = [["batch", "Current Batch"], ["shift", "Shift"], ["today", "Today"]];
   const scopeButtons = scopes.map(([scope, label]) => `<button class="${state.machineSummary.scope === scope ? "active" : ""}" data-machine-summary-scope="${scope}">${label}</button>`).join("");
-  const header = `<div class="performance-summary-head"><div><span class="eyebrow">Machine performance summary</span><h2>Operational Summary</h2><p>${actualText(data?.range?.label || "Menghitung runtime, output, peak, dan stability dari PostgreSQL aktual.")}</p></div><div class="segmented performance-scope-control">${scopeButtons}</div></div>`;
+  const shiftOptions = [["A", "Shift A · 07:00–15:00"], ["B", "Shift B · 15:00–23:00"], ["C", "Shift C · 23:00–07:00"]];
+  const shiftFilter = state.machineSummary.scope === "shift" ? `<div class="performance-shift-filter"><label><span>Production date</span><input type="date" data-machine-summary-date value="${actualText(state.machineSummary.productionDate)}" max="${jakartaShiftSelection().calendarDate}" /></label><label><span>Shift</span><select data-machine-summary-shift>${shiftOptions.map(([code, label]) => `<option value="${code}" ${state.machineSummary.shiftCode === code ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>` : "";
+  const header = `<div class="performance-summary-head"><div><span class="eyebrow">Machine performance summary</span><h2>Operational Summary</h2><p>${actualText(data?.range?.label || "Menghitung runtime, output, peak, dan stability dari PostgreSQL aktual.")}</p></div><div class="performance-summary-controls"><div class="segmented performance-scope-control">${scopeButtons}</div>${shiftFilter}</div></div>`;
   if (!data) {
     const error = actualMachineSummaryErrors.get(key);
     const foot = error || "Loading calculated machine summary…";
@@ -5491,6 +5535,20 @@ function bindPageEvents() {
   document.querySelectorAll("[data-machine-summary-scope]").forEach((button) => {
     button.addEventListener("click", () => {
       state.machineSummary.scope = button.dataset.machineSummaryScope;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-machine-summary-date]").forEach((input) => {
+    input.addEventListener("change", () => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(input.value)) return;
+      state.machineSummary.productionDate = input.value;
+      renderPage({ preserveScroll: true });
+    });
+  });
+  document.querySelectorAll("[data-machine-summary-shift]").forEach((select) => {
+    select.addEventListener("change", () => {
+      if (!["A", "B", "C"].includes(select.value)) return;
+      state.machineSummary.shiftCode = select.value;
       renderPage({ preserveScroll: true });
     });
   });

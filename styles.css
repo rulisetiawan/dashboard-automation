@@ -1122,6 +1122,59 @@ select:focus-visible {
   flex-shrink: 0;
 }
 
+.performance-summary-controls {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.performance-shift-filter {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.performance-shift-filter label {
+  display: grid;
+  gap: 4px;
+}
+
+.performance-shift-filter label > span {
+  color: var(--ink-3);
+  font-size: .46rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.performance-shift-filter input,
+.performance-shift-filter select {
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-family: var(--font-data);
+  font-size: .52rem;
+}
+
+.performance-shift-filter input {
+  width: 132px;
+}
+
+.performance-shift-filter select {
+  width: 168px;
+}
+
+.performance-shift-filter input:focus-visible,
+.performance-shift-filter select:focus-visible {
+  outline: 2px solid rgba(7, 142, 170, .28);
+  outline-offset: 1px;
+}
+
 .performance-scope-control button {
   appearance: none;
   min-width: 88px;
@@ -8939,6 +8992,11 @@ select:focus-visible {
     overflow-x: auto;
   }
 
+  .performance-summary-controls {
+    align-items: flex-start;
+    width: 100%;
+  }
+
   .chemical-filter-card,
   .chemical-chart-layout,
   .chemical-unit-hero {
@@ -9267,6 +9325,17 @@ select:focus-visible {
 
   .performance-scope-control button {
     min-width: 92px;
+  }
+
+  .performance-shift-filter {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .performance-shift-filter input,
+  .performance-shift-filter select {
+    width: 100%;
   }
 
   .management-range-main {

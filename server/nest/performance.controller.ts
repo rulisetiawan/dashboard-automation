@@ -2,9 +2,23 @@ import { BadRequestException, Controller, Get, NotFoundException, Param, Query }
 import { DatabaseService } from "./database.service.js";
 
 type SummaryScope = "batch" | "shift" | "today";
+type ShiftCode = "A" | "B" | "C";
+type SummaryRange = {
+  from: Date;
+  to: Date;
+  label: string;
+  production_date?: string;
+  shift_code?: ShiftCode;
+  timezone?: string;
+  complete?: boolean;
+};
 
 const jakartaOffsetMs = 7 * 60 * 60 * 1000;
-const shiftStartHours = [7, 15, 23];
+const shiftDefinitions: Record<ShiftCode, { startHour: number; endHour: number }> = {
+  A: { startHour: 7, endHour: 15 },
+  B: { startHour: 15, endHour: 23 },
+  C: { startHour: 23, endHour: 7 },
+};
 
 function jakartaParts(date: Date) {
   const local = new Date(date.getTime() + jakartaOffsetMs);
@@ -25,19 +39,54 @@ function todayRange(now: Date) {
   return { from: jakartaTime(parts.year, parts.month, parts.day, 0), to: now, label: "Today · 00.00–now" };
 }
 
-function shiftRange(now: Date) {
-  const parts = jakartaParts(now);
-  let shiftHour = [...shiftStartHours].reverse().find((hour) => parts.hour >= hour);
-  let dayOffset = 0;
-  if (shiftHour == null) {
-    shiftHour = 23;
-    dayOffset = -1;
+function dateKey(year: number, month: number, day: number) {
+  return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
+}
+
+function parseProductionDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) throw new BadRequestException("production_date harus berformat YYYY-MM-DD.");
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const candidate = new Date(Date.UTC(year, month, day));
+  if (candidate.getUTCFullYear() !== year || candidate.getUTCMonth() !== month || candidate.getUTCDate() !== day) {
+    throw new BadRequestException("production_date tidak valid.");
   }
-  const from = jakartaTime(parts.year, parts.month, parts.day + dayOffset, shiftHour);
+  return { year, month, day };
+}
+
+function currentShiftSelection(now: Date) {
+  const parts = jakartaParts(now);
+  if (parts.hour >= 23) return { productionDate: dateKey(parts.year, parts.month, parts.day), shiftCode: "C" as ShiftCode };
+  if (parts.hour >= 15) return { productionDate: dateKey(parts.year, parts.month, parts.day), shiftCode: "B" as ShiftCode };
+  if (parts.hour >= 7) return { productionDate: dateKey(parts.year, parts.month, parts.day), shiftCode: "A" as ShiftCode };
+  return { productionDate: dateKey(parts.year, parts.month, parts.day - 1), shiftCode: "C" as ShiftCode };
+}
+
+function shiftRange(now: Date, requestedProductionDate?: string, requestedShiftCode?: string): SummaryRange {
+  if (Boolean(requestedProductionDate) !== Boolean(requestedShiftCode)) {
+    throw new BadRequestException("production_date dan shift_code harus dikirim bersama.");
+  }
+  const current = currentShiftSelection(now);
+  const productionDate = requestedProductionDate || current.productionDate;
+  const shiftCode = String(requestedShiftCode || current.shiftCode).toUpperCase() as ShiftCode;
+  const definition = shiftDefinitions[shiftCode];
+  if (!definition) throw new BadRequestException("shift_code harus A, B, atau C.");
+  const parts = parseProductionDate(productionDate);
+  const from = jakartaTime(parts.year, parts.month, parts.day, definition.startHour);
   const shiftEnd = new Date(from.getTime() + 8 * 60 * 60 * 1000);
+  if (from > now) throw new BadRequestException("Shift terpilih belum dimulai.");
   const to = now < shiftEnd ? now : shiftEnd;
-  const endLocalHour = (shiftHour + 8) % 24;
-  return { from, to, label: `Current shift · ${String(shiftHour).padStart(2, "0")}.00–${String(endLocalHour).padStart(2, "0")}.00` };
+  return {
+    from,
+    to,
+    label: `Shift ${shiftCode} · ${String(definition.startHour).padStart(2, "0")}.00–${String(definition.endHour).padStart(2, "0")}.00 WIB · Production date ${productionDate}`,
+    production_date: productionDate,
+    shift_code: shiftCode,
+    timezone: "Asia/Jakarta",
+    complete: now >= shiftEnd,
+  };
 }
 
 function peakFamily(signalRole: string) {
@@ -65,6 +114,8 @@ export class PerformanceController {
     @Param("assetId") assetId: string,
     @Query("scope") rawScope = "shift",
     @Query("process_run_id") processRunId?: string,
+    @Query("production_date") productionDate?: string,
+    @Query("shift_code") shiftCode?: string,
   ) {
     const scope = rawScope.toLowerCase() as SummaryScope;
     if (!["batch", "shift", "today"].includes(scope)) throw new BadRequestException("scope harus batch, shift, atau today.");
@@ -73,7 +124,7 @@ export class PerformanceController {
     if (!asset.rows[0]) throw new NotFoundException("asset not found");
 
     const now = new Date();
-    let range: { from: Date; to: Date; label: string };
+    let range: SummaryRange;
     let selectedRun: Record<string, any> | null = null;
     if (scope === "batch") {
       const run = processRunId
@@ -87,7 +138,7 @@ export class PerformanceController {
         label: `Current batch · ${selectedRun.batch_no}`,
       };
     } else {
-      range = scope === "today" ? todayRange(now) : shiftRange(now);
+      range = scope === "today" ? todayRange(now) : shiftRange(now, productionDate, shiftCode);
     }
 
     const [stateSummary, completedBatches, totalizerOutput, speedOutput, peakSensors, temperatureSpread] = await Promise.all([
@@ -246,7 +297,7 @@ export class PerformanceController {
       asset_id: assetId,
       process_type: asset.rows[0].process_type,
       scope,
-      range: { from: range.from, to: range.to, label: range.label },
+      range,
       runtime: {
         seconds: runtimeSeconds,
         observed_seconds: observedSeconds,
