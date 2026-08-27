@@ -23,7 +23,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `backend/Backend_Data_Flow_Graph_v1.0.md` | 1.0 | Aktif | Graph transmisi telemetry, traceability batch, dan batas OT–IT |
 | `backend/Database_Design_Concept_v1.0.md` | 1.0 | Aktif | Desain database PostgreSQL + TimescaleDB untuk master, historian, MES, utility, chemical, maintenance, dan audit |
 | `backend/Non_Jetflow_Backend_Integration_v1.0.md` | 1.0 | Aktif | Implementasi awal D1/API read-only untuk Calator, Dryer, Kalender, Dispensing, dan Utilities |
-| `backend/PostgreSQL_Local_Integration_v1.3.md` | 1.3 | Aktif | PostgreSQL service native lokal dengan kredensial terpisah dan API non-Jetflow |
+| `backend/PostgreSQL_Local_Integration_v1.4.md` | 1.4 | Aktif | Akses PostgreSQL LAN terbatas untuk `pt_smm_scada` dari jaringan `192.168.100.0/24` |
 | `backend/NestJS_PostgreSQL_Integration_v1.12.md` | 1.12 | Aktif | Metadata rule, parameter, unit, threshold, dan trigger pada Alarm API |
 | `backend/Alarm_Rule_Engine_v1.0.md` | 1.0 | Aktif | Configurable threshold, hysteresis, delay, lifecycle, audit, dan WebSocket alarm engine |
 | `backend/Batch_Abnormal_Log_Backend_Implementation_v1.1.md` | 1.1 | Aktif | Implementasi target achievement, dynamic PV/SV deviation, SV revision log, API, export, dan konfigurasi frontend |

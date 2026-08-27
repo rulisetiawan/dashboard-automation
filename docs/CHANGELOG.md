@@ -4,6 +4,24 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## PostgreSQL Local V1.4 — 27 Agustus 2026
+
+**Status:** Akses LAN terbatas aktif
+
+### Diaktifkan
+
+- PostgreSQL tetap mendengarkan TCP port `5432` pada seluruh interface lokal.
+- `pg_hba.conf` mengizinkan database `pt_smm_scada` dari `192.168.100.0/24` dengan autentikasi `scram-sha-256`.
+- Windows Firewall mengizinkan inbound TCP `5432` hanya dari subnet yang sama.
+
+### Keamanan dan batas sistem
+
+- Tidak ada akses global `0.0.0.0/0`.
+- Host `192.168.100.82` tetap merupakan komputer terpisah dan tidak ikut dikonfigurasi.
+- Client harus dapat merutekan koneksi ke alamat aktif komputer database ini.
+
+---
+
 ## Dashboard V2.3 — 26 Agustus 2026
 
 **Status:** Asset heartbeat visibility
