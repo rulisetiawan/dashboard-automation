@@ -63,6 +63,32 @@ export class RealtimeGateway implements OnModuleDestroy {
     });
   }
 
+  async publishInstrumentTags(tagCodes: string[]) {
+    if (!this.server || !tagCodes.length) return;
+    const result = await this.database.query(`
+      SELECT tag_code, asset_id, element_code, parameter_code, signal_role, engineering_unit,
+             value_number, value_text, boolean_value, effective_quality, semantic_state,
+             stale_after_seconds, source_ts, updated_at, freshness_mode,
+             communication_quality, heartbeat_source_ts
+      FROM instrument_state
+      WHERE active = TRUE AND tag_code = ANY($1::text[])
+      ORDER BY asset_id, element_code, parameter_code, tag_code
+    `, [tagCodes]);
+    const byAsset = new Map<string, Record<string, unknown>[]>();
+    for (const row of result.rows) {
+      const states = byAsset.get(row.asset_id) || [];
+      states.push(this.instrumentStatePayload(row));
+      byAsset.set(row.asset_id, states);
+    }
+    for (const [assetId, states] of byAsset) {
+      this.server.to(`asset:${assetId}`).emit("instrument:delta", {
+        asset_id: assetId,
+        snapshot_version: new Date().toISOString(),
+        states,
+      });
+    }
+  }
+
   private async startPolling() {
     const [dataVersions, tagLatestVersion, communicationStates] = await Promise.all([
       this.readDataVersions(),

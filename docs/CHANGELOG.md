@@ -4,6 +4,27 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.4 / Live Value Ingestion API V1.0 — 27 Agustus 2026
+
+**Status:** Live loadcell tanpa historian implemented
+
+### Ditambahkan
+
+- Endpoint `POST /api/v1/ingestion/live-values` untuk UPSERT langsung ke `tag_latest`.
+- Validasi tag/asset, quality, timestamp, UUID, batch maksimum 200 nilai, dan API key opsional.
+- Proteksi timestamp lama/duplikat agar tidak menimpa nilai terbaru.
+- Push WebSocket `instrument:delta` setelah commit berhasil.
+- Nilai `LC-101 · {value} kg` pada SVG Chemical Dispensing beserta label quality.
+- Firewall API TCP 8787 dibatasi ke host `192.168.100.82`.
+
+### Dipertahankan
+
+- Endpoint latest-only tidak menambah data `telemetry_sample`.
+- Hasil timbang final tetap disimpan pada `chemical_transaction.actual_kg`.
+- Heartbeat controller dan nilai loadcell tetap memiliki makna terpisah.
+
+---
+
 ## PostgreSQL Local V1.4 — 27 Agustus 2026
 
 **Status:** Akses LAN terbatas aktif

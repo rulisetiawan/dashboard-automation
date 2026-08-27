@@ -608,6 +608,16 @@ function pidVisualState(item) {
     : "unknown";
 }
 
+function pidLiveDisplayValue(item) {
+  const raw = item?.valueNumber ?? item?.value;
+  const number = Number(raw);
+  const value = Number.isFinite(number)
+    ? number.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : raw == null || raw === "" ? "—" : String(raw);
+  const unit = String(item?.engineeringUnit || "").trim();
+  return `${value}${unit ? ` ${unit}` : ""}`;
+}
+
 function applyPidInstrumentStates(assetId) {
   if (activePidAssetId() !== assetId) return;
   const cached = [...(pidInstrumentStateCache.get(assetId)?.values() || [])];
@@ -633,6 +643,15 @@ function applyPidInstrumentStates(assetId) {
     element.setAttribute("aria-label", `${element.dataset.pidBaseLabel} · ${stateLabel}`);
     const title = [...element.children].find((child) => child.tagName?.toLowerCase() === "title");
     if (title) title.textContent = `${element.dataset.pidBaseLabel} · ${stateLabel}`;
+    element.querySelectorAll("[data-pid-live-value]").forEach((label) => {
+      const parameterCode = String(label.dataset.pidLiveValue || "").toUpperCase();
+      const valueItem = cached.find((candidate) => String(candidate.elementCode || "").toUpperCase() === String(element.dataset.elementCode || "").toUpperCase()
+        && String(candidate.parameterCode || "").toUpperCase() === parameterCode);
+      if (!valueItem) return;
+      const prefix = label.dataset.pidValuePrefix || "";
+      const quality = String(valueItem.quality || "UNKNOWN").toUpperCase();
+      label.textContent = `${prefix}${pidLiveDisplayValue(valueItem)}${quality === "GOOD" ? "" : ` · ${quality}`}`;
+    });
   });
 }
 
@@ -1126,7 +1145,7 @@ function chemicalDispensingPidPanel(machine) {
           <rect class="pid-equipment-plate" x="605" y="181" width="158" height="70" rx="10"/>
           <text class="pid-tank-title" x="684" y="205">TANK 1 · TK-101</text>
           <text class="pid-tank-sub" x="684" y="225">WEIGHING / BUFFER</text>
-          <text class="pid-tank-value" x="684" y="245">LC-101 · LIVE TAG READY</text>
+          <text class="pid-tank-value" x="684" y="245" data-pid-live-value="WEIGHT_PV" data-pid-value-prefix="LC-101 · ">LC-101 · NO LIVE VALUE</text>
           <path class="pid-vessel-leg" d="M606 314 V337 M762 314 V337"/>
         </g>
         <g class="pid-loadcells" data-element-code="TANK_01_LOADCELL">

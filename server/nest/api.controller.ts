@@ -148,6 +148,7 @@ export class ApiController {
       scope: "ALL_PROCESSES",
       processes: result.rows,
       gateway_ingestion: true,
+      live_value_ingestion: true,
       batch_api_ingestion: true,
       server_time: new Date().toISOString(),
     };
