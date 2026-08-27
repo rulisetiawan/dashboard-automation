@@ -650,7 +650,15 @@ function applyPidInstrumentStates(assetId) {
       if (!valueItem) return;
       const prefix = label.dataset.pidValuePrefix || "";
       const quality = String(valueItem.quality || "UNKNOWN").toUpperCase();
-      label.textContent = `${prefix}${pidLiveDisplayValue(valueItem)}${quality === "GOOD" ? "" : ` · ${quality}`}`;
+      label.textContent = `${prefix}${pidLiveDisplayValue(valueItem)}`;
+      label.dataset.quality = quality;
+      const readout = label.closest("[data-pid-live-readout]");
+      if (readout) {
+        readout.dataset.quality = quality;
+        const qualityLabel = [...readout.querySelectorAll("[data-pid-live-quality]")]
+          .find((candidate) => String(candidate.dataset.pidLiveQuality || "").toUpperCase() === parameterCode);
+        if (qualityLabel) qualityLabel.textContent = quality === "GOOD" ? "LIVE · GOOD" : quality.replaceAll("_", " ");
+      }
     });
   });
 }
@@ -1142,10 +1150,16 @@ function chemicalDispensingPidPanel(machine) {
           <path class="pid-vessel-shell" d="M568 132 Q568 110 684 110 Q800 110 800 132 V288 Q800 320 684 320 Q568 320 568 288 Z" fill="url(#${gradientId})"/>
           <ellipse class="pid-vessel-top" cx="684" cy="132" rx="116" ry="22"/>
           <path class="pid-vessel-band" d="M568 265 H800"/>
-          <rect class="pid-equipment-plate" x="605" y="181" width="158" height="70" rx="10"/>
-          <text class="pid-tank-title" x="684" y="205">TANK 1 · TK-101</text>
-          <text class="pid-tank-sub" x="684" y="225">WEIGHING / BUFFER</text>
-          <text class="pid-tank-value" x="684" y="245" data-pid-live-value="WEIGHT_PV" data-pid-value-prefix="LC-101 · ">LC-101 · NO LIVE VALUE</text>
+          <rect class="pid-equipment-plate" x="588" y="164" width="192" height="115" rx="12"/>
+          <text class="pid-tank-title" x="684" y="188">TANK 1 · TK-101</text>
+          <text class="pid-tank-sub" x="684" y="205">WEIGHING / BUFFER</text>
+          <g class="pid-live-readout" data-pid-live-readout="WEIGHT_PV" data-quality="UNKNOWN">
+            <rect class="pid-live-panel" x="598" y="213" width="172" height="58" rx="10"/>
+            <circle class="pid-live-dot" cx="612" cy="228" r="4"/>
+            <text class="pid-live-label" x="622" y="231">LC-101 · LIVE WEIGHT</text>
+            <text class="pid-live-quality" x="760" y="231" text-anchor="end" data-pid-live-quality="WEIGHT_PV">NO DATA</text>
+            <text class="pid-live-value" x="684" y="259" data-pid-live-value="WEIGHT_PV">— kg</text>
+          </g>
           <path class="pid-vessel-leg" d="M606 314 V337 M762 314 V337"/>
         </g>
         <g class="pid-loadcells" data-element-code="TANK_01_LOADCELL">

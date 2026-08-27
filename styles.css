@@ -3677,6 +3677,94 @@ select:focus-visible {
   text-anchor: middle;
 }
 
+.chemical-dispensing-pid .pid-live-panel {
+  fill: #eef8fa;
+  stroke: #8eb8c1;
+  stroke-width: 1.4;
+}
+
+.chemical-dispensing-pid .pid-live-dot {
+  fill: #789198;
+  stroke: rgba(255, 255, 255, .9);
+  stroke-width: 1.5;
+}
+
+.chemical-dispensing-pid .pid-live-label {
+  fill: #466d76;
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: .055em;
+}
+
+.chemical-dispensing-pid .pid-live-quality {
+  fill: #6f8990;
+  font-size: 6.7px;
+  font-weight: 900;
+  letter-spacing: .035em;
+}
+
+.chemical-dispensing-pid .pid-live-value {
+  fill: #0a5362;
+  font-size: 18px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.025em;
+  text-anchor: middle;
+}
+
+.chemical-dispensing-pid .pid-live-readout[data-quality="GOOD"] .pid-live-panel {
+  fill: #e5f8f5;
+  stroke: #159876;
+}
+
+.chemical-dispensing-pid .pid-live-readout[data-quality="GOOD"] .pid-live-dot {
+  fill: #0fa879;
+  animation: pid-live-pulse 1.8s ease-out infinite;
+}
+
+.chemical-dispensing-pid .pid-live-readout[data-quality="GOOD"] .pid-live-value,
+.chemical-dispensing-pid .pid-live-readout[data-quality="GOOD"] .pid-live-quality {
+  fill: #08755b;
+}
+
+.chemical-dispensing-pid .pid-live-readout[data-quality="STALE"] .pid-live-panel {
+  fill: #fff6df;
+  stroke: #d4981d;
+}
+
+.chemical-dispensing-pid .pid-live-readout[data-quality="STALE"] .pid-live-dot,
+.chemical-dispensing-pid .pid-live-readout[data-quality="STALE"] .pid-live-value,
+.chemical-dispensing-pid .pid-live-readout[data-quality="STALE"] .pid-live-quality {
+  fill: #a56606;
+}
+
+.chemical-dispensing-pid .pid-live-readout[data-quality="BAD"] .pid-live-panel,
+.chemical-dispensing-pid .pid-live-readout[data-quality="NOT_CONNECTED"] .pid-live-panel {
+  fill: #fff0ef;
+  stroke: #d8564c;
+}
+
+.chemical-dispensing-pid .pid-live-readout[data-quality="BAD"] .pid-live-dot,
+.chemical-dispensing-pid .pid-live-readout[data-quality="BAD"] .pid-live-value,
+.chemical-dispensing-pid .pid-live-readout[data-quality="BAD"] .pid-live-quality,
+.chemical-dispensing-pid .pid-live-readout[data-quality="NOT_CONNECTED"] .pid-live-dot,
+.chemical-dispensing-pid .pid-live-readout[data-quality="NOT_CONNECTED"] .pid-live-value,
+.chemical-dispensing-pid .pid-live-readout[data-quality="NOT_CONNECTED"] .pid-live-quality {
+  fill: #b5352d;
+}
+
+@keyframes pid-live-pulse {
+  0% { opacity: 1; }
+  55% { opacity: .45; }
+  100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chemical-dispensing-pid .pid-live-readout[data-quality="GOOD"] .pid-live-dot {
+    animation: none;
+  }
+}
+
 .chemical-dispensing-pid .pid-loadcells rect {
   fill: #f6fbfb;
   stroke: #477680;

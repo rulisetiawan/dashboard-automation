@@ -4,6 +4,20 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.5 / Chemical Dispensing Concept V1.13 — 27 Agustus 2026
+
+**Status:** Readout live loadcell diperjelas
+
+### Diubah
+
+- Nilai berat aktual Tank 1 diperbesar dari teks kecil menjadi readout utama berukuran `18px` pada SVG.
+- Label instrumen, angka berat, dan quality dipisahkan agar angka tidak tertutup teks status.
+- Warna readout mengikuti quality: hijau untuk `GOOD`, kuning untuk `STALE`, merah untuk `BAD`/`NOT_CONNECTED`, dan netral saat belum ada data.
+- Titik status `GOOD` memakai pulse halus dan menghormati preferensi reduced motion.
+- Binding WebSocket, canonical tag, penyimpanan `tag_latest`, dan heartbeat controller tidak berubah.
+
+---
+
 ## Dashboard V2.4 / Live Value Ingestion API V1.0 — 27 Agustus 2026
 
 **Status:** Live loadcell tanpa historian implemented
@@ -16,6 +30,7 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 - Push WebSocket `instrument:delta` setelah commit berhasil.
 - Nilai `LC-101 · {value} kg` pada SVG Chemical Dispensing beserta label quality.
 - Firewall API TCP 8787 dibatasi ke host `192.168.100.82`.
+- Panduan uji Node-RED: output HTTP Request ke Debug serta payload Inject tanpa timestamp/UUID statis.
 
 ### Dipertahankan
 
