@@ -4,6 +4,32 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.13 / NestJS PostgreSQL Integration V1.16 — 28 Agustus 2026
+
+**Status:** Compact utility KPI and Production Output by Batch implemented
+
+### Diubah
+
+- Registered Machines pada KPI atas diganti dengan Utility Now berisi empat nilai utility, quality summary, dan waktu data terbaru.
+- Panel Utility Snapshot besar dihapus agar data utility tidak berulang.
+- Production Output by Process berbentuk bar diganti donut Production Output by Batch.
+
+### Ditambahkan
+
+- Mode Effective, Actual, dan Estimated pada donut output.
+- Filter proses, production date, serta Shift A/B/C.
+- Label source per batch, coverage actual/estimated/no data, serta Top 5 + Others.
+- Endpoint `GET /api/v1/production/output-by-batch`.
+- Estimasi output dari speed historian satu menit yang memiliki quality baik dan speed positif.
+
+### Dicegah
+
+- Default Kalender dipakai sebagai final process agar total tidak double count lintas proses.
+- Process run duplikat dideduplikasi per asset dan batch.
+- Effective memilih actual atau estimated per run dan tidak menjumlahkan keduanya.
+
+---
+
 ## Dashboard V2.12 — 28 Agustus 2026
 
 **Status:** Plant Overview Utility Snapshot visual refinement implemented

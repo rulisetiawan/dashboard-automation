@@ -13,7 +13,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Kalender_v1.20.md` | 1.20 | Aktif | Fabric wrap pada cylinder Upper/Lower dan loadcell sebagai roller kecil setelah masing-masing felt |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
 | `chemicals/Chemical_Dispensing_Calator_Concept_v1.15.md` | 1.15 | Aktif | Auto-update transaction log tanpa menggeser posisi scroll |
-| `dashboard/Dashboard_V2_Concept_v2.12.md` | 2.12 | Aktif | Utility Snapshot Plant Overview yang lebih jelas dan menyatu dengan tema utama |
+| `dashboard/Dashboard_V2_Concept_v2.13.md` | 2.13 | Aktif | Utility di KPI atas dan donut Production Output by Batch |
 | `dashboard/Dashboard_V1_Concept_v1.63.md` | 1.63 | Final V1 | Baseline presentasi V1 dengan tooltip tanpa blink saat refresh real-time |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
 | `backend/Backend_Data_Architecture_Concept_v1.0.md` | 1.0 | Aktif | Fondasi edge-to-historian, model database, API, security, dan roadmap integrasi backend |
@@ -24,7 +24,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `backend/Database_Design_Concept_v1.0.md` | 1.0 | Aktif | Desain database PostgreSQL + TimescaleDB untuk master, historian, MES, utility, chemical, maintenance, dan audit |
 | `backend/Non_Jetflow_Backend_Integration_v1.0.md` | 1.0 | Aktif | Implementasi awal D1/API read-only untuk Calator, Dryer, Kalender, Dispensing, dan Utilities |
 | `backend/PostgreSQL_Local_Integration_v1.6.md` | 1.6 | Implementasi parsial | HBA aktif; firewall 169.254.150.182/32 menunggu Administrator |
-| `backend/NestJS_PostgreSQL_Integration_v1.15.md` | 1.15 | Aktif | Change marker untuk auto-update chemical transaction insert/update/delete |
+| `backend/NestJS_PostgreSQL_Integration_v1.16.md` | 1.16 | Aktif | API actual/effective/estimated production output per batch dan shift |
 | `backend/Live_Value_Ingestion_API_v1.0.md` | 1.0 | Aktif | Kontrak POST nilai live langsung ke `tag_latest` tanpa `telemetry_sample` |
 | `backend/Alarm_Rule_Engine_v1.0.md` | 1.0 | Aktif | Configurable threshold, hysteresis, delay, lifecycle, audit, dan WebSocket alarm engine |
 | `backend/Batch_Abnormal_Log_Backend_Implementation_v1.1.md` | 1.1 | Aktif | Implementasi target achievement, dynamic PV/SV deviation, SV revision log, API, export, dan konfigurasi frontend |

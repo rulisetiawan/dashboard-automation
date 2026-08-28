@@ -12,10 +12,11 @@ import { LiveValueIngestionController } from "./live-value-ingestion.controller.
 import { PerformanceController } from "./performance.controller.js";
 import { ProcessDeviationEngineService } from "./process-deviation-engine.service.js";
 import { ProcessDeviationController } from "./process-deviation.controller.js";
+import { ProductionOutputController } from "./production-output.controller.js";
 import { RealtimeGateway } from "./realtime.gateway.js";
 
 @Module({
-  controllers: [ApiController, AlarmController, BatchController, BatchExportController, ChemicalController, LiveValueIngestionController, PerformanceController, ProcessDeviationController],
+  controllers: [ApiController, AlarmController, BatchController, BatchExportController, ChemicalController, LiveValueIngestionController, PerformanceController, ProcessDeviationController, ProductionOutputController],
   providers: [DatabaseService, HistorianAggregationService, RealtimeGateway, AlarmEngineService, ProcessDeviationEngineService, BatchIngestionExceptionFilter],
 })
 export class AppModule {}

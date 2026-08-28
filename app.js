@@ -106,6 +106,12 @@ const state = {
     productionDate: defaultMachineShift.productionDate,
     shiftCode: defaultMachineShift.shiftCode,
   },
+  productionOutput: {
+    mode: "effective",
+    process: "kalender",
+    productionDate: defaultMachineShift.productionDate,
+    shiftCode: defaultMachineShift.shiftCode,
+  },
   pidPanel: {
     kalender: false,
   },
@@ -180,6 +186,10 @@ function restoreDashboardNavigation() {
     if (["batch", "shift", "today"].includes(saved.machineSummaryScope)) state.machineSummary.scope = saved.machineSummaryScope;
     if (/^\d{4}-\d{2}-\d{2}$/.test(saved.machineSummaryProductionDate || "")) state.machineSummary.productionDate = saved.machineSummaryProductionDate;
     if (["A", "B", "C"].includes(saved.machineSummaryShiftCode)) state.machineSummary.shiftCode = saved.machineSummaryShiftCode;
+    if (["effective", "actual", "estimated"].includes(saved.productionOutput?.mode)) state.productionOutput.mode = saved.productionOutput.mode;
+    if (["jetflow", "calator", "dryer", "kalender"].includes(saved.productionOutput?.process)) state.productionOutput.process = saved.productionOutput.process;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(saved.productionOutput?.productionDate || "")) state.productionOutput.productionDate = saved.productionOutput.productionDate;
+    if (["A", "B", "C"].includes(saved.productionOutput?.shiftCode)) state.productionOutput.shiftCode = saved.productionOutput.shiftCode;
     if (typeof saved.pidPanel?.kalender === "boolean") state.pidPanel.kalender = saved.pidPanel.kalender;
   } catch {
     // Gunakan default navigation jika browser storage tidak tersedia atau rusak.
@@ -196,6 +206,7 @@ function persistDashboardNavigation() {
       machineSummaryScope: state.machineSummary.scope,
       machineSummaryProductionDate: state.machineSummary.productionDate,
       machineSummaryShiftCode: state.machineSummary.shiftCode,
+      productionOutput: state.productionOutput,
       pidPanel: state.pidPanel,
     }));
   } catch {
@@ -220,6 +231,7 @@ let backendAlarmEvents = [];
 let backendActiveAlarmEvents = [];
 let backendEquipment = [];
 let backendProcessRuns = [];
+const productionOutputByBatch = { key: null, data: null, loading: false, error: null };
 let realtimeSocket = null;
 let realtimeRefreshTimer = null;
 let deferredRealtimeRender = false;
@@ -748,6 +760,48 @@ async function fetchJson(url, label) {
   return response.json();
 }
 
+function productionOutputRequestKey() {
+  const config = state.productionOutput;
+  return `${config.productionDate}|${config.shiftCode}|${config.process}`;
+}
+
+function productionOutputRequestUrl() {
+  const config = state.productionOutput;
+  const query = new URLSearchParams({
+    production_date: config.productionDate,
+    shift_code: config.shiftCode,
+    process_type: config.process,
+  });
+  return `/api/v1/production/output-by-batch?${query}`;
+}
+
+function invalidateProductionOutputByBatch() {
+  productionOutputByBatch.key = null;
+  productionOutputByBatch.data = null;
+  productionOutputByBatch.error = null;
+}
+
+async function loadProductionOutputByBatch({ render = true, force = false } = {}) {
+  const requestKey = productionOutputRequestKey();
+  if (!force && productionOutputByBatch.key === requestKey && productionOutputByBatch.data) return;
+  if (productionOutputByBatch.loading) return;
+  productionOutputByBatch.loading = true;
+  productionOutputByBatch.error = null;
+  try {
+    const payload = await fetchJson(productionOutputRequestUrl(), "Production output API");
+    if (requestKey !== productionOutputRequestKey()) return;
+    productionOutputByBatch.key = requestKey;
+    productionOutputByBatch.data = payload;
+  } catch (error) {
+    if (requestKey !== productionOutputRequestKey()) return;
+    productionOutputByBatch.key = requestKey;
+    productionOutputByBatch.error = error instanceof Error ? error.message : "Production output unavailable";
+  } finally {
+    productionOutputByBatch.loading = false;
+    if (render && state.page === "overview") renderPage({ preserveAnchor: ".production-output-panel" });
+  }
+}
+
 async function refreshAssetFleets() {
   const payloads = await Promise.all(backendProcesses.map(async (process) => [
     process,
@@ -861,6 +915,10 @@ async function refreshBackendSources(sources) {
       : "/api/v1/telemetry/recent?limit=500";
     tasks.push(fetchJson(telemetryUrl, "Telemetry API").then((payload) => { backendTelemetry = payload.samples || []; }));
   }
+  if (refreshAll || sources.has("production_batch") || sources.has("batch_process_run") || sources.has("telemetry_sample")) {
+    invalidateProductionOutputByBatch();
+    tasks.push(loadProductionOutputByBatch({ render: false, force: true }));
+  }
 
   await Promise.all(tasks);
   backendConnection.lastSync = new Date().toISOString();
@@ -918,6 +976,7 @@ async function connectNonJetflowBackend() {
     backendConnection.storage = status.storage;
     backendConnection.dataMode = status.data_mode;
     backendConnection.lastSync = status.server_time;
+    void loadProductionOutputByBatch();
     updateNavigationCounts();
     syncActiveAlarmPopups();
   } catch {
@@ -3268,14 +3327,13 @@ function actualUtilityQuality(quality) {
   return { tone: "unknown", pill: "unknown", label: value || "UNKNOWN" };
 }
 
-function actualUtilityOverview(utilities) {
-  if (!utilities.length) return actualEmpty("Belum ada utility snapshot");
+function actualUtilityKpi(utilities) {
   const kindMeta = {
-    electrical: { symbol: "EL", context: "Current electrical demand" },
-    water: { symbol: "WT", context: "Current water flow" },
-    steam: { symbol: "ST", context: "Steam supply / production" },
-    thermal: { symbol: "TO", context: "Thermal oil supply" },
-    other: { symbol: "UT", context: "Current utility reading" },
+    electrical: "EL",
+    water: "WT",
+    steam: "ST",
+    thermal: "TO",
+    other: "UT",
   };
   const goodCount = utilities.filter((item) => actualUtilityQuality(item.quality).tone === "good").length;
   const attentionCount = utilities.length - goodCount;
@@ -3283,34 +3341,23 @@ function actualUtilityOverview(utilities) {
     .map((item) => new Date(item.source_ts).getTime())
     .filter(Number.isFinite)
     .sort((left, right) => right - left)[0];
-  const cards = utilities.map((item) => {
+  const readings = utilities.slice(0, 4).map((item) => {
     const kind = actualUtilityKind(item);
-    const meta = kindMeta[kind];
-    const quality = actualUtilityQuality(item.quality);
     const rawValue = item.value;
     const numericValue = rawValue !== null && rawValue !== "" ? Number(rawValue) : Number.NaN;
     const displayValue = Number.isFinite(numericValue)
       ? numericValue.toLocaleString("id-ID", { maximumFractionDigits: 2 })
       : actualText(rawValue);
-    return `
-      <article class="overview-utility-item utility-${kind}" data-utility-quality="${quality.tone}">
-        <div class="overview-utility-item-head">
-          <div class="overview-utility-name"><span class="overview-utility-symbol">${meta.symbol}</span><div><strong>${actualText(item.label)}</strong><small>${meta.context}</small></div></div>
-          <span class="quality-pill ${quality.pill}">${actualText(quality.label)}</span>
-        </div>
-        <div class="overview-utility-value"><strong>${displayValue}</strong><span>${actualText(item.unit)}</span></div>
-        <div class="overview-utility-time"><span>Last update</span><time>${actualTime(item.source_ts)}</time></div>
-      </article>
-    `;
+    return `<div class="utility-kpi-reading utility-${kind}"><span>${kindMeta[kind]} · ${actualText(item.label)}</span><strong>${displayValue}<small>${actualText(item.unit)}</small></strong></div>`;
   }).join("");
+  const qualityTone = !utilities.length ? "unknown" : attentionCount ? "stale" : "good";
+  const qualityLabel = !utilities.length ? "NO DATA" : attentionCount ? `${attentionCount} CHECK` : `${goodCount}/${utilities.length} GOOD`;
   return `
-    <div class="overview-utility-summary">
-      <span><i class="summary-dot source"></i><strong>${utilities.length}</strong> utility points</span>
-      <span><i class="summary-dot good"></i><strong>${goodCount}</strong> good quality</span>
-      ${attentionCount ? `<span class="attention"><i class="summary-dot attention"></i><strong>${attentionCount}</strong> need attention</span>` : ""}
-      <span class="latest"><small>Latest received</small><strong>${newestTimestamp ? actualTime(newestTimestamp) : "—"}</strong></span>
-    </div>
-    <div class="overview-utility-grid">${cards}</div>
+    <article class="card kpi-card overview-utility-kpi">
+      <div class="kpi-top"><span class="kpi-label">Utility Now</span><span class="quality-pill ${qualityTone}">${qualityLabel}</span></div>
+      <div class="utility-kpi-grid">${readings || `<div class="utility-kpi-empty">Menunggu utility_snapshot</div>`}</div>
+      <div class="kpi-foot">Latest received · ${newestTimestamp ? actualTime(newestTimestamp) : "—"}</div>
+    </article>
   `;
 }
 
@@ -4773,13 +4820,93 @@ function actualDonutMarkup(items, totalLabel, unit = "", attribute = null) {
   return `<div class="resource-donut-wrap"><div class="resource-donut"><svg viewBox="0 0 160 160" role="img">${segments}</svg><div><strong>${Number(total).toLocaleString("id-ID", { maximumFractionDigits: 2 })}</strong><small>${actualText(totalLabel)}</small></div></div><div class="resource-legend">${legend}</div></div>`;
 }
 
-function actualOutputByProcess() {
-  const totals = new Map(["jetflow", "calator", "dryer", "kalender"].map((type) => [type, 0]));
-  latestActualProcessRuns().forEach((run) => {
-    const value = Number(run.output_quantity);
-    if (totals.has(run.process_type) && Number.isFinite(value)) totals.set(run.process_type, totals.get(run.process_type) + value);
-  });
-  return [...totals].map(([key, value]) => ({ key, label: processConfig[key].singular, value }));
+function productionOutputValue(batch, mode = state.productionOutput.mode) {
+  const key = mode === "actual" ? "actual_value" : mode === "estimated" ? "estimated_value" : "effective_value";
+  const value = Number(batch?.[key]);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function productionOutputSource(batch, mode = state.productionOutput.mode) {
+  if (mode === "actual") return productionOutputValue(batch, mode) ? "ACTUAL" : "NO_DATA";
+  if (mode === "estimated") return productionOutputValue(batch, mode) ? "ESTIMATED" : "NO_DATA";
+  return batch?.effective_source || "NO_DATA";
+}
+
+function productionOutputChartItems(data) {
+  const ranked = (data?.batches || [])
+    .map((batch) => ({ key: batch.batch_no, label: batch.batch_no, value: productionOutputValue(batch), source: productionOutputSource(batch) }))
+    .filter((item) => item.value > 0)
+    .sort((left, right) => right.value - left.value);
+  if (ranked.length <= 5) return ranked;
+  const remainder = ranked.slice(5);
+  const sources = new Set(remainder.map((item) => item.source));
+  return [...ranked.slice(0, 5), {
+    key: "others",
+    label: `Others (${remainder.length})`,
+    value: remainder.reduce((sum, item) => sum + item.value, 0),
+    source: sources.size === 1 ? [...sources][0] : "MIXED",
+  }];
+}
+
+function productionOutputDonutMarkup(items, unit) {
+  const circumference = 402.12;
+  const total = items.reduce((sum, item) => sum + Number(item.value || 0), 0);
+  let used = 0;
+  const segments = items.map((item, index) => {
+    const length = total ? Number(item.value || 0) / total * circumference : 0;
+    const segment = `<circle cx="80" cy="80" r="64" fill="none" stroke="${managementColors[index % managementColors.length]}" stroke-width="32" stroke-dasharray="${length.toFixed(2)} ${(circumference - length).toFixed(2)}" stroke-dashoffset="${(-used).toFixed(2)}" transform="rotate(-90 80 80)"><title>${actualText(item.label)}: ${Number(item.value).toLocaleString("id-ID", { maximumFractionDigits: 2 })} ${actualText(unit)} · ${actualText(item.source)}</title></circle>`;
+    used += length;
+    return segment;
+  }).join("");
+  const legend = items.map((item, index) => {
+    const sourceTone = item.source === "ACTUAL" ? "actual" : item.source === "ESTIMATED" ? "estimated" : "mixed";
+    return `<div class="production-output-legend-row"><i style="background:${managementColors[index % managementColors.length]}"></i><span><strong>${actualText(item.label)}</strong><em class="${sourceTone}">${actualText(item.source)}</em></span><b>${total ? (Number(item.value) / total * 100).toFixed(1) : "0.0"}%</b><small>${Number(item.value).toLocaleString("id-ID", { maximumFractionDigits: 1 })} ${actualText(unit)}</small></div>`;
+  }).join("");
+  return `<div class="resource-donut-wrap production-output-donut"><div class="resource-donut"><svg viewBox="0 0 160 160" role="img" aria-label="Production output by batch">${segments}</svg><div><strong>${total.toLocaleString("id-ID", { maximumFractionDigits: 1 })}</strong><small>${actualText(unit)} output</small></div></div><div class="resource-legend">${legend}</div></div>`;
+}
+
+function productionOutputControls() {
+  const config = state.productionOutput;
+  const processOptions = [["kalender", "Kalender · Final"], ["dryer", "Dryer"], ["calator", "Calator"], ["jetflow", "Jetflow"]];
+  const shiftOptions = [["A", "A · 07–15"], ["B", "B · 15–23"], ["C", "C · 23–07"]];
+  return `<div class="production-output-toolbar">
+    <div class="segmented production-output-modes" aria-label="Production output source mode">
+      ${[["effective", "Effective"], ["actual", "Actual"], ["estimated", "Estimated"]].map(([mode, label]) => `<button class="segment ${config.mode === mode ? "active" : ""}" data-production-output-mode="${mode}">${label}</button>`).join("")}
+    </div>
+    <div class="production-output-filters">
+      <label><span>Process</span><select data-production-output-process>${processOptions.map(([value, label]) => `<option value="${value}" ${config.process === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+      <label><span>Production date</span><input type="date" data-production-output-date value="${actualText(config.productionDate)}" max="${jakartaShiftSelection().calendarDate}" /></label>
+      <label><span>Shift</span><select data-production-output-shift>${shiftOptions.map(([value, label]) => `<option value="${value}" ${config.shiftCode === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+    </div>
+  </div>`;
+}
+
+function actualProductionOutputPanel() {
+  const currentKey = productionOutputRequestKey();
+  const data = productionOutputByBatch.key === currentKey ? productionOutputByBatch.data : null;
+  const controls = productionOutputControls();
+  if (!data) {
+    const label = productionOutputByBatch.error || (productionOutputByBatch.loading ? "Menghitung output per batch…" : "Menunggu data output produksi");
+    return panel("Production Output by Batch", "Actual diprioritaskan; estimate berasal dari speed historian berkualitas baik", `${controls}${actualEmpty(label)}`, `<span class="data-pill neutral">${state.productionOutput.process.toUpperCase()}</span>`, "production-output-panel");
+  }
+  const items = productionOutputChartItems(data);
+  const summary = data.summary || {};
+  const content = items.length
+    ? productionOutputDonutMarkup(items, data.unit || "m")
+    : actualEmpty(`Belum ada ${state.productionOutput.mode} output pada tanggal dan shift ini.`);
+  const coverage = `<div class="production-output-coverage"><span><strong>${summary.batch_count || 0}</strong> registered batch</span><span class="actual"><strong>${summary.actual_batch_count || 0}</strong> actual</span><span class="estimated"><strong>${summary.estimated_batch_count || 0}</strong> estimated fallback</span><span><strong>${summary.no_data_batch_count || 0}</strong> no data</span><small>Effective tidak menjumlahkan actual dan estimate untuk run yang sama.</small></div>`;
+  return panel("Production Output by Batch", "Actual diprioritaskan; estimate berasal dari speed historian berkualitas baik", `${controls}${content}${coverage}`, `<span class="data-pill good">SHIFT ${actualText(state.productionOutput.shiftCode)}</span>`, "production-output-panel");
+}
+
+function productionOutputMetric() {
+  const data = productionOutputByBatch.key === productionOutputRequestKey() ? productionOutputByBatch.data : null;
+  if (!data) return { value: "—", unit: "", foot: "Loading selected production scope" };
+  const total = (data.batches || []).reduce((sum, batch) => sum + productionOutputValue(batch), 0);
+  return {
+    value: total.toLocaleString("id-ID", { maximumFractionDigits: 1 }),
+    unit: data.unit || "m",
+    foot: `${processConfig[state.productionOutput.process].singular} · Shift ${state.productionOutput.shiftCode} · ${state.productionOutput.mode}`,
+  };
 }
 
 const actualProcessMetricConfig = {
@@ -4828,8 +4955,7 @@ function databaseOverviewPage() {
   const batches = new Set(assets.map((asset) => asset.batch).filter((batch) => batch && batch !== "—")).size;
   const actualRuns = latestActualProcessRuns();
   const completedRuns = actualRuns.filter((run) => String(run.run_status).toUpperCase() === "COMPLETED").length;
-  const outputByProcess = actualOutputByProcess();
-  const totalOutput = outputByProcess.reduce((sum, item) => sum + item.value, 0);
+  const outputMetric = productionOutputMetric();
   const stateBreakdown = [
     { key: "running", label: "Running", value: assets.filter((asset) => asset.state === "running").length },
     { key: "idle", label: "Idle", value: assets.filter((asset) => asset.state === "idle").length },
@@ -4846,20 +4972,19 @@ function databaseOverviewPage() {
     : actualEmpty("Belum ada process run aktual");
   return `
     ${pageHead("overview", `<span class="range-badge">POSTGRESQL ACTUAL</span>`)}
-    <section class="kpi-grid">
-      ${actualMetric("Registered machines", assets.length, "asset", "asset master aktual")}
+    <section class="kpi-grid overview-kpi-grid">
+      ${actualUtilityKpi(backendUtilities)}
       ${actualMetric("Machine running", running, "asset", "asset_snapshot.machine_state")}
       ${actualMetric("Stop / fault / offline", stopped, "asset", "asset_snapshot.machine_state")}
       ${actualMetric("Active batches", batches, "batch", "batch unik pada snapshot")}
-      ${actualMetric("Production output", totalOutput.toLocaleString("id-ID", { maximumFractionDigits: 1 }), "m", "latest unique process run")}
+      ${actualMetric("Production output", outputMetric.value, outputMetric.unit, outputMetric.foot)}
       ${actualMetric("Completed batches", completedRuns, "batch", "run_status = COMPLETED")}
     </section>
-    <section class="grid-2">
+    <section class="grid-equal overview-insight-grid">
       ${panel("Machine Operating Status", "Komposisi kondisi seluruh asset aktual", actualDonutMarkup(stateBreakdown, "machines", "asset"), `<span class="data-pill good">LIVE NOW</span>`)}
-      ${panel("Utility Snapshot", "Demand dan kondisi supply utility saat ini", actualUtilityOverview(backendUtilities), `<span class="data-pill ${!backendUtilities.length ? "neutral" : backendUtilities.some((item) => actualUtilityQuality(item.quality).tone !== "good") ? "warning" : "good"}">${backendUtilities.length ? "LIVE SNAPSHOT" : "NO DATA"}</span>`, "overview-utility-panel")}
+      ${actualProductionOutputPanel()}
     </section>
     ${panel("Textile process flow", "Jumlah dan kondisi asset yang terdaftar", `<div class="process-flow">${processFlow}</div>`)}
-    ${panel("Production Output by Process", "Output terakhir dari process run unik per asset dan batch", totalOutput > 0 ? `<div class="throughput-summary"><div><span>Total Output</span><strong>${totalOutput.toLocaleString("id-ID", { maximumFractionDigits: 1 })} <small>m</small></strong></div><div><span>Process with data</span><strong>${outputByProcess.filter((item) => item.value > 0).length} <small>process</small></strong></div><div><span>Database rows</span><strong>${actualRuns.length} <small>unique runs</small></strong></div></div><div class="chart-container production-bar-chart"><canvas id="actual-overview-output-chart" class="chart-canvas"></canvas></div>` : actualEmpty("Belum ada output produksi aktual pada process run."))}
     ${panel("Active process runs", "Batch dan output yang sudah tersimpan di database", runs)}
     ${panel("Machine Directory", "Status aktual tiap asset · klik melalui process flow untuk drill-down area dan mesin", actualAssetTable(assets))}
   `;
@@ -5210,6 +5335,7 @@ function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
   document.getElementById("breadcrumb-page").textContent = pageMeta[state.page][0];
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === state.page));
   bindPageEvents();
+  if (backendConnection.status === "connected" && state.page === "overview") void loadProductionOutputByBatch();
   requestAnimationFrame(() => {
     initPageCharts();
     void activatePidBindingForCurrentView();
@@ -5879,6 +6005,27 @@ function bindPageEvents() {
       renderPage({ preserveScroll: true });
     });
   });
+  document.querySelectorAll("[data-production-output-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.productionOutput.mode = button.dataset.productionOutputMode;
+      renderPage({ preserveAnchor: ".production-output-panel" });
+    });
+  });
+  document.querySelector("[data-production-output-process]")?.addEventListener("change", (event) => {
+    state.productionOutput.process = event.target.value;
+    invalidateProductionOutputByBatch();
+    renderPage({ preserveAnchor: ".production-output-panel" });
+  });
+  document.querySelector("[data-production-output-date]")?.addEventListener("change", (event) => {
+    state.productionOutput.productionDate = event.target.value;
+    invalidateProductionOutputByBatch();
+    renderPage({ preserveAnchor: ".production-output-panel" });
+  });
+  document.querySelector("[data-production-output-shift]")?.addEventListener("change", (event) => {
+    state.productionOutput.shiftCode = event.target.value;
+    invalidateProductionOutputByBatch();
+    renderPage({ preserveAnchor: ".production-output-panel" });
+  });
   document.querySelectorAll("[data-sensor-toggle]").forEach((checkbox) => {
     checkbox.addEventListener("change", () => {
       const [type, key] = checkbox.dataset.sensorToggle.split("|");
@@ -6419,10 +6566,6 @@ function initPageCharts() {
     ], labels),
   };
   charts[state.page]?.();
-  if (backendConnection.status === "connected" && backendConnection.dataMode === "ACTUAL_DATABASE" && state.page === "overview") {
-    const outputByProcess = actualOutputByProcess();
-    if (outputByProcess.some((item) => item.value > 0)) drawBarChart("actual-overview-output-chart", outputByProcess.map((item) => item.value), outputByProcess.map((item) => item.label), outputByProcess.map((_, index) => managementColors[index]), { showValues: true, standard: true, unit: "m" });
-  }
   if (state.drill[state.page]?.machine && sensorTrendConfig[state.page]) drawSensorComparisonTrends(state.page);
   if (state.motorDrive.selected && state.motorDrive.source === state.page) {
     drawMotorDriveTrend();
