@@ -256,7 +256,19 @@ async function authResponse(request, env, pathname) {
     if (!username || !password || username.length > 160 || password.length > 128) return json({ message: "Username atau password tidak valid." }, 401);
     const user = await env.DB.prepare("SELECT * FROM dashboard_user WHERE username = ? OR email = ? LIMIT 1").bind(username, username).first();
     const locked = user?.locked_until && new Date(user.locked_until).getTime() > Date.now();
-    const valid = user?.active === 1 && !locked && await verifyPassword(password, user.password_hash).catch(() => false);
+    let passwordMatches = false;
+    if (user?.active === 1 && !locked) {
+      try {
+        passwordMatches = await verifyPassword(password, user.password_hash);
+      } catch (error) {
+        console.error("Dashboard password verification error", error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+      }
+      if (!passwordMatches) {
+        const [, iterations, salt, digest] = String(user.password_hash || "").split("$");
+        console.warn("Dashboard password verification mismatch", { iterations, saltLength: salt?.length, digestLength: digest?.length, passwordLength: password.length });
+      }
+    }
+    const valid = user?.active === 1 && !locked && passwordMatches;
     if (!valid) {
       if (user && !locked) {
         const failed = Number(user.failed_login_count || 0) + 1;
