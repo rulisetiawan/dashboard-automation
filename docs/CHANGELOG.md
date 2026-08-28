@@ -4,6 +4,26 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.10 — 28 Agustus 2026
+
+**Status:** Area card active-state contrast implemented
+
+### Diperjelas
+
+- Angka dan badge status utama diperbesar.
+- Status aktif memakai tint sepuluh persen, border lebih tegas, dan garis kiri tiga piksel.
+- Label pada status aktif ikut memakai warna semantik.
+- Idle memakai cyan primer dashboard agar berbeda jelas dari status nol/offline.
+- Aksen atas card memakai warna semantik penuh; Warning dan Fault mendapat border card yang sedikit lebih kuat.
+
+### Dipertahankan
+
+- Background keseluruhan card tetap putih.
+- Status nol tetap netral dan tidak mengambil perhatian.
+- Data status, prioritas kondisi, drill-down, serta refresh real-time tidak berubah.
+
+---
+
 ## Dashboard V2.9 — 28 Agustus 2026
 
 **Status:** Area card visual refinement implemented
