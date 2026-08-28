@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.18 — 28 Agustus 2026
+
+**Status:** Header production shift synchronized with Jakarta time
+
+### Diperbaiki
+
+- Indikator shift statis `Shift A · 06:00—14:00` dihapus.
+- Header diperbarui otomatis setiap detik menjadi Shift A 07:00–15:00, Shift B 15:00–23:00, atau Shift C 23:00–07:00.
+- Jam header secara eksplisit memakai zona waktu Asia/Jakarta.
+- Production date untuk Shift C pukul 00:00–06:59 tetap mengacu ke tanggal sebelumnya.
+
+### Dipertahankan
+
+- Filter chart production output tetap merupakan pilihan analisis pengguna dan tidak dipaksa mengikuti shift header.
+
+---
+
 ## Dashboard V2.17 — 28 Agustus 2026
 
 **Status:** Plant Overview realtime interaction bug fixed

@@ -7533,7 +7533,22 @@ function updateLiveNumbers() {
 
 function updateClock() {
   const now = new Date();
-  document.getElementById("header-clock").textContent = now.toLocaleTimeString("id-ID", { hour12: false });
+  const shift = jakartaShiftSelection(now.getTime());
+  const shiftWindows = {
+    A: "07:00—15:00",
+    B: "15:00—23:00",
+    C: "23:00—07:00",
+  };
+  document.getElementById("header-clock").textContent = now.toLocaleTimeString("id-ID", { hour12: false, timeZone: "Asia/Jakarta" });
+  const shiftButton = document.getElementById("shift-button");
+  const shiftLabel = document.getElementById("header-shift-label");
+  const shiftTime = document.getElementById("header-shift-time");
+  if (shiftLabel) shiftLabel.textContent = `Shift ${shift.shiftCode}`;
+  if (shiftTime) shiftTime.textContent = shiftWindows[shift.shiftCode];
+  if (shiftButton) {
+    shiftButton.title = `Current production shift · ${shift.productionDate}`;
+    shiftButton.setAttribute("aria-label", `Current production Shift ${shift.shiftCode}, ${shiftWindows[shift.shiftCode]}, production date ${shift.productionDate}`);
+  }
 }
 
 function openSidebar() {
