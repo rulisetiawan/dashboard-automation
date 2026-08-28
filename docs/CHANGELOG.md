@@ -4,6 +4,29 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.15 — 28 Agustus 2026
+
+**Status:** Utility Now hierarchy and category mapping refined
+
+### Dibatasi
+
+- Utility Now hanya menampilkan Water, Electrical Energy, Steam, dan Thermal Oil.
+- Snapshot utility lain tetap tersedia di backend tetapi tidak masuk ke card overview utama.
+
+### Diperjelas
+
+- Container utility diperlebar menjadi tiga kali lebar KPI standar pada desktop.
+- Setiap utility memakai icon dan nama kategori tetap; label sumber aktual ditampilkan sebagai keterangan kedua.
+- Nilai utility memakai data font, bobot, tracking, dan skala yang sama dengan Machine Running.
+- Empat slot selalu terlihat. Utility yang belum memiliki mapping menampilkan `No mapped snapshot` tanpa menggeser urutan card.
+
+### Dipertahankan
+
+- Nilai, unit, quality, dan latest received tetap berasal dari `utility_snapshot`.
+- Quality summary dihitung hanya dari empat utility utama.
+
+---
+
 ## Dashboard V2.14 / NestJS PostgreSQL Integration V1.17 — 28 Agustus 2026
 
 **Status:** Utility emphasis and synchronized process output comparison implemented

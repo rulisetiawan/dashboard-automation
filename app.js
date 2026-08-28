@@ -3314,8 +3314,8 @@ function actualUtilityKind(item) {
   const descriptor = `${item.utility_code || ""} ${item.label || ""} ${item.unit || ""}`.toUpperCase();
   if (descriptor.includes("STEAM") || descriptor.includes("BOILER")) return "steam";
   if (descriptor.includes("THERMAL") || descriptor.includes("OIL")) return "thermal";
-  if (descriptor.includes("WATER") || descriptor.includes("AIR") || descriptor.includes("M³")) return "water";
-  if (descriptor.includes("ELECT") || descriptor.includes("POWER") || descriptor.includes("KW") || descriptor.includes("MW")) return "electrical";
+  if (descriptor.includes("WATER") || descriptor.includes("H2O") || /(^|[\s_.-])AIR($|[\s_.-])/.test(descriptor) || descriptor.includes("M³")) return "water";
+  if (descriptor.includes("ELECT") || descriptor.includes("POWER") || /(^|[\s_.-])[KM]W(H)?($|[\s_.-])/.test(descriptor)) return "electrical";
   return "other";
 }
 
@@ -3328,34 +3328,39 @@ function actualUtilityQuality(quality) {
 }
 
 function actualUtilityKpi(utilities) {
-  const kindMeta = {
-    electrical: "EL",
-    water: "WT",
-    steam: "ST",
-    thermal: "TO",
-    other: "UT",
-  };
-  const goodCount = utilities.filter((item) => actualUtilityQuality(item.quality).tone === "good").length;
-  const attentionCount = utilities.length - goodCount;
-  const newestTimestamp = utilities
+  const utilitySlots = [
+    { kind: "water", label: "Water", icon: "💧" },
+    { kind: "electrical", label: "Electrical Energy", icon: "⚡" },
+    { kind: "steam", label: "Steam", icon: "≋" },
+    { kind: "thermal", label: "Thermal Oil", icon: "♨" },
+  ];
+  const selectedUtilities = utilitySlots.map((slot) => ({
+    ...slot,
+    item: utilities.find((item) => actualUtilityKind(item) === slot.kind),
+  }));
+  const mappedUtilities = selectedUtilities.map((slot) => slot.item).filter(Boolean);
+  const goodCount = mappedUtilities.filter((item) => actualUtilityQuality(item.quality).tone === "good").length;
+  const newestTimestamp = mappedUtilities
     .map((item) => new Date(item.source_ts).getTime())
     .filter(Number.isFinite)
     .sort((left, right) => right - left)[0];
-  const readings = utilities.slice(0, 4).map((item) => {
-    const kind = actualUtilityKind(item);
+  const readings = selectedUtilities.map(({ kind, label, icon, item }) => {
+    if (!item) {
+      return `<div class="utility-kpi-reading utility-${kind} no-data"><span class="utility-kpi-icon" aria-hidden="true">${icon}</span><div class="utility-kpi-copy"><span class="utility-kpi-name">${label}</span><small>No mapped snapshot</small><strong>—<small></small></strong></div></div>`;
+    }
     const rawValue = item.value;
     const numericValue = rawValue !== null && rawValue !== "" ? Number(rawValue) : Number.NaN;
     const displayValue = Number.isFinite(numericValue)
       ? numericValue.toLocaleString("id-ID", { maximumFractionDigits: 2 })
       : actualText(rawValue);
-    return `<div class="utility-kpi-reading utility-${kind}"><span>${kindMeta[kind]} · ${actualText(item.label)}</span><strong>${displayValue}<small>${actualText(item.unit)}</small></strong></div>`;
+    return `<div class="utility-kpi-reading utility-${kind}"><span class="utility-kpi-icon" aria-hidden="true">${icon}</span><div class="utility-kpi-copy"><span class="utility-kpi-name">${label}</span><small title="${actualText(item.label)}">${actualText(item.label)}</small><strong>${displayValue}<small>${actualText(item.unit)}</small></strong></div></div>`;
   }).join("");
-  const qualityTone = !utilities.length ? "unknown" : attentionCount ? "stale" : "good";
-  const qualityLabel = !utilities.length ? "NO DATA" : attentionCount ? `${attentionCount} CHECK` : `${goodCount}/${utilities.length} GOOD`;
+  const qualityTone = !mappedUtilities.length ? "unknown" : goodCount === utilitySlots.length ? "good" : "stale";
+  const qualityLabel = !mappedUtilities.length ? "NO DATA" : `${goodCount}/${utilitySlots.length} GOOD`;
   return `
     <article class="card kpi-card overview-utility-kpi">
       <div class="kpi-top"><span class="kpi-label">Utility Now</span><span class="quality-pill ${qualityTone}">${qualityLabel}</span></div>
-      <div class="utility-kpi-grid">${readings || `<div class="utility-kpi-empty">Menunggu utility_snapshot</div>`}</div>
+      <div class="utility-kpi-grid">${readings}</div>
       <div class="kpi-foot">Latest received · ${newestTimestamp ? actualTime(newestTimestamp) : "—"}</div>
     </article>
   `;
