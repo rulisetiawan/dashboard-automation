@@ -177,7 +177,16 @@ body.auth-active {
 .auth-brand-lockup {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 18px;
+}
+
+.auth-brand-logo {
+  display: block;
+  width: clamp(142px, 14vw, 190px);
+  height: auto;
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.2));
 }
 
 .auth-brand-mark {
@@ -228,8 +237,10 @@ body.auth-active {
 }
 
 .auth-brand-lockup > div:last-child strong {
-  font-size: 1.06rem;
-  letter-spacing: 0.15em;
+  color: #edf8fa;
+  font-size: 0.83rem;
+  letter-spacing: 0.035em;
+  line-height: 1.35;
 }
 
 .auth-brand-lockup > div:last-child strong b {
@@ -240,8 +251,8 @@ body.auth-active {
   margin-top: 4px;
   color: #71909b;
   font-family: var(--font-data);
-  font-size: 0.49rem;
-  letter-spacing: 0.1em;
+  font-size: 0.46rem;
+  letter-spacing: 0.085em;
 }
 
 .auth-story-copy {
@@ -11338,6 +11349,16 @@ select:focus-visible {
 
   .auth-brand-lockup > div:last-child small {
     font-size: 0.42rem;
+  }
+
+  .auth-brand-lockup {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 11px;
+  }
+
+  .auth-brand-logo {
+    width: 154px;
   }
 
   .auth-story-copy {

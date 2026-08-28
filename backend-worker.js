@@ -376,10 +376,11 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith(API_PREFIX)) return apiResponse(request, env);
     const file = files[url.pathname] || files["/"];
-    return new Response(file.body, {
+    const body = file.bodyBase64 ? Uint8Array.from(atob(file.bodyBase64), (character) => character.charCodeAt(0)) : file.body;
+    return new Response(body, {
       headers: {
         "content-type": file.type,
-        "cache-control": url.pathname === "/" || url.pathname === "/index.html" ? "no-cache" : "public, max-age=3600",
+        "cache-control": url.pathname === "/" || url.pathname === "/index.html" ? "no-cache" : file.immutable ? "public, max-age=31536000, immutable" : "public, max-age=3600",
         "x-content-type-options": "nosniff",
       },
     });

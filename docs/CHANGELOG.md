@@ -4,6 +4,20 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.21 — 28 Agustus 2026
+
+**Status:** Login identity and SMM brand asset refined
+
+### Diperbarui
+
+- Brand login menggunakan nama lengkap `PT. Sarana Makin Mulya`.
+- Label platform diubah menjadi `Manufacturing Execution System (MES) SMM`.
+- Deskripsi hero disederhanakan untuk menegaskan tujuan monitoring mesin, produksi, dan utilitas.
+- Logo referensi SMM diolah menjadi aset PNG transparan 3840 × 1280 dengan treatment putih, emas, navy, dan cyan yang menyatu dengan tema login.
+- Hosted worker menyajikan aset logo dengan cache immutable tanpa mengambil gambar dari layanan eksternal.
+
+---
+
 ## Dashboard V2.20 — 28 Agustus 2026
 
 **Status:** Plant Overview summary layout refined
