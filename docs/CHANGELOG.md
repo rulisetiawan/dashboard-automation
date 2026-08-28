@@ -4,6 +4,31 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.7 / Chemical Dispensing Concept V1.14 / NestJS PostgreSQL Integration V1.15 — 28 Agustus 2026
+
+**Status:** Chemical Transaction Log auto-update implemented
+
+### Ditambahkan
+
+- Trigger PostgreSQL statement-level untuk mendeteksi `INSERT`, `UPDATE`, dan `DELETE` pada `chemical_transaction`.
+- Marker perubahan yang tetap valid untuk direct database write, bulk import, dan backfill bertimestamp lama.
+- Refresh otomatis summary, chart, unit overview, serta halaman transaction log aktif melalui WebSocket `dashboard:refresh`.
+- Badge `LIVE AUTO-UPDATE` dan fallback `AUTO-UPDATE PAUSED` pada panel transaction log.
+- Retry inisialisasi poller WebSocket saat lifecycle startup masih menyelesaikan migration database.
+
+### Diperbaiki
+
+- Rolling range chemical sekarang memperbarui waktu akhir ketika notifikasi transaksi diterima sehingga transaksi terbaru langsung masuk ke query.
+- Deteksi lama berbasis `MAX(created_at)` diganti karena dapat melewatkan insert dengan timestamp lama dan update/delete transaksi.
+
+### Dipertahankan
+
+- PostgreSQL tetap menjadi source of truth dan REST API tetap membawa payload lengkap.
+- Custom range operator tidak digeser otomatis.
+- Refresh aman terhadap scroll dan interaksi operator.
+
+---
+
 ## PostgreSQL Local Integration V1.6 — 28 Agustus 2026
 
 **Status:** HBA aktif; firewall menunggu PowerShell Administrator

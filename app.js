@@ -827,6 +827,7 @@ async function refreshBackendSources(sources) {
   if (refreshAll || sources.has("chemical_transaction")) {
     tasks.push(fetchJson("/api/v1/dispensing/transactions", "Chemical transaction API").then((payload) => {
       hydrateChemicalTransactions(payload.transactions || []);
+      if (state.chemicalLog.range !== "CUSTOM") state.chemicalLog.anchorEnd = Date.now();
       invalidateChemicalAnalytics();
     }));
   }
@@ -3831,7 +3832,9 @@ function chemicalTransactionPanel(data) {
   const first = pagination.total_rows ? (pagination.page - 1) * pagination.page_size + 1 : 0;
   const last = Math.min(pagination.total_rows, pagination.page * pagination.page_size);
   const content = `<div class="chemical-log-table-wrap"><table class="data-table chemical-transaction-table"><thead><tr><th>Time</th><th>Source ID</th><th>Chemical</th><th>Actual</th><th>Mode</th><th>Process / Emergency Detail</th><th>Calator Destination</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="8" class="dispensing-empty-row">Tidak ada transaksi sesuai filter.</td></tr>`}</tbody></table></div><div class="chemical-pagination"><div><strong>${chemicalNumber(first, 0)}–${chemicalNumber(last, 0)}</strong><span>dari ${chemicalNumber(pagination.total_rows, 0)} transaksi</span></div><label>Rows<select class="select-control" data-chemical-page-size><option value="25" ${pagination.page_size === 25 ? "selected" : ""}>25</option><option value="50" ${pagination.page_size === 50 ? "selected" : ""}>50</option><option value="100" ${pagination.page_size === 100 ? "selected" : ""}>100</option></select></label><div class="chemical-page-actions"><button class="button small" data-chemical-page="prev" ${pagination.page <= 1 ? "disabled" : ""}>← Previous</button><span>Page <strong>${pagination.page}</strong> / ${pagination.total_pages}</span><button class="button small" data-chemical-page="next" ${pagination.page >= pagination.total_pages ? "disabled" : ""}>Next →</button></div></div>`;
-  return panel("Chemical Transaction Log", "Automatic, Manual, dan Emergency · data dimuat per halaman dari PostgreSQL", content, `<span class="data-pill neutral">SERVER PAGINATION</span>`, "chemical-transaction-panel");
+  const autoUpdateConnected = backendConnection.realtime === "connected";
+  const autoUpdateBadge = `<span class="data-pill ${autoUpdateConnected ? "good" : "warning"}">${autoUpdateConnected ? "LIVE AUTO-UPDATE" : "AUTO-UPDATE PAUSED"}</span>`;
+  return panel("Chemical Transaction Log", "Automatic, Manual, dan Emergency · transaksi baru dimuat otomatis dari PostgreSQL", content, autoUpdateBadge, "chemical-transaction-panel");
 }
 
 function chemicalUnitHeader(machine, data) {

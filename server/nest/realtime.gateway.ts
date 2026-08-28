@@ -90,16 +90,21 @@ export class RealtimeGateway implements OnModuleDestroy {
   }
 
   private async startPolling() {
-    const [dataVersions, tagLatestVersion, communicationStates] = await Promise.all([
-      this.readDataVersions(),
-      this.readTagLatestVersion(),
-      this.readCommunicationStates(),
-    ]);
-    this.dataVersions = dataVersions;
-    this.dataVersion = this.latestVersion(dataVersions);
-    this.tagLatestVersion = tagLatestVersion;
-    this.communicationStates = communicationStates;
-    this.poller = setInterval(() => void this.publishIfChanged(), 2000);
+    try {
+      const [dataVersions, tagLatestVersion, communicationStates] = await Promise.all([
+        this.readDataVersions(),
+        this.readTagLatestVersion(),
+        this.readCommunicationStates(),
+      ]);
+      this.dataVersions = dataVersions;
+      this.dataVersion = this.latestVersion(dataVersions);
+      this.tagLatestVersion = tagLatestVersion;
+      this.communicationStates = communicationStates;
+      this.poller = setInterval(() => void this.publishIfChanged(), 2000);
+    } catch {
+      // Gateway dapat dibuat sebelum lifecycle migration selesai; coba lagi tanpa menjatuhkan service.
+      this.poller = setTimeout(() => void this.startPolling(), 1000);
+    }
   }
 
   private async publishIfChanged() {
@@ -252,7 +257,7 @@ export class RealtimeGateway implements OnModuleDestroy {
         SELECT 'asset_snapshot'::text AS source, updated_at AS changed_at FROM asset
         UNION ALL SELECT 'asset_snapshot', updated_at FROM asset_snapshot
         UNION ALL SELECT 'utility_snapshot', updated_at FROM utility_snapshot
-        UNION ALL SELECT 'chemical_transaction', created_at FROM chemical_transaction
+        UNION ALL SELECT 'chemical_transaction', changed_at FROM dashboard_change_marker WHERE source_key = 'chemical_transaction'
         UNION ALL SELECT 'alarm_event', GREATEST(created_at, COALESCE(cleared_at, created_at), COALESCE(acknowledged_at, created_at)) FROM alarm_event
         UNION ALL SELECT 'production_batch', updated_at FROM production_batch
         UNION ALL SELECT 'batch_process_run', updated_at FROM batch_process_run
