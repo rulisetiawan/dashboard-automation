@@ -4,6 +4,25 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.8 — 28 Agustus 2026
+
+**Status:** Area card status visibility implemented
+
+### Diubah
+
+- Summary `Run`, `Idle`, `Warn`, dan `Fault` memakai warna semantik hijau, slate blue, amber, dan merah.
+- Status dengan jumlah aktif diberi border, garis aksen, dan bayangan ringan; nilai nol diredupkan.
+- Area card memakai garis atas dan tint ringan berdasarkan kondisi berprioritas tertinggi.
+- Area dengan seluruh mesin idle sekarang berstatus `IDLE`, bukan `OFFLINE`.
+
+### Dipertahankan
+
+- Sumber status tetap `asset_snapshot.machine_state`.
+- Urutan prioritas kondisi adalah Fault, Warning, Running, Idle, lalu Offline.
+- Navigasi area, drill-down mesin, dan refresh real-time tidak berubah.
+
+---
+
 ## Dashboard V2.7 / Chemical Dispensing Concept V1.14 / NestJS PostgreSQL Integration V1.15 — 28 Agustus 2026
 
 **Status:** Chemical Transaction Log auto-update implemented

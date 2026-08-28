@@ -2025,6 +2025,16 @@ function downtimePareto(type) {
   return panel("Unplanned Downtime Pareto", "Penyebab downtime demo untuk periode terpilih; planned idle tidak dihitung.", `<div class="downtime-bars">${reasons.map(([label, value], index) => `<div><span>${label}</span><i><b style="width:${value}%;background:${managementColors[index]}"></b></i><strong>${value}%</strong></div>`).join("")}</div>`);
 }
 
+function areaStateSummary(running, idle, warning, fault) {
+  const states = [
+    ["run", "Run", running],
+    ["idle", "Idle", idle],
+    ["warn", "Warn", warning],
+    ["fault", "Fault", fault],
+  ];
+  return `<div class="area-state-grid">${states.map(([tone, label, count]) => `<span class="area-state-item state-${tone} ${Number(count) > 0 ? "is-active" : "is-empty"}"><strong>${count}</strong><small>${label}</small></span>`).join("")}</div>`;
+}
+
 function processFleetPage(type) {
   const config = processConfig[type];
   const fleet = fleetFor(type);
@@ -2042,11 +2052,11 @@ function processFleetPage(type) {
     const idle = statusCount(items, "idle");
     const warning = statusCount(items, "warning");
     const fault = statusCount(items, "fault");
-    const tone = fault ? "fault" : warning ? "warning" : "running";
-    return `<article class="card area-card" data-area-target="${type}|${area.code}" role="button" tabindex="0">
+    const tone = fault ? "fault" : warning ? "warning" : running ? "running" : idle ? "idle" : "offline";
+    return `<article class="card area-card" data-area-state="${tone}" data-area-target="${type}|${area.code}" role="button" tabindex="0">
       <div class="area-card-head"><div><span class="area-code">${area.code}</span><h2>${type === "jetflow" ? area.label : `Area ${area.label}`}</h2></div>${statusPill(tone)}</div>
       <div class="area-total"><strong>${items.length}</strong><span>${config.singular} registered</span></div>
-      <div class="area-state-grid"><span><strong>${running}</strong>Run</span><span><strong>${idle}</strong>Idle</span><span><strong>${warning}</strong>Warn</span><span><strong>${fault}</strong>Fault</span></div>
+      ${areaStateSummary(running, idle, warning, fault)}
       <div class="area-card-foot"><span>${actualOnly ? "No data aggregate" : `${formatManagementValue(metricTotal(type, state.management.metric[type], items), selectedMetric.unit)} ${selectedMetric.unit} ${selectedMetric.short.toLowerCase()}`}</span><strong>Open ranking →</strong></div>
     </article>`;
   }).join("");
@@ -4796,11 +4806,15 @@ function databaseFleetPage(type) {
   const areas = [...new Map(fleet.map((machine) => [machine.area, machine.areaLabel || machine.area])).entries()];
   const cards = areas.length ? areas.map(([areaCode, areaLabel]) => {
     const machines = fleet.filter((machine) => machine.area === areaCode);
-    const tone = statusCount(machines, "fault") ? "fault" : statusCount(machines, "warning") ? "warning" : statusCount(machines, "running") ? "running" : "offline";
-    return `<article class="card area-card" data-area-target="${type}|${areaCode}" role="button" tabindex="0">
+    const running = statusCount(machines, "running");
+    const idle = statusCount(machines, "idle");
+    const warning = statusCount(machines, "warning");
+    const fault = statusCount(machines, "fault");
+    const tone = fault ? "fault" : warning ? "warning" : running ? "running" : idle ? "idle" : "offline";
+    return `<article class="card area-card" data-area-state="${tone}" data-area-target="${type}|${areaCode}" role="button" tabindex="0">
       <div class="area-card-head"><div><span class="area-code">${actualText(areaCode)}</span><h2>${actualText(areaLabel)}</h2></div>${statusPill(tone)}</div>
       <div class="area-total"><strong>${machines.length}</strong><span>${actualText(processConfig[type].singular)} registered</span></div>
-      <div class="area-state-grid"><span><strong>${statusCount(machines, "running")}</strong>Run</span><span><strong>${statusCount(machines, "idle")}</strong>Idle</span><span><strong>${statusCount(machines, "warning")}</strong>Warn</span><span><strong>${statusCount(machines, "fault")}</strong>Fault</span></div>
+      ${areaStateSummary(running, idle, warning, fault)}
       <div class="area-card-foot"><span>Snapshot aktual</span><strong>Open assets →</strong></div>
     </article>`;
   }).join("") : actualEmpty("Belum ada asset untuk proses ini");

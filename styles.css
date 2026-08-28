@@ -19,6 +19,8 @@
   --warning-soft: rgba(214, 139, 5, 0.12);
   --danger: #d9485c;
   --danger-soft: rgba(217, 72, 92, 0.1);
+  --idle: #64748b;
+  --idle-soft: rgba(100, 116, 139, 0.11);
   --sidebar: #18252c;
   --sidebar-2: #203139;
   --sidebar-text: #9fb0b7;
@@ -755,13 +757,51 @@ select:focus-visible {
 }
 
 .area-card {
+  position: relative;
   display: flex;
+  overflow: hidden;
   min-height: 228px;
   flex-direction: column;
   padding: 20px 22px;
   cursor: pointer;
   transition: 160ms ease;
 }
+
+.area-card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: var(--line);
+  content: "";
+}
+
+.area-card[data-area-state="running"] {
+  border-color: color-mix(in srgb, var(--success) 24%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--success) 5%, var(--surface)) 0, var(--surface) 42%);
+}
+
+.area-card[data-area-state="running"]::before { background: var(--success); }
+
+.area-card[data-area-state="idle"] {
+  border-color: color-mix(in srgb, var(--idle) 24%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--idle) 5%, var(--surface)) 0, var(--surface) 42%);
+}
+
+.area-card[data-area-state="idle"]::before { background: var(--idle); }
+
+.area-card[data-area-state="warning"] {
+  border-color: color-mix(in srgb, var(--warning) 32%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--warning) 7%, var(--surface)) 0, var(--surface) 42%);
+}
+
+.area-card[data-area-state="warning"]::before { background: var(--warning); }
+
+.area-card[data-area-state="fault"] {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--danger) 7%, var(--surface)) 0, var(--surface) 42%);
+}
+
+.area-card[data-area-state="fault"]::before { background: var(--danger); }
 
 .area-card:hover,
 .area-card:focus-visible,
@@ -830,21 +870,62 @@ select:focus-visible {
   gap: 8px;
 }
 
-.area-state-grid span {
+.area-state-item {
+  position: relative;
   display: grid;
-  gap: 3px;
-  padding: 9px 5px;
-  border-radius: 6px;
-  background: var(--surface-2);
-  color: var(--ink-3);
-  font-size: 0.48rem;
+  min-height: 56px;
+  align-content: center;
+  gap: 4px;
+  padding: 9px 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   text-align: center;
 }
 
-.area-state-grid strong {
-  color: var(--ink-2);
+.area-state-item strong {
   font-family: var(--font-data);
-  font-size: 0.68rem;
+  font-size: 0.88rem;
+  line-height: 1;
+}
+
+.area-state-item small {
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.area-state-item.state-run {
+  border-color: color-mix(in srgb, var(--success) 24%, var(--line));
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.area-state-item.state-idle {
+  border-color: color-mix(in srgb, var(--idle) 24%, var(--line));
+  background: var(--idle-soft);
+  color: var(--idle);
+}
+
+.area-state-item.state-warn {
+  border-color: color-mix(in srgb, var(--warning) 26%, var(--line));
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.area-state-item.state-fault {
+  border-color: color-mix(in srgb, var(--danger) 26%, var(--line));
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.area-state-item.is-active {
+  border-color: currentColor;
+  box-shadow: inset 0 3px 0 currentColor, 0 5px 12px color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.area-state-item.is-empty {
+  opacity: 0.54;
 }
 
 .area-card-foot {
@@ -2331,7 +2412,11 @@ select:focus-visible {
   color: var(--danger);
 }
 
-.status-pill.idle,
+.status-pill.idle {
+  background: var(--idle-soft);
+  color: var(--idle);
+}
+
 .status-pill.offline,
 .quality-pill.unknown,
 .data-pill.neutral {
