@@ -256,6 +256,18 @@ async function authResponse(request, env, pathname) {
     if (!username || !password || username.length > 160 || password.length > 128) return json({ message: "Username atau password tidak valid." }, 401);
     const user = await env.DB.prepare("SELECT * FROM dashboard_user WHERE username = ? OR email = ? LIMIT 1").bind(username, username).first();
     const locked = user?.locked_until && new Date(user.locked_until).getTime() > Date.now();
+    if (env.DASHBOARD_AUTH_DIAGNOSTIC_TOKEN && request.headers.get("x-dashboard-auth-diagnostic") === env.DASHBOARD_AUTH_DIAGNOSTIC_TOKEN) {
+      const [, iterations, salt, digest] = String(user?.password_hash || "").split("$");
+      let verification = false;
+      let verificationError = null;
+      try { verification = Boolean(user) && await verifyPassword(password, user.password_hash); }
+      catch (error) { verificationError = error instanceof Error ? `${error.name}: ${error.message}` : String(error); }
+      return json({
+        userFound: Boolean(user), active: user?.active, locked: Boolean(locked), passwordLength: password.length,
+        inputChecksumMatches: Boolean(env.DASHBOARD_BOOTSTRAP_PASSWORD_SHA256) && await sha256(password) === env.DASHBOARD_BOOTSTRAP_PASSWORD_SHA256,
+        iterations, saltLength: salt?.length, digestLength: digest?.length, verification, verificationError,
+      });
+    }
     let passwordMatches = false;
     if (user?.active === 1 && !locked) {
       try {
