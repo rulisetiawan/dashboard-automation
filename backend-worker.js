@@ -152,6 +152,8 @@ async function ensureDatabase(env) {
         display_name = excluded.display_name,
         password_hash = excluded.password_hash,
         active = 1,
+        failed_login_count = 0,
+        locked_until = NULL,
         updated_at = excluded.updated_at
       WHERE dashboard_user.password_hash <> excluded.password_hash
          OR dashboard_user.display_name <> excluded.display_name
