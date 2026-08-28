@@ -11367,3 +11367,91 @@ select:focus-visible {
     flex-direction: column;
   }
 }
+
+/* Dashboard V2.20 · balanced Plant Overview summary */
+.overview-kpi-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 16px;
+}
+
+.overview-kpi-grid > .overview-utility-kpi {
+  grid-column: 1 / -1;
+  min-height: 0;
+  padding: 18px 20px 17px;
+}
+
+.overview-utility-kpi .kpi-top {
+  margin-bottom: 12px;
+}
+
+.overview-utility-kpi .utility-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.overview-utility-kpi .utility-kpi-reading {
+  min-height: 78px;
+  padding: 11px 12px;
+}
+
+.overview-kpi-grid > .kpi-card:not(.overview-utility-kpi) {
+  display: flex;
+  min-height: 148px;
+  flex-direction: column;
+}
+
+.overview-kpi-grid > .kpi-card:not(.overview-utility-kpi) .kpi-top {
+  align-items: flex-start;
+}
+
+.overview-kpi-grid > .kpi-card:not(.overview-utility-kpi) .kpi-label {
+  max-width: 70%;
+  line-height: 1.35;
+}
+
+.overview-kpi-grid > .kpi-card:not(.overview-utility-kpi) .kpi-value {
+  white-space: nowrap;
+}
+
+.overview-kpi-grid > .kpi-card:not(.overview-utility-kpi) .kpi-foot {
+  margin-top: auto;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .overview-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .overview-kpi-grid > .overview-utility-kpi {
+    grid-column: 1 / -1;
+  }
+
+  .overview-utility-kpi .utility-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 920px) {
+  .overview-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .overview-kpi-grid,
+  .overview-utility-kpi .utility-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-kpi-grid > .overview-utility-kpi {
+    grid-column: auto;
+  }
+
+  .overview-kpi-grid > .kpi-card:not(.overview-utility-kpi) .kpi-label {
+    max-width: none;
+  }
+}

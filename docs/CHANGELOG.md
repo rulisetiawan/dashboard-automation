@@ -4,6 +4,19 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.20 — 28 Agustus 2026
+
+**Status:** Plant Overview summary layout refined
+
+### Diperbaiki
+
+- Utility Now ditempatkan sebagai ringkasan lebar dengan empat pembacaan sejajar pada desktop.
+- Lima KPI operasional memakai kolom yang sama lebar agar label, nilai, unit, dan sumber data tidak terpotong.
+- Grid berubah menjadi tiga, dua, lalu satu kolom mengikuti lebar layar tanpa menimbulkan overflow horizontal.
+- Kredensial administrator dirotasi menjadi nilai yang mudah digunakan; database tetap hanya menyimpan salted one-way hash.
+
+---
+
 ## Dashboard V2.19 / NestJS PostgreSQL Integration V1.18 — 28 Agustus 2026
 
 **Status:** Database-backed dashboard authentication implemented
