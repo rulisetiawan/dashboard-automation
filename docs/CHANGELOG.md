@@ -19,7 +19,7 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ### Diamankan
 
-- Password memakai salted PBKDF2-SHA256 600.000 iterasi dan verifikasi constant-time.
+- Password memakai salted PBKDF2-SHA256 dan verifikasi constant-time: 600.000 iterasi pada PostgreSQL/NestJS serta 100.000 pada hosted D1 sesuai batas runtime.
 - Session memakai random token 256-bit pada cookie HttpOnly, SameSite Strict, dan Secure pada HTTPS.
 - Database hanya menyimpan SHA-256 hash dari session token.
 - Lima kegagalan login mengunci akun selama 15 menit.

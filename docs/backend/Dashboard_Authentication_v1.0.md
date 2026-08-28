@@ -15,8 +15,11 @@ pbkdf2-sha256$600000$BASE64_SALT$BASE64_DERIVED_KEY
 - salt: 32 byte acak per user;
 - derived key: 32 byte;
 - digest: SHA-256;
-- iterasi: 600.000;
+- iterasi PostgreSQL/NestJS: 600.000;
+- iterasi hosted D1: 100.000, yaitu batas PBKDF2 pada runtime hosted saat ini;
 - verifikasi menggunakan constant-time comparison.
+
+Hosted D1 tetap dilindungi password acak panjang, rate limiting berbasis lockout, session token 256-bit, dan akses situs owner-only. Nilai iterasi hosted perlu dinaikkan ketika runtime mendukung batas yang lebih tinggi.
 
 ## Session storage
 
