@@ -4,6 +4,16 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.22 — 28 Agustus 2026
+
+**Status:** Sidebar identity aligned with SMM brand
+
+### Diperbarui
+
+- Identitas buatan berbasis ikon CSS dan teks `PT.SMM` pada sidebar diganti dengan aset logo SMM yang sama seperti halaman login.
+- Logo sidebar memakai lockup lengkap monogram SMM dan nama Sarana Makin Mulya tanpa teks merek yang diduplikasi.
+- Ukuran logo dibuat responsif untuk sidebar desktop penuh, sidebar ringkas, dan drawer navigasi mobile.
+
 ## Dashboard V2.21 — 28 Agustus 2026
 
 **Status:** Login identity and SMM brand asset refined
