@@ -4,6 +4,17 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.16 — 28 Agustus 2026
+
+**Status:** Utility Now accent color aligned with dashboard theme
+
+### Diubah
+
+- Border aksen atas Utility Now tidak lagi menggunakan gradient multicolor.
+- Aksen diganti menjadi satu warna `primary-strong` agar konsisten dengan warna biru dashboard lainnya.
+
+---
+
 ## Dashboard V2.15 — 28 Agustus 2026
 
 **Status:** Utility Now hierarchy and category mapping refined
