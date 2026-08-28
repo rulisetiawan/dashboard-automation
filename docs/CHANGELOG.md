@@ -4,6 +4,32 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.19 / NestJS PostgreSQL Integration V1.18 — 28 Agustus 2026
+
+**Status:** Database-backed dashboard authentication implemented
+
+### Ditambahkan
+
+- Login page eksklusif dengan identitas Digital Automation Department dan tagline Smart Manufacturing System PT SMM.
+- Menu session pengguna pada header beserta aksi sign out.
+- Tabel PostgreSQL `dashboard_user` dan `dashboard_session`.
+- Endpoint login, session validation, dan logout untuk backend PostgreSQL serta hosted D1.
+- Script provisioning akun administrator tanpa menyimpan password plaintext pada source atau `.env`.
+
+### Diamankan
+
+- Password memakai salted PBKDF2-SHA256 600.000 iterasi dan verifikasi constant-time.
+- Session memakai random token 256-bit pada cookie HttpOnly, SameSite Strict, dan Secure pada HTTPS.
+- Database hanya menyimpan SHA-256 hash dari session token.
+- Lima kegagalan login mengunci akun selama 15 menit.
+- API read/write dashboard dan koneksi WebSocket memerlukan session valid.
+
+### Dipisahkan
+
+- POST live-value dan external batch ingestion tidak memakai session operator; endpoint tersebut tetap memakai `INGEST_API_KEY` sebagai kredensial machine-to-machine.
+
+---
+
 ## Dashboard V2.18 — 28 Agustus 2026
 
 **Status:** Header production shift synchronized with Jakarta time

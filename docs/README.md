@@ -13,7 +13,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Kalender_v1.20.md` | 1.20 | Aktif | Fabric wrap pada cylinder Upper/Lower dan loadcell sebagai roller kecil setelah masing-masing felt |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
 | `chemicals/Chemical_Dispensing_Calator_Concept_v1.15.md` | 1.15 | Aktif | Auto-update transaction log tanpa menggeser posisi scroll |
-| `dashboard/Dashboard_V2_Concept_v2.18.md` | 2.18 | Aktif | Indikator shift header otomatis berdasarkan waktu Asia/Jakarta |
+| `dashboard/Dashboard_V2_Concept_v2.19.md` | 2.19 | Aktif | Login eksklusif Digital Automation dan menu session pengguna |
 | `dashboard/Dashboard_V1_Concept_v1.63.md` | 1.63 | Final V1 | Baseline presentasi V1 dengan tooltip tanpa blink saat refresh real-time |
 | `assets/Plant_Machine_Area_Mapping_v1.1.md` | 1.1 | Aktif | Master mapping 138 aset mesin: 133 mesin proses dan 5 dispensing Calator |
 | `backend/Backend_Data_Architecture_Concept_v1.0.md` | 1.0 | Aktif | Fondasi edge-to-historian, model database, API, security, dan roadmap integrasi backend |
@@ -24,7 +24,8 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `backend/Database_Design_Concept_v1.0.md` | 1.0 | Aktif | Desain database PostgreSQL + TimescaleDB untuk master, historian, MES, utility, chemical, maintenance, dan audit |
 | `backend/Non_Jetflow_Backend_Integration_v1.0.md` | 1.0 | Aktif | Implementasi awal D1/API read-only untuk Calator, Dryer, Kalender, Dispensing, dan Utilities |
 | `backend/PostgreSQL_Local_Integration_v1.6.md` | 1.6 | Implementasi parsial | HBA aktif; firewall 169.254.150.182/32 menunggu Administrator |
-| `backend/NestJS_PostgreSQL_Integration_v1.17.md` | 1.17 | Aktif | Cross-process output totals pada date/shift dan formula yang sama dengan batch output |
+| `backend/NestJS_PostgreSQL_Integration_v1.18.md` | 1.18 | Aktif | Autentikasi dashboard dengan password hash, session aman, dan API protection |
+| `backend/Dashboard_Authentication_v1.0.md` | 1.0 | Aktif | Kontrak user, password hashing, session, provisioning, dan pemisahan API OT |
 | `backend/Live_Value_Ingestion_API_v1.0.md` | 1.0 | Aktif | Kontrak POST nilai live langsung ke `tag_latest` tanpa `telemetry_sample` |
 | `backend/Alarm_Rule_Engine_v1.0.md` | 1.0 | Aktif | Configurable threshold, hysteresis, delay, lifecycle, audit, dan WebSocket alarm engine |
 | `backend/Batch_Abnormal_Log_Backend_Implementation_v1.1.md` | 1.1 | Aktif | Implementasi target achievement, dynamic PV/SV deviation, SV revision log, API, export, dan konfigurasi frontend |

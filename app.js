@@ -223,6 +223,12 @@ const backendConnection = {
   lastSync: null,
   realtime: "connecting",
 };
+const authentication = {
+  user: null,
+  dashboardStarted: false,
+  intervalsStarted: false,
+};
+const loginUsernameStorageKey = "pt-smm.dashboard.login-username";
 const defaultHeartbeatStaleAfterSeconds = 30;
 
 let backendUtilities = [];
@@ -756,6 +762,7 @@ const backendProcesses = ["jetflow", "calator", "dryer", "kalender", "chemical"]
 
 async function fetchJson(url, label) {
   const response = await fetch(url, { cache: "no-store" });
+  if (response.status === 401 && !String(url).includes("/auth/")) showAuthenticationScreen("Session Anda telah berakhir. Silakan masuk kembali.");
   if (!response.ok) throw new Error(`${label} unavailable (${response.status})`);
   return response.json();
 }
@@ -7559,6 +7566,156 @@ function closeSidebar() {
   document.getElementById("sidebar").classList.remove("open");
 }
 
+function authenticationInitials(name) {
+  const parts = String(name || "DA").trim().split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts.at(-1)[0]}` : parts[0]?.slice(0, 2) || "DA").toUpperCase();
+}
+
+function applyAuthenticatedUser(user) {
+  authentication.user = user;
+  const displayName = user?.displayName || user?.username || "Authorized User";
+  const role = String(user?.role || "VIEWER").replaceAll("_", " ");
+  const department = user?.department || "Digital Automation";
+  const avatar = document.getElementById("session-avatar");
+  const name = document.getElementById("session-user-name");
+  const roleLabel = document.getElementById("session-user-role");
+  const menuName = document.getElementById("session-menu-name");
+  const menuDepartment = document.getElementById("session-menu-department");
+  if (avatar) avatar.textContent = authenticationInitials(displayName);
+  if (name) name.textContent = displayName;
+  if (roleLabel) roleLabel.textContent = role;
+  if (menuName) menuName.textContent = displayName;
+  if (menuDepartment) menuDepartment.textContent = `${department} · ${role}`;
+}
+
+function showAuthenticationScreen(message = "") {
+  authentication.user = null;
+  document.body.classList.add("auth-active");
+  document.getElementById("app").hidden = true;
+  document.getElementById("auth-screen").hidden = false;
+  const menu = document.getElementById("user-session-menu");
+  const menuButton = document.getElementById("user-menu-button");
+  if (menu) menu.hidden = true;
+  if (menuButton) menuButton.setAttribute("aria-expanded", "false");
+  const error = document.getElementById("login-error");
+  if (error) {
+    error.textContent = message;
+    error.hidden = !message;
+  }
+  if (realtimeSocket) {
+    realtimeSocket.disconnect();
+    realtimeSocket = null;
+  }
+  window.requestAnimationFrame(() => document.getElementById("login-username")?.focus());
+}
+
+function showAuthenticatedDashboard(user) {
+  applyAuthenticatedUser(user);
+  document.body.classList.remove("auth-active");
+  document.getElementById("auth-screen").hidden = true;
+  document.getElementById("app").hidden = false;
+  if (!authentication.dashboardStarted) {
+    authentication.dashboardStarted = true;
+    updateAlarmCounts();
+    updateClock();
+    renderPage();
+  } else {
+    renderPage({ preserveScroll: true });
+  }
+  backendConnection.status = "connecting";
+  backendConnection.realtime = "connecting";
+  void connectNonJetflowBackend();
+  connectRealtimeChannel();
+  if (!authentication.intervalsStarted) {
+    authentication.intervalsStarted = true;
+    window.setInterval(updateClock, 1000);
+    window.setInterval(updateMachineConnectionIndicators, 1000);
+    window.setInterval(updateLiveNumbers, 1800);
+  }
+}
+
+async function initializeAuthentication() {
+  const remembered = window.localStorage.getItem(loginUsernameStorageKey) || "";
+  const usernameInput = document.getElementById("login-username");
+  if (usernameInput) usernameInput.value = remembered;
+  try {
+    const response = await fetch("/api/v1/auth/session", { cache: "no-store", credentials: "same-origin" });
+    if (!response.ok) throw new Error("No active session");
+    const payload = await response.json();
+    showAuthenticatedDashboard(payload.user);
+  } catch {
+    showAuthenticationScreen();
+  }
+}
+
+document.getElementById("login-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const username = document.getElementById("login-username")?.value.trim() || "";
+  const password = document.getElementById("login-password")?.value || "";
+  const submit = document.getElementById("login-submit");
+  const error = document.getElementById("login-error");
+  if (!username || !password) {
+    error.textContent = "Masukkan username dan password untuk melanjutkan.";
+    error.hidden = false;
+    return;
+  }
+  submit.disabled = true;
+  error.hidden = true;
+  try {
+    const response = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!response.ok) throw new Error(response.status === 429 ? "Terlalu banyak percobaan login. Coba kembali beberapa menit lagi." : "Username atau password tidak valid.");
+    const payload = await response.json();
+    if (document.getElementById("login-remember")?.checked) window.localStorage.setItem(loginUsernameStorageKey, username);
+    else window.localStorage.removeItem(loginUsernameStorageKey);
+    document.getElementById("login-password").value = "";
+    showAuthenticatedDashboard(payload.user);
+  } catch (loginError) {
+    error.textContent = loginError instanceof Error ? loginError.message : "Login gagal. Silakan coba kembali.";
+    error.hidden = false;
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+document.getElementById("password-visibility")?.addEventListener("click", () => {
+  const input = document.getElementById("login-password");
+  const button = document.getElementById("password-visibility");
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  button.textContent = show ? "Hide" : "Show";
+  button.setAttribute("aria-label", show ? "Hide password" : "Show password");
+});
+
+document.getElementById("user-menu-button")?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  const menu = document.getElementById("user-session-menu");
+  const button = document.getElementById("user-menu-button");
+  menu.hidden = !menu.hidden;
+  button.setAttribute("aria-expanded", String(!menu.hidden));
+});
+
+document.getElementById("logout-button")?.addEventListener("click", async () => {
+  try {
+    await fetch("/api/v1/auth/logout", { method: "POST", credentials: "same-origin" });
+  } finally {
+    document.getElementById("login-password").value = "";
+    showAuthenticationScreen("Anda telah keluar dari dashboard dengan aman.");
+  }
+});
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest?.(".user-menu-wrap")) return;
+  const menu = document.getElementById("user-session-menu");
+  const button = document.getElementById("user-menu-button");
+  if (menu) menu.hidden = true;
+  if (button) button.setAttribute("aria-expanded", "false");
+});
+
 document.getElementById("main-nav").addEventListener("click", (event) => {
   const button = event.target.closest("[data-page]");
   if (button) navigate(button.dataset.page);
@@ -7620,11 +7777,4 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && realtimeUiRefresh.pending) scheduleSafeRealtimeRender();
 });
 
-updateAlarmCounts();
-updateClock();
-renderPage();
-connectNonJetflowBackend();
-connectRealtimeChannel();
-window.setInterval(updateClock, 1000);
-window.setInterval(updateMachineConnectionIndicators, 1000);
-window.setInterval(updateLiveNumbers, 1800);
+void initializeAuthentication();

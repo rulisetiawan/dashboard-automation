@@ -103,6 +103,9 @@ const schemaStatements = [
   "CREATE TABLE IF NOT EXISTS chemical_transaction (transaction_id TEXT PRIMARY KEY, request_code TEXT NOT NULL, dispenser_id TEXT NOT NULL, calator_id TEXT NOT NULL, chemical_code TEXT NOT NULL, chemical_name TEXT NOT NULL, target_kg REAL NOT NULL, actual_kg REAL, mode TEXT NOT NULL, status TEXT NOT NULL, operator_name TEXT, stage TEXT, occurred_at TEXT NOT NULL, created_at TEXT NOT NULL)",
   "CREATE INDEX IF NOT EXISTS idx_chemical_transaction_filter ON chemical_transaction(dispenser_id, occurred_at DESC)",
   "CREATE TABLE IF NOT EXISTS utility_snapshot (utility_code TEXT PRIMARY KEY, label TEXT NOT NULL, value REAL NOT NULL, unit TEXT NOT NULL, quality TEXT NOT NULL, source_ts TEXT NOT NULL, updated_at TEXT NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS dashboard_user (user_id TEXT PRIMARY KEY, username TEXT NOT NULL COLLATE NOCASE UNIQUE, email TEXT COLLATE NOCASE UNIQUE, display_name TEXT NOT NULL, department TEXT NOT NULL DEFAULT 'Digital Automation', role_code TEXT NOT NULL DEFAULT 'VIEWER', password_hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, failed_login_count INTEGER NOT NULL DEFAULT 0, locked_until TEXT, last_login_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS dashboard_session (session_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, user_agent TEXT, ip_address TEXT, revoked_at TEXT, created_at TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES dashboard_user(user_id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_dashboard_session_active ON dashboard_session(user_id, expires_at DESC, revoked_at)",
 ];
 
 async function executeInChunks(db, statements, chunkSize = 50) {
@@ -138,11 +141,131 @@ async function ensureDatabase(env) {
     ];
     await executeInChunks(env.DB, statements);
   }
+  if (env.DASHBOARD_BOOTSTRAP_USERNAME && env.DASHBOARD_BOOTSTRAP_PASSWORD_HASH) {
+    const now = new Date().toISOString();
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO dashboard_user (
+        user_id, username, display_name, department, role_code, password_hash,
+        active, failed_login_count, created_at, updated_at
+      ) VALUES (?, ?, ?, 'Digital Automation', 'ADMIN', ?, 1, 0, ?, ?)
+    `).bind(
+      crypto.randomUUID(),
+      String(env.DASHBOARD_BOOTSTRAP_USERNAME).trim().toLowerCase(),
+      String(env.DASHBOARD_BOOTSTRAP_DISPLAY_NAME || "Dashboard Administrator").trim(),
+      String(env.DASHBOARD_BOOTSTRAP_PASSWORD_HASH),
+      now,
+      now,
+    ).run();
+  }
   return { available: true, mode: "D1" };
 }
 
-function json(payload, status = 200) {
-  return new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
+function json(payload, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", ...extraHeaders } });
+}
+
+const dashboardSessionCookie = "smm_dashboard_session";
+const dashboardSessionLifetimeMs = 12 * 60 * 60_000;
+
+function base64Bytes(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function hexBytes(value) {
+  return [...new Uint8Array(value)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function cookieValue(request, name) {
+  const match = String(request.headers.get("cookie") || "").split(";").map((item) => item.trim()).find((item) => item.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
+}
+
+async function sha256(value) {
+  return hexBytes(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+}
+
+async function verifyPassword(password, encodedHash) {
+  const [algorithm, rawIterations, rawSalt, rawHash] = String(encodedHash || "").split("$");
+  const iterations = Number(rawIterations);
+  if (algorithm !== "pbkdf2-sha256" || !Number.isInteger(iterations) || iterations < 100000 || iterations > 1000000 || !rawSalt || !rawHash) return false;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const actual = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: base64Bytes(rawSalt), iterations }, key, 256));
+  const expected = base64Bytes(rawHash);
+  if (actual.length !== expected.length) return false;
+  let difference = 0;
+  for (let index = 0; index < actual.length; index += 1) difference |= actual[index] ^ expected[index];
+  return difference === 0;
+}
+
+function sessionUser(row) {
+  return {
+    userId: row.user_id,
+    username: row.username,
+    displayName: row.display_name,
+    department: row.department || "Digital Automation",
+    role: row.role_code || "VIEWER",
+    expiresAt: row.expires_at,
+  };
+}
+
+async function authenticatedSession(request, env) {
+  const token = cookieValue(request, dashboardSessionCookie);
+  if (!token) return null;
+  const now = new Date().toISOString();
+  const row = await env.DB.prepare(`
+    SELECT u.user_id, u.username, u.display_name, u.department, u.role_code,
+           s.session_id, s.expires_at, s.last_seen_at
+    FROM dashboard_session s
+    JOIN dashboard_user u ON u.user_id = s.user_id
+    WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND u.active = 1
+    LIMIT 1
+  `).bind(await sha256(token), now).first();
+  if (!row) return null;
+  if (!row.last_seen_at || Date.now() - new Date(row.last_seen_at).getTime() > 5 * 60_000) {
+    await env.DB.prepare("UPDATE dashboard_session SET last_seen_at = ? WHERE session_id = ?").bind(now, row.session_id).run();
+  }
+  return sessionUser(row);
+}
+
+async function authResponse(request, env, pathname) {
+  if (pathname.endsWith("/session") && request.method === "GET") {
+    const user = await authenticatedSession(request, env);
+    return user ? json({ authenticated: true, user }) : json({ authenticated: false, message: "Session tidak aktif." }, 401);
+  }
+  if (pathname.endsWith("/logout") && request.method === "POST") {
+    const token = cookieValue(request, dashboardSessionCookie);
+    if (token) await env.DB.prepare("UPDATE dashboard_session SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL").bind(new Date().toISOString(), await sha256(token)).run();
+    return json({ authenticated: false }, 200, { "set-cookie": `${dashboardSessionCookie}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0` });
+  }
+  if (pathname.endsWith("/login") && request.method === "POST") {
+    let payload;
+    try { payload = await request.json(); } catch { return json({ message: "Payload login tidak valid." }, 400); }
+    const username = String(payload?.username || "").trim().toLowerCase();
+    const password = String(payload?.password || "");
+    if (!username || !password || username.length > 160 || password.length > 128) return json({ message: "Username atau password tidak valid." }, 401);
+    const user = await env.DB.prepare("SELECT * FROM dashboard_user WHERE username = ? OR email = ? LIMIT 1").bind(username, username).first();
+    const locked = user?.locked_until && new Date(user.locked_until).getTime() > Date.now();
+    const valid = user?.active === 1 && !locked && await verifyPassword(password, user.password_hash).catch(() => false);
+    if (!valid) {
+      if (user && !locked) {
+        const failed = Number(user.failed_login_count || 0) + 1;
+        const lockedUntil = failed >= 5 ? new Date(Date.now() + 15 * 60_000).toISOString() : user.locked_until;
+        await env.DB.prepare("UPDATE dashboard_user SET failed_login_count = ?, locked_until = ?, updated_at = ? WHERE user_id = ?").bind(failed, lockedUntil, new Date().toISOString(), user.user_id).run();
+      }
+      return json({ message: "Username atau password tidak valid." }, 401);
+    }
+    const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
+    const token = btoa(String.fromCharCode(...tokenBytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + dashboardSessionLifetimeMs).toISOString();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE dashboard_user SET failed_login_count = 0, locked_until = NULL, last_login_at = ?, updated_at = ? WHERE user_id = ?").bind(now, now, user.user_id),
+      env.DB.prepare("INSERT INTO dashboard_session (session_id, user_id, token_hash, expires_at, last_seen_at, user_agent, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), user.user_id, await sha256(token), expiresAt, now, request.headers.get("user-agent"), request.headers.get("cf-connecting-ip"), now),
+    ]);
+    return json({ authenticated: true, user: sessionUser({ ...user, expires_at: expiresAt }) }, 200, { "set-cookie": `${dashboardSessionCookie}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${dashboardSessionLifetimeMs / 1000}` });
+  }
+  return json({ error: "not found" }, 404);
 }
 
 function assetRow(row) {
@@ -167,6 +290,10 @@ async function apiResponse(request, env) {
   const url = new URL(request.url);
   const ready = await ensureDatabase(env);
   if (!ready.available) return json({ error: "D1 binding is unavailable", data_mode: "FALLBACK" }, 503);
+
+  if (url.pathname.startsWith(`${API_PREFIX}/auth/`)) return authResponse(request, env, url.pathname);
+  const isEdgeIngestion = url.pathname === `${API_PREFIX}/edge/telemetry` && request.method === "POST";
+  if (!isEdgeIngestion && !await authenticatedSession(request, env)) return json({ error: "unauthorized", message: "Session dashboard tidak aktif." }, 401);
 
   if (url.pathname === `${API_PREFIX}/integration/status`) {
     const rows = await env.DB.prepare("SELECT process_type, COUNT(*) AS asset_count FROM asset WHERE active = 1 GROUP BY process_type").all();

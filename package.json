@@ -1,6 +1,6 @@
 {
   "name": "pt-smm-digital-automation-dashboard",
-  "version": "2.18.0",
+  "version": "2.19.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "build:backend": "tsc -p tsconfig.backend.json",
     "dev:postgres": "npm run build:backend && npm run start:postgres",
     "start:postgres": "node --env-file=.env dist-backend/server/nest/main.js",
+    "user:create": "node --env-file=.env scripts/create-dashboard-user.mjs",
     "seed:kalender-batch": "node --env-file=.env scripts/inject-kalender-batch-tracking.mjs"
   },
   "dependencies": {

@@ -2,6 +2,7 @@ import { OnModuleDestroy } from "@nestjs/common";
 import { ConnectedSocket, MessageBody, SubscribeMessage, WebSocketGateway, WebSocketServer } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
 import { DatabaseService } from "./database.service.js";
+import { AuthService } from "./auth.service.js";
 
 @WebSocketGateway({ namespace: "/realtime", cors: { origin: true, credentials: true } })
 export class RealtimeGateway implements OnModuleDestroy {
@@ -14,9 +15,19 @@ export class RealtimeGateway implements OnModuleDestroy {
   private tagLatestVersion: string | null = null;
   private communicationStates: Record<string, Record<string, unknown>> = {};
 
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly database: DatabaseService, private readonly auth: AuthService) {}
 
   afterInit() {
+    this.server.use(async (socket, next) => {
+      try {
+        const user = await this.auth.sessionFromRequest({ headers: socket.handshake.headers as any });
+        if (!user) return next(new Error("unauthorized"));
+        socket.data.dashboardUser = user;
+        next();
+      } catch {
+        next(new Error("unauthorized"));
+      }
+    });
     void this.startPolling();
   }
 

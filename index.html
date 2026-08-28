@@ -18,7 +18,40 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div id="app" class="app-shell">
+    <section class="auth-screen" id="auth-screen" aria-labelledby="auth-title">
+      <div class="auth-ambient" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="auth-shell">
+        <div class="auth-story">
+          <div class="auth-brand-lockup">
+            <div class="auth-brand-mark" aria-hidden="true"><span></span></div>
+            <div><strong>PT.<b>SMM</b></strong><small>DIGITAL AUTOMATION DEPARTMENT</small></div>
+          </div>
+          <div class="auth-story-copy">
+            <span class="auth-eyebrow">Industrial Intelligence Platform</span>
+            <h1>Digital Automation<br /><em>Dashboard</em></h1>
+            <p>Unified operational visibility for connected machines, production performance, utilities, quality, and process intelligence.</p>
+          </div>
+          <div class="auth-system-line"><i></i><span>Smart Manufacturing System</span><strong>PT SMM</strong></div>
+        </div>
+        <div class="auth-panel-wrap">
+          <form class="auth-panel" id="login-form" autocomplete="on" novalidate>
+            <div class="auth-panel-head">
+              <span class="auth-secure-mark" aria-hidden="true">◆</span>
+              <div><span>Secure access</span><h2 id="auth-title">Welcome back</h2><p>Sign in to enter the manufacturing control dashboard.</p></div>
+            </div>
+            <label class="auth-field"><span>Username or email</span><div><i aria-hidden="true">ID</i><input id="login-username" name="username" type="text" autocomplete="username" maxlength="160" required placeholder="Enter your account" /></div></label>
+            <label class="auth-field"><span>Password</span><div><i aria-hidden="true">••</i><input id="login-password" name="password" type="password" autocomplete="current-password" maxlength="128" required placeholder="Enter your password" /><button type="button" id="password-visibility" aria-label="Show password">Show</button></div></label>
+            <div class="auth-form-meta"><label><input id="login-remember" type="checkbox" checked /><span>Keep username on this device</span></label><span>Protected session · 12 hours</span></div>
+            <div class="auth-error" id="login-error" role="alert" hidden></div>
+            <button class="auth-submit" id="login-submit" type="submit"><span>Enter Dashboard</span><i aria-hidden="true">→</i></button>
+            <div class="auth-trust"><span><i></i>Encrypted connection</span><span>Authorized personnel only</span></div>
+          </form>
+          <p class="auth-support">Account access is managed by Digital Automation Department.</p>
+        </div>
+      </div>
+    </section>
+
+    <div id="app" class="app-shell" hidden>
       <aside class="sidebar" id="sidebar">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true"><span></span></div>
@@ -90,7 +123,7 @@
             <div class="topbar-left">
               <button class="menu-button" id="menu-button" aria-label="Buka navigasi">☰</button>
               <div class="breadcrumb">
-                <span>Digital Automation Dashboard</span><span class="dashboard-version">V2.18</span><span class="crumb-separator">/</span><strong id="breadcrumb-page">Overview</strong>
+                <span>Digital Automation Dashboard</span><span class="dashboard-version">V2.19</span><span class="crumb-separator">/</span><strong id="breadcrumb-page">Overview</strong>
               </div>
             </div>
             <div class="topbar-actions">
@@ -102,9 +135,15 @@
                   <span>△</span><i id="header-alarm-count">0</i>
                 </button>
               </div>
-              <button class="user-button" aria-label="Profil pengguna">
-                <span class="avatar">AR</span><span class="user-copy"><strong>Adi Rahman</strong><small>Shift Leader</small></span>
-              </button>
+              <div class="user-menu-wrap">
+                <button class="user-button" id="user-menu-button" type="button" aria-label="Profil pengguna" aria-expanded="false">
+                  <span class="avatar" id="session-avatar">DA</span><span class="user-copy"><strong id="session-user-name">Digital Automation</strong><small id="session-user-role">Authorized user</small></span>
+                </button>
+                <div class="user-session-menu" id="user-session-menu" hidden>
+                  <div><span>Signed in as</span><strong id="session-menu-name">—</strong><small id="session-menu-department">Digital Automation</small></div>
+                  <button type="button" id="logout-button"><span>Sign out</span><i aria-hidden="true">→</i></button>
+                </div>
+              </div>
             </div>
           </div>
         </header>

@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { MiddlewareConsumer, Module, RequestMethod } from "@nestjs/common";
 import { ApiController } from "./api.controller.js";
 import { BatchIngestionExceptionFilter } from "./batch-ingestion-exception.filter.js";
 import { AlarmController } from "./alarm.controller.js";
@@ -14,9 +14,21 @@ import { ProcessDeviationEngineService } from "./process-deviation-engine.servic
 import { ProcessDeviationController } from "./process-deviation.controller.js";
 import { ProductionOutputController } from "./production-output.controller.js";
 import { RealtimeGateway } from "./realtime.gateway.js";
+import { AuthController } from "./auth.controller.js";
+import { DashboardAuthMiddleware } from "./auth.middleware.js";
+import { AuthService } from "./auth.service.js";
 
 @Module({
-  controllers: [ApiController, AlarmController, BatchController, BatchExportController, ChemicalController, LiveValueIngestionController, PerformanceController, ProcessDeviationController, ProductionOutputController],
-  providers: [DatabaseService, HistorianAggregationService, RealtimeGateway, AlarmEngineService, ProcessDeviationEngineService, BatchIngestionExceptionFilter],
+  controllers: [AuthController, ApiController, AlarmController, BatchController, BatchExportController, ChemicalController, LiveValueIngestionController, PerformanceController, ProcessDeviationController, ProductionOutputController],
+  providers: [DatabaseService, AuthService, DashboardAuthMiddleware, HistorianAggregationService, RealtimeGateway, AlarmEngineService, ProcessDeviationEngineService, BatchIngestionExceptionFilter],
 })
-export class AppModule {}
+export class AppModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(DashboardAuthMiddleware).exclude(
+      { path: "api/v1/auth/{*path}", method: RequestMethod.ALL },
+      { path: "api/v1/ingestion/{*path}", method: RequestMethod.POST },
+      { path: "api/v1/batch/production-batches", method: RequestMethod.POST },
+      { path: "api/v1/batch/process-runs", method: RequestMethod.POST },
+    ).forRoutes({ path: "api/v1/{*path}", method: RequestMethod.ALL });
+  }
+}
