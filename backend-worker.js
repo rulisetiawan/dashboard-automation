@@ -144,10 +144,18 @@ async function ensureDatabase(env) {
   if (env.DASHBOARD_BOOTSTRAP_USERNAME && env.DASHBOARD_BOOTSTRAP_PASSWORD_HASH) {
     const now = new Date().toISOString();
     await env.DB.prepare(`
-      INSERT OR IGNORE INTO dashboard_user (
+      INSERT INTO dashboard_user (
         user_id, username, display_name, department, role_code, password_hash,
         active, failed_login_count, created_at, updated_at
       ) VALUES (?, ?, ?, 'Digital Automation', 'ADMIN', ?, 1, 0, ?, ?)
+      ON CONFLICT(username) DO UPDATE SET
+        display_name = excluded.display_name,
+        password_hash = excluded.password_hash,
+        active = 1,
+        updated_at = excluded.updated_at
+      WHERE dashboard_user.password_hash <> excluded.password_hash
+         OR dashboard_user.display_name <> excluded.display_name
+         OR dashboard_user.active <> 1
     `).bind(
       crypto.randomUUID(),
       String(env.DASHBOARD_BOOTSTRAP_USERNAME).trim().toLowerCase(),

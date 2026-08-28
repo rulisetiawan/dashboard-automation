@@ -43,3 +43,5 @@ Remove-Item Env:DASHBOARD_USER_PASSWORD
 ```
 
 Script menyimpan hash baru ke PostgreSQL dan mengaktifkan kembali user tersebut bila sebelumnya dinonaktifkan.
+
+Pada hosted D1, akun bootstrap memakai environment runtime yang sama setiap kali worker memastikan skema. Bila username sudah ada dan hash berubah, hash akun diperbarui secara idempotent sehingga rotasi kredensial dapat diterapkan melalui environment lalu deployment baru.

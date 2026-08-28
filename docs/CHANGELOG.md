@@ -15,6 +15,7 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 - Tabel PostgreSQL `dashboard_user` dan `dashboard_session`.
 - Endpoint login, session validation, dan logout untuk backend PostgreSQL serta hosted D1.
 - Script provisioning akun administrator tanpa menyimpan password plaintext pada source atau `.env`.
+- Bootstrap akun hosted D1 bersifat idempotent dan memperbarui hash ketika kredensial runtime dirotasi.
 
 ### Diamankan
 
