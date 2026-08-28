@@ -4,6 +4,24 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.12 — 28 Agustus 2026
+
+**Status:** Plant Overview Utility Snapshot visual refinement implemented
+
+### Diperjelas
+
+- Utility Snapshot menampilkan ringkasan jumlah titik, quality baik, titik yang memerlukan perhatian, dan waktu data terbaru.
+- Nilai dan unit tiap utility menjadi fokus utama dengan label, konteks pengukuran, quality badge, serta timestamp yang lebih mudah dipindai.
+- Electrical, water, steam, dan thermal oil memiliki simbol serta aksen tipis yang berbeda.
+
+### Diselaraskan
+
+- Permukaan panel tetap putih dan tidak memakai sub-card abu-abu bertumpuk.
+- Grid dua kolom berubah menjadi satu kolom pada layar kecil.
+- Sumber PostgreSQL, endpoint, quality, timestamp, dan mekanisme refresh tidak berubah.
+
+---
+
 ## Dashboard V2.11 / Chemical Dispensing Concept V1.15 — 28 Agustus 2026
 
 **Status:** Chemical auto-update scroll stability implemented

@@ -3251,6 +3251,69 @@ function actualMetric(label, value, unit = "", foot = "Data aktual") {
   return `<article class="card kpi-card"><div class="kpi-top"><span class="kpi-label">${actualText(label)}</span><span class="quality-pill good">ACTUAL</span></div><div class="kpi-value">${actualText(value)}<small>${actualText(unit)}</small></div><div class="kpi-foot">${actualText(foot)}</div></article>`;
 }
 
+function actualUtilityKind(item) {
+  const descriptor = `${item.utility_code || ""} ${item.label || ""} ${item.unit || ""}`.toUpperCase();
+  if (descriptor.includes("STEAM") || descriptor.includes("BOILER")) return "steam";
+  if (descriptor.includes("THERMAL") || descriptor.includes("OIL")) return "thermal";
+  if (descriptor.includes("WATER") || descriptor.includes("AIR") || descriptor.includes("M³")) return "water";
+  if (descriptor.includes("ELECT") || descriptor.includes("POWER") || descriptor.includes("KW") || descriptor.includes("MW")) return "electrical";
+  return "other";
+}
+
+function actualUtilityQuality(quality) {
+  const value = String(quality || "UNKNOWN").trim().toUpperCase();
+  if (value === "GOOD") return { tone: "good", pill: "good", label: "GOOD" };
+  if (["BAD", "ERROR", "NOT_CONNECTED"].includes(value)) return { tone: "bad", pill: "bad", label: value };
+  if (["STALE", "UNCERTAIN", "WARNING"].includes(value)) return { tone: "warning", pill: "stale", label: value };
+  return { tone: "unknown", pill: "unknown", label: value || "UNKNOWN" };
+}
+
+function actualUtilityOverview(utilities) {
+  if (!utilities.length) return actualEmpty("Belum ada utility snapshot");
+  const kindMeta = {
+    electrical: { symbol: "EL", context: "Current electrical demand" },
+    water: { symbol: "WT", context: "Current water flow" },
+    steam: { symbol: "ST", context: "Steam supply / production" },
+    thermal: { symbol: "TO", context: "Thermal oil supply" },
+    other: { symbol: "UT", context: "Current utility reading" },
+  };
+  const goodCount = utilities.filter((item) => actualUtilityQuality(item.quality).tone === "good").length;
+  const attentionCount = utilities.length - goodCount;
+  const newestTimestamp = utilities
+    .map((item) => new Date(item.source_ts).getTime())
+    .filter(Number.isFinite)
+    .sort((left, right) => right - left)[0];
+  const cards = utilities.map((item) => {
+    const kind = actualUtilityKind(item);
+    const meta = kindMeta[kind];
+    const quality = actualUtilityQuality(item.quality);
+    const rawValue = item.value;
+    const numericValue = rawValue !== null && rawValue !== "" ? Number(rawValue) : Number.NaN;
+    const displayValue = Number.isFinite(numericValue)
+      ? numericValue.toLocaleString("id-ID", { maximumFractionDigits: 2 })
+      : actualText(rawValue);
+    return `
+      <article class="overview-utility-item utility-${kind}" data-utility-quality="${quality.tone}">
+        <div class="overview-utility-item-head">
+          <div class="overview-utility-name"><span class="overview-utility-symbol">${meta.symbol}</span><div><strong>${actualText(item.label)}</strong><small>${meta.context}</small></div></div>
+          <span class="quality-pill ${quality.pill}">${actualText(quality.label)}</span>
+        </div>
+        <div class="overview-utility-value"><strong>${displayValue}</strong><span>${actualText(item.unit)}</span></div>
+        <div class="overview-utility-time"><span>Last update</span><time>${actualTime(item.source_ts)}</time></div>
+      </article>
+    `;
+  }).join("");
+  return `
+    <div class="overview-utility-summary">
+      <span><i class="summary-dot source"></i><strong>${utilities.length}</strong> utility points</span>
+      <span><i class="summary-dot good"></i><strong>${goodCount}</strong> good quality</span>
+      ${attentionCount ? `<span class="attention"><i class="summary-dot attention"></i><strong>${attentionCount}</strong> need attention</span>` : ""}
+      <span class="latest"><small>Latest received</small><strong>${newestTimestamp ? actualTime(newestTimestamp) : "—"}</strong></span>
+    </div>
+    <div class="overview-utility-grid">${cards}</div>
+  `;
+}
+
 function actualFleet() {
   return [...jetflows, ...calators, ...dryers, ...kalenders, ...dispensers];
 }
@@ -4793,7 +4856,7 @@ function databaseOverviewPage() {
     </section>
     <section class="grid-2">
       ${panel("Machine Operating Status", "Komposisi kondisi seluruh asset aktual", actualDonutMarkup(stateBreakdown, "machines", "asset"), `<span class="data-pill good">LIVE NOW</span>`)}
-      ${panel("Utility snapshot", "Nilai terbaru dari utility_snapshot", backendUtilities.length ? `<div class="metric-grid">${backendUtilities.map((item) => metricTile(actualText(item.label), `${actualText(item.value)}<small>${actualText(item.unit)}</small>`, `${actualTime(item.source_ts)} · ${actualText(item.quality)}`)).join("")}</div>` : actualEmpty("Belum ada utility snapshot"))}
+      ${panel("Utility Snapshot", "Demand dan kondisi supply utility saat ini", actualUtilityOverview(backendUtilities), `<span class="data-pill ${!backendUtilities.length ? "neutral" : backendUtilities.some((item) => actualUtilityQuality(item.quality).tone !== "good") ? "warning" : "good"}">${backendUtilities.length ? "LIVE SNAPSHOT" : "NO DATA"}</span>`, "overview-utility-panel")}
     </section>
     ${panel("Textile process flow", "Jumlah dan kondisi asset yang terdaftar", `<div class="process-flow">${processFlow}</div>`)}
     ${panel("Production Output by Process", "Output terakhir dari process run unik per asset dan batch", totalOutput > 0 ? `<div class="throughput-summary"><div><span>Total Output</span><strong>${totalOutput.toLocaleString("id-ID", { maximumFractionDigits: 1 })} <small>m</small></strong></div><div><span>Process with data</span><strong>${outputByProcess.filter((item) => item.value > 0).length} <small>process</small></strong></div><div><span>Database rows</span><strong>${actualRuns.length} <small>unique runs</small></strong></div></div><div class="chart-container production-bar-chart"><canvas id="actual-overview-output-chart" class="chart-canvas"></canvas></div>` : actualEmpty("Belum ada output produksi aktual pada process run."))}
