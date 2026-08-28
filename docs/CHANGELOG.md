@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.11 / Chemical Dispensing Concept V1.15 — 28 Agustus 2026
+
+**Status:** Chemical auto-update scroll stability implemented
+
+### Diperbaiki
+
+- Auto-update Chemical Transaction Log tidak lagi mengganti halaman dengan loading state pendek saat data lama masih tersedia.
+- Panel transaction log dipakai sebagai anchor agar posisinya terhadap viewport tetap sama setelah response baru dirender.
+- Filter, pagination, summary, chart, dan transaction log tetap menerima data terbaru tanpa membawa operator ke bagian atas halaman.
+
+### Dipertahankan
+
+- Initial load tanpa cache tetap memiliki loading state.
+- PostgreSQL, REST API, WebSocket, marker perubahan, dan interval deteksi tidak berubah.
+
+---
+
 ## Dashboard V2.10 — 28 Agustus 2026
 
 **Status:** Area card active-state contrast implemented
