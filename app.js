@@ -4909,6 +4909,31 @@ function productionOutputMetric() {
   };
 }
 
+function productionProcessOutputValue(process, mode = state.productionOutput.mode) {
+  const key = mode === "actual" ? "actual_value" : mode === "estimated" ? "estimated_value" : "effective_value";
+  const value = Number(process?.[key]);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function actualProductionOutputProcessPanel() {
+  const data = productionOutputByBatch.key === productionOutputRequestKey() ? productionOutputByBatch.data : null;
+  if (!data) return panel("Production Output by Process", "Perbandingan proses mengikuti production date, shift, dan source mode pada chart batch", actualEmpty("Menunggu agregasi output seluruh proses."), `<span class="data-pill neutral">${state.productionOutput.mode.toUpperCase()}</span>`, "production-process-panel");
+  const totals = (data.process_totals || []).map((item) => ({ ...item, value: productionProcessOutputValue(item) }));
+  const available = totals.filter((item) => item.value > 0).sort((left, right) => right.value - left.value);
+  if (!available.length) return panel("Production Output by Process", "Perbandingan proses mengikuti production date, shift, dan source mode pada chart batch", actualEmpty(`Belum ada ${state.productionOutput.mode} output antarproses pada scope ini.`), `<span class="data-pill neutral">${state.productionOutput.mode.toUpperCase()}</span>`, "production-process-panel");
+  const highest = available[0];
+  const lowest = available[available.length - 1];
+  const gap = highest.value - lowest.value;
+  const gapPercent = highest.value > 0 ? gap / highest.value * 100 : 0;
+  const summary = `<div class="throughput-summary output-process-summary">
+    <div><span>Highest process</span><strong>${actualText(processConfig[highest.process_type].singular)} <small>${highest.value.toLocaleString("id-ID", { maximumFractionDigits: 1 })} ${actualText(data.unit || "m")}</small></strong></div>
+    <div><span>Lowest with data</span><strong>${actualText(processConfig[lowest.process_type].singular)} <small>${lowest.value.toLocaleString("id-ID", { maximumFractionDigits: 1 })} ${actualText(data.unit || "m")}</small></strong></div>
+    <div><span>Process gap</span><strong>${gap.toLocaleString("id-ID", { maximumFractionDigits: 1 })} <small>${actualText(data.unit || "m")} · ${gapPercent.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%</small></strong></div>
+  </div>`;
+  const note = `<div class="production-process-note"><span>${actualText(state.productionOutput.productionDate)} · Shift ${actualText(state.productionOutput.shiftCode)} · ${actualText(state.productionOutput.mode)}</span><small>Bandingkan gap untuk menemukan bottleneck. Nilai proses tidak dijumlahkan sebagai total plant karena batch yang sama dapat melewati beberapa proses.</small></div>`;
+  return panel("Production Output by Process", "Perbandingan proses mengikuti production date, shift, dan source mode pada chart batch", `${summary}<div class="chart-container production-bar-chart"><canvas id="production-output-process-chart" class="chart-canvas"></canvas></div>${note}`, `<span class="data-pill good">SYNCED FILTER</span>`, "production-process-panel");
+}
+
 const actualProcessMetricConfig = {
   jetflow: { label: "Water Consumption", unit: "m³", keys: ["penggunaan_air_pv", "water_consumption_m3", "total_water_const"] },
   calator: { label: "Production Output", unit: "m", keys: ["output_total_m"] },
@@ -4984,6 +5009,7 @@ function databaseOverviewPage() {
       ${panel("Machine Operating Status", "Komposisi kondisi seluruh asset aktual", actualDonutMarkup(stateBreakdown, "machines", "asset"), `<span class="data-pill good">LIVE NOW</span>`)}
       ${actualProductionOutputPanel()}
     </section>
+    ${actualProductionOutputProcessPanel()}
     ${panel("Textile process flow", "Jumlah dan kondisi asset yang terdaftar", `<div class="process-flow">${processFlow}</div>`)}
     ${panel("Active process runs", "Batch dan output yang sudah tersimpan di database", runs)}
     ${panel("Machine Directory", "Status aktual tiap asset · klik melalui process flow untuk drill-down area dan mesin", actualAssetTable(assets))}
@@ -6566,6 +6592,19 @@ function initPageCharts() {
     ], labels),
   };
   charts[state.page]?.();
+  if (backendConnection.status === "connected" && backendConnection.dataMode === "ACTUAL_DATABASE" && state.page === "overview") {
+    const data = productionOutputByBatch.key === productionOutputRequestKey() ? productionOutputByBatch.data : null;
+    const processTotals = (data?.process_totals || []).map((item) => ({ ...item, value: productionProcessOutputValue(item) }));
+    if (processTotals.some((item) => item.value > 0)) {
+      drawBarChart(
+        "production-output-process-chart",
+        processTotals.map((item) => item.value),
+        processTotals.map((item) => processConfig[item.process_type].singular),
+        processTotals.map((_, index) => managementColors[index % managementColors.length]),
+        { showValues: true, standard: true, unit: data.unit || "m" },
+      );
+    }
+  }
   if (state.drill[state.page]?.machine && sensorTrendConfig[state.page]) drawSensorComparisonTrends(state.page);
   if (state.motorDrive.selected && state.motorDrive.source === state.page) {
     drawMotorDriveTrend();

@@ -4,6 +4,33 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.14 / NestJS PostgreSQL Integration V1.17 — 28 Agustus 2026
+
+**Status:** Utility emphasis and synchronized process output comparison implemented
+
+### Diperjelas
+
+- Utility Now memakai layout 2×2, nilai lebih besar, serta container cyan ringan dengan aksen utility.
+- Quality summary dan latest received tetap terlihat tanpa mengembalikan panel Utility Snapshot besar.
+
+### Ditambahkan kembali
+
+- Bar chart Production Output by Process untuk Jetflow, Calator, Dryer, dan Kalender.
+- Summary highest process, lowest process with data, absolute gap, dan percentage gap.
+
+### Disinkronkan
+
+- Bar chart mengikuti production date, Shift A/B/C, serta mode Effective/Actual/Estimated yang dipilih pada donut batch.
+- Endpoint output batch mengembalikan `process_totals` seluruh proses dalam response yang sama.
+- KPI output, donut batch, dan bar process memakai formula serta range yang identik.
+
+### Dipertahankan
+
+- Process totals tidak dijumlahkan sebagai total plant.
+- Kalender tetap menjadi final-process default untuk mencegah double counting.
+
+---
+
 ## Dashboard V2.13 / NestJS PostgreSQL Integration V1.16 — 28 Agustus 2026
 
 **Status:** Compact utility KPI and Production Output by Batch implemented

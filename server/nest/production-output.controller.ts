@@ -71,24 +71,25 @@ export class ProductionOutputController {
             ORDER BY r.source_updated_at DESC NULLS LAST, r.updated_at DESC, r.started_at DESC NULLS LAST
           ) AS latest_rank
         FROM batch_process_run r
-        WHERE LOWER(r.process_type) = $1
+        WHERE LOWER(r.process_type) IN ('jetflow', 'calator', 'dryer', 'kalender')
       ), scoped_runs AS (
         SELECT
           r.process_run_id,
           r.batch_no,
           r.asset_id,
+          LOWER(r.process_type) AS process_type,
           r.run_status,
-          CASE WHEN r.started_at >= $2::timestamptz THEN r.output_quantity END AS output_quantity,
+          CASE WHEN r.started_at >= $1::timestamptz THEN r.output_quantity END AS output_quantity,
           r.output_unit,
           r.started_at,
           r.ended_at,
-          GREATEST(r.started_at, $2::timestamptz) AS range_start,
-          LEAST(COALESCE(r.ended_at, $3::timestamptz), $3::timestamptz) AS range_end
+          GREATEST(r.started_at, $1::timestamptz) AS range_start,
+          LEAST(COALESCE(r.ended_at, $2::timestamptz), $2::timestamptz) AS range_end
         FROM ranked_runs r
         WHERE r.latest_rank = 1
           AND r.started_at IS NOT NULL
-          AND r.started_at < $3::timestamptz
-          AND COALESCE(r.ended_at, $3::timestamptz) > $2::timestamptz
+          AND r.started_at < $2::timestamptz
+          AND COALESCE(r.ended_at, $2::timestamptz) > $1::timestamptz
       ), totalizer_candidates AS (
         SELECT
           run.process_run_id,
@@ -169,8 +170,8 @@ export class ProductionOutputController {
       LEFT JOIN speed_candidates speed
         ON speed.process_run_id = run.process_run_id
        AND speed.candidate_rank = 1
-      ORDER BY run.started_at DESC, run.batch_no
-    `, [processType, range.from, range.to]);
+      ORDER BY run.process_type, run.started_at DESC, run.batch_no
+    `, [range.from, range.to]);
 
     const grouped = new Map<string, any>();
     for (const row of result.rows) {
@@ -184,8 +185,10 @@ export class ProductionOutputController {
       const runEstimated = Number.isFinite(estimatedCandidate) && Number(estimatedCandidate) > 0 ? estimatedCandidate : null;
       const runEffective = runActual ?? runEstimated;
       const sourceType = runActual != null ? "ACTUAL" : runEstimated != null ? "ESTIMATED" : "NO_DATA";
-      const batch = grouped.get(row.batch_no) || {
+      const groupKey = `${row.process_type}|${row.batch_no}`;
+      const batch = grouped.get(groupKey) || {
         batch_no: row.batch_no,
+        process_type: row.process_type,
         actual_value: 0,
         estimated_value: 0,
         effective_value: 0,
@@ -210,10 +213,10 @@ export class ProductionOutputController {
         batch.sources.add(row.speed_tag_code);
       }
       if (sourceType === "NO_DATA") batch.no_data_run_count += 1;
-      grouped.set(row.batch_no, batch);
+      grouped.set(groupKey, batch);
     }
 
-    const batches = [...grouped.values()].map((batch) => ({
+    const allBatches = [...grouped.values()].map((batch) => ({
       ...batch,
       actual_value: batch.actual_run_count ? batch.actual_value : null,
       estimated_value: batch.estimated_value > 0 ? batch.estimated_value : null,
@@ -222,6 +225,20 @@ export class ProductionOutputController {
       sources: [...batch.sources].filter(Boolean),
       assets: [...batch.assets],
     })).sort((left, right) => Number(right.effective_value || 0) - Number(left.effective_value || 0));
+    const batches = allBatches.filter((batch) => batch.process_type === processType);
+    const processTotals = ["jetflow", "calator", "dryer", "kalender"].map((type) => {
+      const processBatches = allBatches.filter((batch) => batch.process_type === type);
+      return {
+        process_type: type,
+        batch_count: processBatches.length,
+        actual_value: processBatches.reduce((sum, batch) => sum + Number(batch.actual_value || 0), 0),
+        estimated_value: processBatches.reduce((sum, batch) => sum + Number(batch.estimated_value || 0), 0),
+        effective_value: processBatches.reduce((sum, batch) => sum + Number(batch.effective_value || 0), 0),
+        actual_batch_count: processBatches.filter((batch) => batch.actual_run_count > 0).length,
+        estimated_batch_count: processBatches.filter((batch) => batch.effective_source === "ESTIMATED" || batch.effective_source === "MIXED").length,
+        no_data_batch_count: processBatches.filter((batch) => batch.effective_source === "NO_DATA").length,
+      };
+    });
 
     return {
       data_mode: "ACTUAL_DATABASE",
@@ -229,6 +246,7 @@ export class ProductionOutputController {
       range,
       unit: "m",
       batches,
+      process_totals: processTotals,
       summary: {
         batch_count: batches.length,
         actual_batch_count: batches.filter((batch) => batch.actual_run_count > 0).length,
