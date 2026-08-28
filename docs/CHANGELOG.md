@@ -4,6 +4,25 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.17 — 28 Agustus 2026
+
+**Status:** Plant Overview realtime interaction bug fixed
+
+### Diperbaiki
+
+- Pemulihan posisi scroll dipindahkan dari frame berikutnya ke siklus render yang sama agar tidak menarik halaman kembali ketika pengguna sedang scroll.
+- Full render realtime ditunda sampai 1,2 detik setelah interaksi scroll, touch, pointer, keyboard, atau focus selesai.
+- Kontrol mode, process, production date, dan shift Production Output memakai event delegation sehingga tetap aktif setelah refresh DOM.
+- Request output terbaru memakai request ID dan tidak dapat ditimpa response request lama.
+- Response error disimpan per filter agar kegagalan API tidak memicu render dan request ulang tanpa henti.
+
+### Dipertahankan
+
+- Production Output by Batch dan Production Output by Process tetap memakai filter serta formula yang sama.
+- Pembaruan realtime tetap berjalan setelah pengguna berhenti berinteraksi.
+
+---
+
 ## Dashboard V2.16 — 28 Agustus 2026
 
 **Status:** Utility Now accent color aligned with dashboard theme

@@ -231,7 +231,7 @@ let backendAlarmEvents = [];
 let backendActiveAlarmEvents = [];
 let backendEquipment = [];
 let backendProcessRuns = [];
-const productionOutputByBatch = { key: null, data: null, loading: false, error: null };
+const productionOutputByBatch = { key: null, data: null, loading: false, error: null, requestId: 0 };
 let realtimeSocket = null;
 let realtimeRefreshTimer = null;
 let deferredRealtimeRender = false;
@@ -776,27 +776,31 @@ function productionOutputRequestUrl() {
 }
 
 function invalidateProductionOutputByBatch() {
+  productionOutputByBatch.requestId += 1;
   productionOutputByBatch.key = null;
   productionOutputByBatch.data = null;
+  productionOutputByBatch.loading = false;
   productionOutputByBatch.error = null;
 }
 
 async function loadProductionOutputByBatch({ render = true, force = false } = {}) {
   const requestKey = productionOutputRequestKey();
-  if (!force && productionOutputByBatch.key === requestKey && productionOutputByBatch.data) return;
-  if (productionOutputByBatch.loading) return;
+  if (!force && productionOutputByBatch.key === requestKey && (productionOutputByBatch.data || productionOutputByBatch.error)) return;
+  const requestId = productionOutputByBatch.requestId + 1;
+  productionOutputByBatch.requestId = requestId;
   productionOutputByBatch.loading = true;
   productionOutputByBatch.error = null;
   try {
     const payload = await fetchJson(productionOutputRequestUrl(), "Production output API");
-    if (requestKey !== productionOutputRequestKey()) return;
+    if (requestId !== productionOutputByBatch.requestId || requestKey !== productionOutputRequestKey()) return;
     productionOutputByBatch.key = requestKey;
     productionOutputByBatch.data = payload;
   } catch (error) {
-    if (requestKey !== productionOutputRequestKey()) return;
+    if (requestId !== productionOutputByBatch.requestId || requestKey !== productionOutputRequestKey()) return;
     productionOutputByBatch.key = requestKey;
     productionOutputByBatch.error = error instanceof Error ? error.message : "Production output unavailable";
   } finally {
+    if (requestId !== productionOutputByBatch.requestId) return;
     productionOutputByBatch.loading = false;
     if (render && state.page === "overview") renderPage({ preserveAnchor: ".production-output-panel" });
   }
@@ -818,7 +822,7 @@ function realtimeRenderBlocked() {
     || realtimeUiRefresh.activePointers.size > 0
     || controlFocused
     || Boolean(document.querySelector("[data-motor-drive-backdrop], .sidebar.open"))
-    || Date.now() - realtimeUiRefresh.lastInteractionAt < 420;
+    || Date.now() - realtimeUiRefresh.lastInteractionAt < 1200;
 }
 
 function scheduleSafeRealtimeRender() {
@@ -828,14 +832,14 @@ function scheduleSafeRealtimeRender() {
     realtimeUiRefresh.timer = null;
     if (!realtimeUiRefresh.pending) return;
     if (realtimeRenderBlocked()) {
-      realtimeUiRefresh.timer = window.setTimeout(attempt, 650);
+      realtimeUiRefresh.timer = window.setTimeout(attempt, 400);
       return;
     }
     realtimeUiRefresh.pending = false;
     deferredRealtimeRender = false;
     renderPage({ preserveScroll: true });
   };
-  realtimeUiRefresh.timer = window.setTimeout(attempt, 260);
+  realtimeUiRefresh.timer = window.setTimeout(attempt, 400);
 }
 
 function markRealtimeInteraction() {
@@ -4876,7 +4880,7 @@ function productionOutputControls() {
   const shiftOptions = [["A", "A · 07–15"], ["B", "B · 15–23"], ["C", "C · 23–07"]];
   return `<div class="production-output-toolbar">
     <div class="segmented production-output-modes" aria-label="Production output source mode">
-      ${[["effective", "Effective"], ["actual", "Actual"], ["estimated", "Estimated"]].map(([mode, label]) => `<button class="segment ${config.mode === mode ? "active" : ""}" data-production-output-mode="${mode}">${label}</button>`).join("")}
+      ${[["effective", "Effective"], ["actual", "Actual"], ["estimated", "Estimated"]].map(([mode, label]) => `<button type="button" class="segment ${config.mode === mode ? "active" : ""}" data-production-output-mode="${mode}">${label}</button>`).join("")}
     </div>
     <div class="production-output-filters">
       <label><span>Process</span><select data-production-output-process>${processOptions.map(([value, label]) => `<option value="${value}" ${config.process === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
@@ -5367,16 +5371,16 @@ function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === state.page));
   bindPageEvents();
   if (backendConnection.status === "connected" && state.page === "overview") void loadProductionOutputByBatch();
+  const nextAnchor = preserveAnchor ? document.querySelector(preserveAnchor) : null;
+  if (nextAnchor && Number.isFinite(anchorViewportTop)) {
+    const anchorDocumentTop = nextAnchor.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: Math.max(0, anchorDocumentTop - anchorViewportTop), behavior: "auto" });
+  } else {
+    window.scrollTo({ top: preserveScroll ? previousScroll : 0, behavior: preserveScroll ? "auto" : "smooth" });
+  }
   requestAnimationFrame(() => {
     initPageCharts();
     void activatePidBindingForCurrentView();
-    const nextAnchor = preserveAnchor ? document.querySelector(preserveAnchor) : null;
-    if (nextAnchor && Number.isFinite(anchorViewportTop)) {
-      const anchorDocumentTop = nextAnchor.getBoundingClientRect().top + window.scrollY;
-      window.scrollTo({ top: Math.max(0, anchorDocumentTop - anchorViewportTop), behavior: "auto" });
-      return;
-    }
-    window.scrollTo({ top: preserveScroll ? previousScroll : 0, behavior: preserveScroll ? "auto" : "smooth" });
   });
 }
 
@@ -6035,27 +6039,6 @@ function bindPageEvents() {
       state.range = button.dataset.range;
       renderPage({ preserveScroll: true });
     });
-  });
-  document.querySelectorAll("[data-production-output-mode]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.productionOutput.mode = button.dataset.productionOutputMode;
-      renderPage({ preserveAnchor: ".production-output-panel" });
-    });
-  });
-  document.querySelector("[data-production-output-process]")?.addEventListener("change", (event) => {
-    state.productionOutput.process = event.target.value;
-    invalidateProductionOutputByBatch();
-    renderPage({ preserveAnchor: ".production-output-panel" });
-  });
-  document.querySelector("[data-production-output-date]")?.addEventListener("change", (event) => {
-    state.productionOutput.productionDate = event.target.value;
-    invalidateProductionOutputByBatch();
-    renderPage({ preserveAnchor: ".production-output-panel" });
-  });
-  document.querySelector("[data-production-output-shift]")?.addEventListener("change", (event) => {
-    state.productionOutput.shiftCode = event.target.value;
-    invalidateProductionOutputByBatch();
-    renderPage({ preserveAnchor: ".production-output-panel" });
   });
   document.querySelectorAll("[data-sensor-toggle]").forEach((checkbox) => {
     checkbox.addEventListener("change", () => {
@@ -7570,6 +7553,23 @@ document.getElementById("menu-button").addEventListener("click", openSidebar);
 document.getElementById("sidebar-close").addEventListener("click", closeSidebar);
 document.getElementById("sidebar-backdrop").addEventListener("click", closeSidebar);
 window.addEventListener("resize", () => requestAnimationFrame(initPageCharts));
+document.addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-production-output-mode]");
+  if (!button) return;
+  markRealtimeInteraction();
+  state.productionOutput.mode = button.dataset.productionOutputMode;
+  renderPage({ preserveAnchor: ".production-output-panel" });
+});
+document.addEventListener("change", (event) => {
+  const control = event.target;
+  if (!control?.matches?.("[data-production-output-process], [data-production-output-date], [data-production-output-shift]")) return;
+  markRealtimeInteraction();
+  if (control.matches("[data-production-output-process]")) state.productionOutput.process = control.value;
+  if (control.matches("[data-production-output-date]")) state.productionOutput.productionDate = control.value;
+  if (control.matches("[data-production-output-shift]")) state.productionOutput.shiftCode = control.value;
+  invalidateProductionOutputByBatch();
+  renderPage({ preserveAnchor: ".production-output-panel" });
+});
 document.addEventListener("pointerdown", (event) => {
   realtimeUiRefresh.activePointers.add(event.pointerId);
   markRealtimeInteraction();
@@ -7599,6 +7599,8 @@ document.addEventListener("keydown", (event) => {
   }
 }, true);
 document.addEventListener("wheel", markRealtimeInteraction, { capture: true, passive: true });
+document.addEventListener("touchmove", markRealtimeInteraction, { capture: true, passive: true });
+document.addEventListener("scroll", markRealtimeInteraction, { capture: true, passive: true });
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && realtimeUiRefresh.pending) scheduleSafeRealtimeRender();
 });
