@@ -4,6 +4,25 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.9 — 28 Agustus 2026
+
+**Status:** Area card visual refinement implemented
+
+### Diselaraskan
+
+- Background dan border berwarna pada keseluruhan card dihapus agar kembali konsisten dengan surface putih dashboard.
+- Warna semantik dibatasi pada angka, titik kecil, garis status aktif, dan aksen tipis di bagian atas card.
+- Tint status aktif diturunkan menjadi lima persen; status nol kembali netral dan lebih redup.
+- Warna Idle disesuaikan dengan palet slate `ink-2`/`ink-3`.
+
+### Dipertahankan
+
+- Run, Idle, Warn, dan Fault tetap dapat dibedakan cepat.
+- Perbaikan label IDLE dari V2.8 tetap aktif.
+- Sumber status, prioritas kondisi, navigasi, dan refresh real-time tidak berubah.
+
+---
+
 ## Dashboard V2.8 — 28 Agustus 2026
 
 **Status:** Area card status visibility implemented

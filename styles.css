@@ -19,8 +19,8 @@
   --warning-soft: rgba(214, 139, 5, 0.12);
   --danger: #d9485c;
   --danger-soft: rgba(217, 72, 92, 0.1);
-  --idle: #64748b;
-  --idle-soft: rgba(100, 116, 139, 0.11);
+  --idle: #6e838d;
+  --idle-soft: rgba(110, 131, 141, 0.09);
   --sidebar: #18252c;
   --sidebar-2: #203139;
   --sidebar-text: #9fb0b7;
@@ -770,38 +770,18 @@ select:focus-visible {
 .area-card::before {
   position: absolute;
   inset: 0 0 auto;
-  height: 4px;
+  height: 3px;
   background: var(--line);
   content: "";
 }
 
-.area-card[data-area-state="running"] {
-  border-color: color-mix(in srgb, var(--success) 24%, var(--line));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--success) 5%, var(--surface)) 0, var(--surface) 42%);
-}
+.area-card[data-area-state="running"]::before { background: color-mix(in srgb, var(--success) 68%, var(--line)); }
 
-.area-card[data-area-state="running"]::before { background: var(--success); }
+.area-card[data-area-state="idle"]::before { background: color-mix(in srgb, var(--idle) 62%, var(--line)); }
 
-.area-card[data-area-state="idle"] {
-  border-color: color-mix(in srgb, var(--idle) 24%, var(--line));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--idle) 5%, var(--surface)) 0, var(--surface) 42%);
-}
+.area-card[data-area-state="warning"]::before { background: color-mix(in srgb, var(--warning) 72%, var(--line)); }
 
-.area-card[data-area-state="idle"]::before { background: var(--idle); }
-
-.area-card[data-area-state="warning"] {
-  border-color: color-mix(in srgb, var(--warning) 32%, var(--line));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--warning) 7%, var(--surface)) 0, var(--surface) 42%);
-}
-
-.area-card[data-area-state="warning"]::before { background: var(--warning); }
-
-.area-card[data-area-state="fault"] {
-  border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--danger) 7%, var(--surface)) 0, var(--surface) 42%);
-}
-
-.area-card[data-area-state="fault"]::before { background: var(--danger); }
+.area-card[data-area-state="fault"]::before { background: color-mix(in srgb, var(--danger) 76%, var(--line)); }
 
 .area-card:hover,
 .area-card:focus-visible,
@@ -873,59 +853,70 @@ select:focus-visible {
 .area-state-item {
   position: relative;
   display: grid;
-  min-height: 56px;
+  min-height: 52px;
   align-content: center;
-  gap: 4px;
-  padding: 9px 5px 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  gap: 3px;
+  padding: 9px 5px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface-2);
   text-align: center;
+}
+
+.area-state-item::before {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+  opacity: 0.72;
 }
 
 .area-state-item strong {
   font-family: var(--font-data);
-  font-size: 0.88rem;
+  font-size: 0.8rem;
+  font-weight: 500;
   line-height: 1;
 }
 
 .area-state-item small {
-  font-size: 0.5rem;
-  font-weight: 700;
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
+  color: var(--ink-3);
+  font-size: 0.48rem;
+  font-weight: 500;
 }
 
 .area-state-item.state-run {
-  border-color: color-mix(in srgb, var(--success) 24%, var(--line));
-  background: var(--success-soft);
   color: var(--success);
 }
 
 .area-state-item.state-idle {
-  border-color: color-mix(in srgb, var(--idle) 24%, var(--line));
-  background: var(--idle-soft);
   color: var(--idle);
 }
 
 .area-state-item.state-warn {
-  border-color: color-mix(in srgb, var(--warning) 26%, var(--line));
-  background: var(--warning-soft);
   color: var(--warning);
 }
 
 .area-state-item.state-fault {
-  border-color: color-mix(in srgb, var(--danger) 26%, var(--line));
-  background: var(--danger-soft);
   color: var(--danger);
 }
 
 .area-state-item.is-active {
-  border-color: currentColor;
-  box-shadow: inset 0 3px 0 currentColor, 0 5px 12px color-mix(in srgb, currentColor 10%, transparent);
+  border-color: color-mix(in srgb, currentColor 24%, var(--line));
+  background: color-mix(in srgb, currentColor 5%, var(--surface-2));
+  box-shadow: inset 2px 0 0 color-mix(in srgb, currentColor 72%, transparent);
 }
 
 .area-state-item.is-empty {
-  opacity: 0.54;
+  color: var(--ink-3);
+  opacity: 0.66;
+}
+
+.area-state-item.is-empty::before {
+  opacity: 0.34;
 }
 
 .area-card-foot {
