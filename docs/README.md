@@ -23,7 +23,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `backend/Backend_Data_Flow_Graph_v1.0.md` | 1.0 | Aktif | Graph transmisi telemetry, traceability batch, dan batas OT–IT |
 | `backend/Database_Design_Concept_v1.0.md` | 1.0 | Aktif | Desain database PostgreSQL + TimescaleDB untuk master, historian, MES, utility, chemical, maintenance, dan audit |
 | `backend/Non_Jetflow_Backend_Integration_v1.0.md` | 1.0 | Aktif | Implementasi awal D1/API read-only untuk Calator, Dryer, Kalender, Dispensing, dan Utilities |
-| `backend/PostgreSQL_Local_Integration_v1.5.md` | 1.5 | Aktif | Live Value API TCP 8787 dibatasi ke host sumber yang disetujui |
+| `backend/PostgreSQL_Local_Integration_v1.6.md` | 1.6 | Implementasi parsial | HBA aktif; firewall 169.254.150.182/32 menunggu Administrator |
 | `backend/NestJS_PostgreSQL_Integration_v1.14.md` | 1.14 | Aktif | Query performance summary berdasarkan production date dan shift |
 | `backend/Live_Value_Ingestion_API_v1.0.md` | 1.0 | Aktif | Kontrak POST nilai live langsung ke `tag_latest` tanpa `telemetry_sample` |
 | `backend/Alarm_Rule_Engine_v1.0.md` | 1.0 | Aktif | Configurable threshold, hysteresis, delay, lifecycle, audit, dan WebSocket alarm engine |

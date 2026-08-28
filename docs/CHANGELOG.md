@@ -4,6 +4,28 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## PostgreSQL Local Integration V1.6 — 28 Agustus 2026
+
+**Status:** HBA aktif; firewall menunggu PowerShell Administrator
+
+### Diaktifkan
+
+- `pg_hba.conf` mengizinkan database `pt_smm_scada` dari host `169.254.150.182/32` dengan autentikasi `scram-sha-256`.
+- Izin lama untuk jaringan `192.168.100.0/24` tetap dipertahankan.
+
+### Menunggu Administrator
+
+- Rule inbound TCP `5432` khusus `169.254.150.182` belum dapat dibuat dari sesi non-elevated.
+- Skrip idempotent `scripts/enable-postgresql-nodered-169.254.150.182.ps1` disediakan untuk dijalankan melalui PowerShell **Run as Administrator**.
+
+### Batas keamanan
+
+- Izin tidak diperluas ke seluruh subnet APIPA `169.254.0.0/16`.
+- Alamat APIPA dapat berubah; target jangka panjang tetap IP statis pada subnet OT yang disepakati.
+- Akses hanya membuka konektivitas. Username dan password PostgreSQL tetap wajib.
+
+---
+
 ## Dashboard V2.6 / NestJS PostgreSQL Integration V1.14 — 27 Agustus 2026
 
 **Status:** Pemilihan tanggal dan shift implemented
