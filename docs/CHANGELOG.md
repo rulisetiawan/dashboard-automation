@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.23 / NestJS PostgreSQL Integration V1.19 — 29 Agustus 2026
+
+**Status:** Actual Chemical Dispensing control mode implemented
+
+### Ditambahkan
+
+- Card unit dan header detail Chemical Dispensing menampilkan feedback aktual `AUTO`, `MANUAL`, atau `UNKNOWN`.
+- Canonical tag `SMM.{ASSET_ID}.MACHINE.AUTO_MODE_FB` terdaftar untuk seluruh asset dispensing.
+- Asset REST projection dan event realtime komunikasi membawa mode, quality, serta timestamp feedback.
+
+### Aturan validasi
+
+- Mode mesin tidak disimpulkan dari tipe transaksi Automatic/Manual.
+- Feedback mode hanya dipercaya saat quality `GOOD` dan heartbeat controller masih valid.
+- Controller offline, feedback hilang, atau quality tidak baik menghasilkan `UNKNOWN`.
+
 ## Dashboard V2.22 — 28 Agustus 2026
 
 **Status:** Sidebar identity aligned with SMM brand

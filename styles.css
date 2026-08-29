@@ -3339,13 +3339,78 @@ select:focus-visible {
   font-size: .5rem;
 }
 
-.chemical-unit-controller {
+.chemical-unit-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   margin-bottom: 14px;
+}
+
+.chemical-unit-controller,
+.chemical-control-mode {
   padding: 10px 11px;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: var(--surface-2);
 }
+
+.chemical-control-mode {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-3);
+}
+
+.chemical-control-mode > b {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 26%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  font-family: var(--font-data);
+  font-size: .52rem;
+}
+
+.chemical-control-mode > span,
+.chemical-control-mode small,
+.chemical-control-mode strong,
+.chemical-control-mode em {
+  display: block;
+  min-width: 0;
+}
+
+.chemical-control-mode small {
+  color: var(--ink-3);
+  font-size: .38rem;
+  font-style: normal;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.chemical-control-mode strong {
+  margin-top: 2px;
+  color: currentColor;
+  font-family: var(--font-data);
+  font-size: .56rem;
+}
+
+.chemical-control-mode em {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: .38rem;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chemical-control-mode.auto { color: var(--success); }
+.chemical-control-mode.manual { color: var(--warning); }
+.chemical-control-mode.unknown { color: var(--ink-3); }
 
 .chemical-unit-modes,
 .chemical-mode-grid {
@@ -9838,7 +9903,7 @@ select:focus-visible {
 
   .chemical-unit-live {
     grid-column: 1 / -1;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto auto 1fr auto;
     align-items: center;
     justify-items: start;
     text-align: left;
@@ -10119,6 +10184,7 @@ select:focus-visible {
   .chemical-filter-controls,
   .chemical-kpi-grid,
   .chemical-unit-grid,
+  .chemical-unit-status-grid,
   .chemical-mode-grid,
   .chemical-chart-legend {
     grid-template-columns: 1fr;

@@ -17,10 +17,17 @@ const assetProjection = `
     communication.heartbeat_tag_code,
     communication.heartbeat_value,
     communication.stale_after_seconds AS heartbeat_stale_after_seconds,
-    communication.source_ts AS heartbeat_source_ts
+    communication.source_ts AS heartbeat_source_ts,
+    control_mode.boolean_value AS automatic_mode,
+    control_mode.value_text AS control_mode_value_text,
+    control_mode.effective_quality AS control_mode_quality,
+    control_mode.source_ts AS control_mode_source_ts
   FROM asset a
   LEFT JOIN asset_snapshot s ON s.asset_id = a.asset_id
   LEFT JOIN asset_communication_state communication ON communication.asset_id = a.asset_id
+  LEFT JOIN instrument_state control_mode
+    ON control_mode.tag_code = 'SMM.' || a.asset_id || '.MACHINE.AUTO_MODE_FB'
+   AND control_mode.active = TRUE
   LEFT JOIN LATERAL (
     SELECT run.batch_no, run.progress_percent
     FROM batch_process_run run
@@ -51,6 +58,14 @@ function queryRange(from?: string, to?: string, defaultHours = 24) {
 }
 
 function assetRow(row: Record<string, any>) {
+  const controlModeText = String(row.control_mode_value_text || "").trim().toUpperCase();
+  const controlMode = row.control_mode_quality === "GOOD"
+    ? controlModeText === "AUTO" || controlModeText === "AUTOMATIC" || row.automatic_mode === true
+      ? "AUTO"
+      : controlModeText === "MANUAL" || row.automatic_mode === false
+        ? "MANUAL"
+        : "UNKNOWN"
+    : "UNKNOWN";
   return {
     id: row.asset_id,
     name: row.display_name,
@@ -68,6 +83,9 @@ function assetRow(row: Record<string, any>) {
     heartbeatValue: row.heartbeat_value ?? null,
     heartbeatStaleAfterSeconds: Number(row.heartbeat_stale_after_seconds || 30),
     heartbeatSourceTs: row.heartbeat_source_ts || null,
+    controlMode,
+    controlModeQuality: row.control_mode_quality || "NO_DATA",
+    controlModeSourceTs: row.control_mode_source_ts || null,
     sourceTs: row.source_ts || null,
     quality: row.quality || "NO_DATA",
     values: row.values_json || {},

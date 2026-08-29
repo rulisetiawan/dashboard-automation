@@ -606,6 +606,9 @@ function connectRealtimeChannel() {
     machine.heartbeatValue = payload.heartbeatValue ?? null;
     machine.heartbeatStaleAfterSeconds = Number(payload.heartbeatStaleAfterSeconds || defaultHeartbeatStaleAfterSeconds);
     machine.heartbeatSourceTs = payload.heartbeatSourceTs || null;
+    machine.controlMode = payload.controlMode || "UNKNOWN";
+    machine.controlModeQuality = payload.controlModeQuality || "NO_DATA";
+    machine.controlModeSourceTs = payload.controlModeSourceTs || null;
     updateMachineConnectionIndicators();
   });
 }
@@ -667,6 +670,20 @@ function pidLiveDisplayValue(item) {
 function applyPidInstrumentStates(assetId) {
   if (activePidAssetId() !== assetId) return;
   const cached = [...(pidInstrumentStateCache.get(assetId)?.values() || [])];
+  const controlModeState = cached.find((item) => String(item.elementCode || "").toUpperCase() === "MACHINE"
+    && String(item.parameterCode || "").toUpperCase() === "AUTO_MODE_FB");
+  const machine = dispensers.find((item) => String(item.id).toUpperCase() === assetId);
+  if (machine && controlModeState) {
+    const valueText = String(controlModeState.valueText ?? controlModeState.value ?? "").trim().toUpperCase();
+    machine.controlMode = ["AUTO", "AUTOMATIC"].includes(valueText) || controlModeState.booleanValue === true
+      ? "AUTO"
+      : valueText === "MANUAL" || controlModeState.booleanValue === false
+        ? "MANUAL"
+        : "UNKNOWN";
+    machine.controlModeQuality = controlModeState.quality || "NO_DATA";
+    machine.controlModeSourceTs = controlModeState.sourceTs || null;
+    updateChemicalControlModeIndicators();
+  }
   const byElement = new Map();
   cached.forEach((item) => {
     const code = String(item.elementCode || "").toUpperCase();
@@ -1060,6 +1077,45 @@ function updateMachineConnectionIndicators() {
       ? element.dataset.connectionConnectedLabel || connection.label
       : element.dataset.connectionDisconnectedLabel || connection.label;
     if (detail) detail.textContent = connection.detail;
+  });
+  updateChemicalControlModeIndicators();
+}
+
+function machineControlModeSnapshot(machine) {
+  const connection = machineConnectionSnapshot(machine);
+  const quality = String(machine?.controlModeQuality || "NO_DATA").toUpperCase();
+  const mode = String(machine?.controlMode || "UNKNOWN").toUpperCase();
+  if (connection.state !== "connected") return { state: "unknown", label: "UNKNOWN", detail: "Controller offline · mode tidak dapat divalidasi" };
+  if (quality !== "GOOD" || !["AUTO", "MANUAL"].includes(mode)) {
+    return { state: "unknown", label: "UNKNOWN", detail: `Feedback mode ${quality.replaceAll("_", " ")}` };
+  }
+  return {
+    state: mode.toLowerCase(),
+    label: mode,
+    detail: machine?.controlModeSourceTs ? `Feedback aktual · ${backendTimeLabel(machine.controlModeSourceTs)}` : "Feedback aktual controller",
+  };
+}
+
+function machineControlModeBadge(machine) {
+  const snapshot = machineControlModeSnapshot(machine);
+  return `<span class="chemical-control-mode ${snapshot.state}" data-chemical-control-mode-id="${actualText(machine.id)}" title="${actualText(snapshot.detail)}"><b aria-hidden="true" data-control-mode-symbol>${snapshot.state === "auto" ? "A" : snapshot.state === "manual" ? "M" : "?"}</b><span><small>Control mode</small><strong data-control-mode-label>${snapshot.label}</strong><em data-control-mode-detail>${actualText(snapshot.detail)}</em></span></span>`;
+}
+
+function updateChemicalControlModeIndicators() {
+  const machines = new Map(dispensers.map((machine) => [String(machine.id).toUpperCase(), machine]));
+  document.querySelectorAll("[data-chemical-control-mode-id]").forEach((element) => {
+    const machine = machines.get(String(element.dataset.chemicalControlModeId || "").toUpperCase());
+    if (!machine) return;
+    const snapshot = machineControlModeSnapshot(machine);
+    element.classList.remove("auto", "manual", "unknown");
+    element.classList.add(snapshot.state);
+    element.title = snapshot.detail;
+    const symbol = element.querySelector("[data-control-mode-symbol]");
+    const label = element.querySelector("[data-control-mode-label]");
+    const detail = element.querySelector("[data-control-mode-detail]");
+    if (symbol) symbol.textContent = snapshot.state === "auto" ? "A" : snapshot.state === "manual" ? "M" : "?";
+    if (label) label.textContent = snapshot.label;
+    if (detail) detail.textContent = snapshot.detail;
   });
 }
 
@@ -3923,7 +3979,7 @@ function chemicalUnitOverview(data) {
     return `<article class="card chemical-unit-card" data-chemical-unit="${actualText(machine.id)}" role="button" tabindex="0">
       <div class="chemical-unit-head"><div><span class="area-code">${actualText(machine.area)}</span><h2>${actualText(machine.name)}</h2><p>${actualText(machine.id)} · ${actualText(machine.areaLabel)}</p></div>${statusPill(machine.state || "offline")}</div>
       <div class="chemical-unit-total"><strong>${chemicalNumber(item.total_kg || 0)}</strong><span>kg consumed</span></div>
-      <div class="chemical-unit-controller">${machineConnectionBadge(machine, "controller")}</div>
+      <div class="chemical-unit-status-grid"><div class="chemical-unit-controller">${machineConnectionBadge(machine, "controller")}</div>${machineControlModeBadge(machine)}</div>
       <div class="chemical-unit-modes"><span><strong>${chemicalNumber(item.automatic_count || 0, 0)}</strong>Automatic</span><span><strong>${chemicalNumber(item.manual_count || 0, 0)}</strong>Manual</span><span class="${Number(item.emergency_count) ? "warning" : ""}"><strong>${chemicalNumber(item.emergency_count || 0, 0)}</strong>Emergency</span></div>
       <div class="chemical-unit-top"><span>Top chemical</span><strong>${actualText(item.top_chemical_code || "—")} · ${actualText(item.top_chemical_name || "No consumption")}</strong><small>${item.last_transaction_at ? `Last transaction ${actualTime(item.last_transaction_at)}` : "No transaction in selected range"}</small></div>
       <div class="area-card-foot"><span>${dispensingSupportedCalators(machine).length} supported Calators</span><strong>Open unit detail →</strong></div>
@@ -3975,7 +4031,7 @@ function chemicalTransactionPanel(data) {
 
 function chemicalUnitHeader(machine, data) {
   const supported = dispensingSupportedCalators(machine);
-  return `<section class="card chemical-unit-hero"><div><span class="eyebrow">CHEMICAL DISPENSING UNIT</span><h1>${actualText(machine.name)}</h1><p>${actualText(machine.id)} · Area ${actualText(machine.areaLabel)} · mendukung ${supported.length} Calator</p></div><div class="chemical-supported-list"><span>Supported Calators</span><strong>${supported.map((item) => actualText(item.id)).join(" · ") || "Belum dimapping"}</strong><small>Destination transaksi tetap “Belum teridentifikasi” sampai calator_id tersedia dari sumber.</small></div><div class="chemical-unit-live">${machineConnectionBadge(machine, "controller")}<div class="chemical-unit-live-reading"><span>Machine state</span>${statusPill(machine.state || "offline")}</div><div class="chemical-unit-live-reading"><span>Last transaction</span><strong>${actualTime(data.summary?.last_transaction_at)}</strong></div></div></section>`;
+  return `<section class="card chemical-unit-hero"><div><span class="eyebrow">CHEMICAL DISPENSING UNIT</span><h1>${actualText(machine.name)}</h1><p>${actualText(machine.id)} · Area ${actualText(machine.areaLabel)} · mendukung ${supported.length} Calator</p></div><div class="chemical-supported-list"><span>Supported Calators</span><strong>${supported.map((item) => actualText(item.id)).join(" · ") || "Belum dimapping"}</strong><small>Destination transaksi tetap “Belum teridentifikasi” sampai calator_id tersedia dari sumber.</small></div><div class="chemical-unit-live">${machineConnectionBadge(machine, "controller")}${machineControlModeBadge(machine)}<div class="chemical-unit-live-reading"><span>Machine state</span>${statusPill(machine.state || "offline")}</div><div class="chemical-unit-live-reading"><span>Last transaction</span><strong>${actualTime(data.summary?.last_transaction_at)}</strong></div></div></section>`;
 }
 
 function actualChemicalPage() {
@@ -7704,7 +7760,7 @@ document.getElementById("logout-button")?.addEventListener("click", async () => 
     await fetch("/api/v1/auth/logout", { method: "POST", credentials: "same-origin" });
   } finally {
     document.getElementById("login-password").value = "";
-    showAuthenticationScreen("Anda telah keluar dari dashboard dengan aman.");
+    showAuthenticationScreen("Anda Telah Keluar Dari Dashboard");
   }
 });
 

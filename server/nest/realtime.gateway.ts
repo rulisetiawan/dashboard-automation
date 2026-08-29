@@ -237,10 +237,18 @@ export class RealtimeGateway implements OnModuleDestroy {
 
   private async readCommunicationStates() {
     const result = await this.database.query(`
-      SELECT asset_id, heartbeat_tag_code, heartbeat_value, effective_quality, online,
-             stale_after_seconds, source_ts
-      FROM asset_communication_state
-      ORDER BY asset_id
+      SELECT communication.asset_id, communication.heartbeat_tag_code,
+             communication.heartbeat_value, communication.effective_quality,
+             communication.online, communication.stale_after_seconds,
+             communication.source_ts, control_mode.boolean_value AS automatic_mode,
+             control_mode.value_text AS control_mode_value_text,
+             control_mode.effective_quality AS control_mode_quality,
+             control_mode.source_ts AS control_mode_source_ts
+      FROM asset_communication_state communication
+      LEFT JOIN instrument_state control_mode
+        ON control_mode.tag_code = 'SMM.' || communication.asset_id || '.MACHINE.AUTO_MODE_FB'
+       AND control_mode.active = TRUE
+      ORDER BY communication.asset_id
     `);
     return Object.fromEntries(result.rows.map((row) => [
       row.asset_id,
@@ -252,6 +260,15 @@ export class RealtimeGateway implements OnModuleDestroy {
         connected: row.online === true,
         heartbeatStaleAfterSeconds: Number(row.stale_after_seconds || 30),
         heartbeatSourceTs: row.source_ts,
+        controlMode: row.control_mode_quality === "GOOD"
+          ? ["AUTO", "AUTOMATIC"].includes(String(row.control_mode_value_text || "").trim().toUpperCase()) || row.automatic_mode === true
+            ? "AUTO"
+            : String(row.control_mode_value_text || "").trim().toUpperCase() === "MANUAL" || row.automatic_mode === false
+              ? "MANUAL"
+              : "UNKNOWN"
+          : "UNKNOWN",
+        controlModeQuality: row.control_mode_quality || "NO_DATA",
+        controlModeSourceTs: row.control_mode_source_ts || null,
       },
     ]));
   }
