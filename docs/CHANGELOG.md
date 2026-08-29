@@ -4,6 +4,16 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.24 — 29 Agustus 2026
+
+**Status:** Chemical schematic live mode visibility refined
+
+### Diperbarui
+
+- Header Live Process Schematic Chemical Dispensing menampilkan badge control mode aktual di sebelah status controller.
+- Badge schematic memakai bentuk compact agar status `AUTO`, `MANUAL`, atau `UNKNOWN` terlihat tanpa memenuhi area legend.
+- Binding realtime dan aturan validasi heartbeat tetap sama dengan V2.23.
+
 ## Dashboard V2.23 / NestJS PostgreSQL Integration V1.19 — 29 Agustus 2026
 
 **Status:** Actual Chemical Dispensing control mode implemented

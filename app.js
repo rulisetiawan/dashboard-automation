@@ -1096,9 +1096,9 @@ function machineControlModeSnapshot(machine) {
   };
 }
 
-function machineControlModeBadge(machine) {
+function machineControlModeBadge(machine, compact = false) {
   const snapshot = machineControlModeSnapshot(machine);
-  return `<span class="chemical-control-mode ${snapshot.state}" data-chemical-control-mode-id="${actualText(machine.id)}" title="${actualText(snapshot.detail)}"><b aria-hidden="true" data-control-mode-symbol>${snapshot.state === "auto" ? "A" : snapshot.state === "manual" ? "M" : "?"}</b><span><small>Control mode</small><strong data-control-mode-label>${snapshot.label}</strong><em data-control-mode-detail>${actualText(snapshot.detail)}</em></span></span>`;
+  return `<span class="chemical-control-mode ${snapshot.state}${compact ? " compact" : ""}" data-chemical-control-mode-id="${actualText(machine.id)}" title="${actualText(snapshot.detail)}"><b aria-hidden="true" data-control-mode-symbol>${snapshot.state === "auto" ? "A" : snapshot.state === "manual" ? "M" : "?"}</b><span><small>Control mode</small><strong data-control-mode-label>${snapshot.label}</strong><em data-control-mode-detail>${actualText(snapshot.detail)}</em></span></span>`;
 }
 
 function updateChemicalControlModeIndicators() {
@@ -1278,7 +1278,7 @@ function chemicalDispensingPidPanel(machine) {
     </g>`;
   }).join("");
   return `<section class="card pid-card">
-    <div class="pid-head"><div><span class="eyebrow">LIVE PROCESS SCHEMATIC</span><h2>Chemical Dispensing Skid · ${actualText(machine.id)}</h2><p>Delapan supply line masuk ke common manifold, ditimbang pada Tank 1, ditransfer ke Tank 2, lalu dialirkan melalui distribution header ke Calator area ${actualText(machine.areaLabel)}.</p></div><div class="pid-head-actions chemical-pid-head-actions">${machineConnectionBadge(machine, "controller")}<div class="pid-legend"><span><i class="pid-legend-dot ready"></i>No live data / binding ready</span><span><i class="pid-legend-valve"></i>Actuated valve</span><span><i class="pid-legend-line"></i>Process pipe</span></div></div></div>
+    <div class="pid-head"><div><span class="eyebrow">LIVE PROCESS SCHEMATIC</span><h2>Chemical Dispensing Skid · ${actualText(machine.id)}</h2><p>Delapan supply line masuk ke common manifold, ditimbang pada Tank 1, ditransfer ke Tank 2, lalu dialirkan melalui distribution header ke Calator area ${actualText(machine.areaLabel)}.</p></div><div class="pid-head-actions chemical-pid-head-actions"><div class="chemical-pid-live-status">${machineConnectionBadge(machine, "controller")}${machineControlModeBadge(machine, true)}</div><div class="pid-legend"><span><i class="pid-legend-dot ready"></i>No live data / binding ready</span><span><i class="pid-legend-valve"></i>Actuated valve</span><span><i class="pid-legend-line"></i>Process pipe</span></div></div></div>
     <div class="pid-scroll" tabindex="0" aria-label="P and ID chemical dispensing ${machine.id}">
       <svg class="chemical-dispensing-pid" viewBox="0 0 1440 ${diagramHeight}" role="img" aria-label="P and ID dispensing chemical: supply rack 8 valve, common manifold, Tank 1 dengan loadcell, transfer valve dan pump, Tank 2, serta distribution header ke Calator">
         <title>Chemical dispensing process schematic ${actualText(machine.id)}</title>

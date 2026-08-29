@@ -3412,6 +3412,28 @@ select:focus-visible {
 .chemical-control-mode.manual { color: var(--warning); }
 .chemical-control-mode.unknown { color: var(--ink-3); }
 
+.chemical-control-mode.compact {
+  padding: 7px 9px;
+}
+
+.chemical-control-mode.compact > b {
+  width: 21px;
+  height: 21px;
+  font-size: .45rem;
+}
+
+.chemical-control-mode.compact small {
+  font-size: .34rem;
+}
+
+.chemical-control-mode.compact strong {
+  font-size: .49rem;
+}
+
+.chemical-control-mode.compact em {
+  display: none;
+}
+
 .chemical-unit-modes,
 .chemical-mode-grid {
   display: grid;
@@ -3740,6 +3762,13 @@ select:focus-visible {
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: var(--surface-2);
+}
+
+.chemical-pid-live-status {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .calator-matrix-foot {
@@ -10602,6 +10631,11 @@ select:focus-visible {
   .pid-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .chemical-pid-live-status {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .pid-head-actions {
