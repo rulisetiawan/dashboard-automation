@@ -4,6 +4,18 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.26 — 1 September 2026
+
+**Status:** Operational UI copy simplified
+
+### Diperbarui
+
+- Header area hanya menampilkan kode area, nama proses-area, dan jumlah mesin.
+- Keterangan teknis database dan nama tabel dihapus dari layar operasional.
+- Badge sumber data disederhanakan menjadi `LIVE DATA` atau `LIVE NOW` ketika masih relevan.
+- Footer area menampilkan jumlah mesin connected sebagai informasi yang dapat langsung ditindaklanjuti.
+- Diagnostic teknis tetap dipertahankan pada halaman Data Health.
+
 ## Dashboard V2.25 / NestJS PostgreSQL Integration V1.20 — 1 September 2026
 
 **Status:** Calator Depan 03 registered
