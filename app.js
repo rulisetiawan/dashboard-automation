@@ -324,7 +324,7 @@ const processAreas = {
     { code: "LC", label: "Lane C", count: 18 }, { code: "LD", label: "Lane D", count: 18 },
     { code: "LE", label: "Lane E", count: 13 }, { code: "LF", label: "Lane F", count: 15 },
   ],
-  calator: [{ code: "DPN", label: "Depan", count: 2 }, { code: "BLK", label: "Belakang", count: 9 }, { code: "TMR", label: "Timur", count: 7 }],
+  calator: [{ code: "DPN", label: "Depan", count: 3 }, { code: "BLK", label: "Belakang", count: 9 }, { code: "TMR", label: "Timur", count: 7 }],
   dryer: [{ code: "DPN", label: "Depan", count: 1 }, { code: "BLK", label: "Belakang", count: 2 }, { code: "TMR", label: "Timur", count: 3 }],
   kalender: [{ code: "DPN", label: "Depan", count: 7 }, { code: "BLK", label: "Belakang", count: 7 }, { code: "TMR", label: "Timur", count: 7 }],
   chemical: [{ code: "DPN", label: "Depan", count: 1 }, { code: "BLK", label: "Belakang", count: 2 }, { code: "TMR", label: "Timur", count: 2 }],
@@ -1912,7 +1912,7 @@ function overviewPage() {
       ${managementKpi("historical", "Good Production Output", formatProductionOutput(productionOutput.total), "m", "Good fabric aggregate · demo")}
       ${managementKpi("historical", "Water Consumption", formatProductionOutput(productionOutput.water), "m³", "All production machines · demo")}
       ${managementKpi("historical", "Energy Consumption", formatManagementValue(productionOutput.energy, "MWh"), "MWh", "Accumulated electrical energy · demo")}
-      ${managementKpi("historical", "Total Machine Runtime", formatProductionOutput(productionOutput.runtime), "h", "Accumulated across 133 machines")}
+      ${managementKpi("historical", "Total Machine Runtime", formatProductionOutput(productionOutput.runtime), "h", "Accumulated across 134 machines")}
       ${managementKpi("historical", "Machine Downtime", formatManagementValue(productionOutput.downtime, "h"), "h", "Idle and fault duration · demo", "warning")}
     </section>
     ${panel("Production Output by Interval", `Good fabric output · ${productionOutput.scope} · meter kain`, `
@@ -2869,7 +2869,7 @@ const electricalDistribution = {
     { id: "SDP-JF-D", name: "SDP Jetflow Lane D", demand: 136, location: "Lane D", supply: "MDP Jetflow Lane D–F", downstream: "18 Jetflow machines" },
     { id: "SDP-JF-E", name: "SDP Jetflow Lane E", demand: 110, location: "Lane E", supply: "MDP Jetflow Lane D–F", downstream: "13 Jetflow machines" },
     { id: "SDP-JF-F", name: "SDP Jetflow Lane F", demand: 136, location: "Lane F", supply: "MDP Jetflow Lane D–F", downstream: "15 Jetflow machines" },
-    { id: "SDP-CL-D", name: "SDP Calator Depan", demand: 58, location: "Area Depan", supply: "MDP Calator & Dispensing", downstream: "2 Calator + 1 Dispensing" },
+    { id: "SDP-CL-D", name: "SDP Calator Depan", demand: 58, location: "Area Depan", supply: "MDP Calator & Dispensing", downstream: "3 Calator + 1 Dispensing" },
     { id: "SDP-CL-B", name: "SDP Calator Belakang", demand: 82, location: "Area Belakang", supply: "MDP Calator & Dispensing", downstream: "9 Calator + 2 Dispensing" },
     { id: "SDP-CL-T", name: "SDP Calator Timur", demand: 58, location: "Area Timur", supply: "MDP Calator & Dispensing", downstream: "7 Calator + 2 Dispensing" },
     { id: "SDP-DR-D", name: "SDP Dryer Depan", demand: 74, location: "Area Depan", supply: "MDP Dryer", downstream: "1 Dryer machine" },

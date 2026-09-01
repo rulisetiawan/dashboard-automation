@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.25 / NestJS PostgreSQL Integration V1.20 — 1 September 2026
+
+**Status:** Calator Depan 03 registered
+
+### Ditambahkan
+
+- Asset `CL-DPN-03` sebagai Calator Depan 03 dengan kondisi awal offline dan no data.
+- Sebelas tag proses canonical dan satu heartbeat untuk asset baru.
+- Feedback route 03 pada `DSP-DPN-01` untuk tujuan Calator ketiga.
+
+### Diperbarui
+
+- Jumlah Calator Area Depan menjadi 3 dan total Calator plant menjadi 19.
+- Rekapitulasi plant menjadi 134 mesin proses atau 139 asset termasuk lima dispensing.
+- Live Process Schematic `DSP-DPN-01` membentuk destination `CL-DPN-03` dari master asset.
+
 ## Dashboard V2.24 — 29 Agustus 2026
 
 **Status:** Chemical schematic live mode visibility refined

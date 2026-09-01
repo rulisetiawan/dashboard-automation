@@ -1,7 +1,7 @@
 const API_PREFIX = "/api/v1";
 
 const processConfig = {
-  calator: { code: "CL", label: "Calator", areas: [["DPN", "Depan", 2], ["BLK", "Belakang", 9], ["TMR", "Timur", 7]] },
+  calator: { code: "CL", label: "Calator", areas: [["DPN", "Depan", 3], ["BLK", "Belakang", 9], ["TMR", "Timur", 7]] },
   dryer: { code: "DR", label: "Dryer", areas: [["DPN", "Depan", 1], ["BLK", "Belakang", 2], ["TMR", "Timur", 3]] },
   kalender: { code: "KL", label: "Kalender", areas: [["DPN", "Depan", 7], ["BLK", "Belakang", 7], ["TMR", "Timur", 7]] },
   chemical: { code: "DSP", label: "Dispensing Calator", areas: [["DPN", "Depan", 1], ["BLK", "Belakang", 2], ["TMR", "Timur", 2]] },
@@ -140,6 +140,21 @@ async function ensureDatabase(env) {
       ...utilityRows.map(([code, label, value, unit]) => env.DB.prepare("INSERT INTO utility_snapshot (utility_code, label, value, unit, quality, source_ts, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(code, label, value, unit, "SIMULATED", now, now)),
     ];
     await executeInChunks(env.DB, statements);
+  }
+  const calatorThreeMeta = await env.DB.prepare("SELECT meta_value FROM backend_meta WHERE meta_key = ?").bind("asset_expansion_cl_dpn_03_v1").first();
+  if (!calatorThreeMeta) {
+    const now = new Date().toISOString();
+    const assetId = "CL-DPN-03";
+    const tags = (seedTagMap.calator || []).map((tag) => ({
+      tagCode: `SMM.DPN.${assetId}.${tag}`,
+      role: tag.endsWith("_PV") ? "PV" : "STATE",
+    }));
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO backend_meta (meta_key, meta_value, updated_at) VALUES (?, ?, ?)").bind("asset_expansion_cl_dpn_03_v1", "1", now),
+      env.DB.prepare("INSERT OR IGNORE INTO asset (asset_id, process_type, area_code, area_name, display_name, subtype, config_json, active, created_at, updated_at) VALUES (?, 'calator', 'DPN', 'Depan', 'Calator Depan 03', 'Standard', ?, 1, ?, ?)").bind(assetId, JSON.stringify({ canonical_registered: true, commissioning_status: "PENDING_MAPPING" }), now, now),
+      env.DB.prepare("INSERT OR IGNORE INTO asset_snapshot (asset_id, machine_state, batch_no, progress_percent, connected, source_ts, quality, values_json, updated_at) VALUES (?, 'offline', '—', 0, 0, ?, 'NO_DATA', '{}', ?)").bind(assetId, now, now),
+      ...tags.map((tag) => env.DB.prepare("INSERT OR IGNORE INTO tag_definition (tag_code, asset_id, signal_role, source_status, created_at) VALUES (?, ?, ?, 'PENDING_MAPPING', ?)").bind(tag.tagCode, assetId, tag.role, now)),
+    ]);
   }
   if (env.DASHBOARD_BOOTSTRAP_USERNAME && env.DASHBOARD_BOOTSTRAP_PASSWORD_HASH) {
     const now = new Date().toISOString();
