@@ -93,6 +93,16 @@ const state = {
     pageSize: 25,
     chartHidden: [],
   },
+  solar: {
+    tab: "overview",
+    range: "30D",
+    customFrom: Date.now() - 30 * 86400000,
+    customTo: Date.now(),
+    search: "",
+    status: "all",
+    page: 1,
+    pageSize: 25,
+  },
   motorDrive: {
     selected: null,
     source: null,
@@ -157,7 +167,7 @@ const state = {
 };
 
 const navigationStorageKey = "pt-smm.dashboard.navigation.v2";
-const navigationPages = new Set(["overview", "jetflow", "calator", "dryer", "kalender", "utilities", "chemical", "alarms", "trends", "health"]);
+const navigationPages = new Set(["overview", "jetflow", "calator", "dryer", "kalender", "utilities", "chemical", "solar", "alarms", "trends", "health"]);
 const processNavigationPages = ["jetflow", "calator", "dryer", "kalender", "chemical"];
 
 function restoreDashboardNavigation() {
@@ -238,6 +248,7 @@ let backendActiveAlarmEvents = [];
 let backendEquipment = [];
 let backendProcessRuns = [];
 const productionOutputByBatch = { key: null, data: null, loading: false, error: null, requestId: 0 };
+const solarFueling = { key: null, data: null, loading: false, error: null, requestId: 0 };
 let realtimeSocket = null;
 let realtimeRefreshTimer = null;
 let deferredRealtimeRender = false;
@@ -313,6 +324,7 @@ const pageMeta = {
   kalender: ["Kalender", "Finishing Process", "Upper-lower balance, overfeed, width, motor, dan quality context."],
   utilities: ["Plant Utilities", "Resource Monitoring", "Electrical, water, steam, dan thermal oil supply-to-consumer."],
   chemical: ["Chemical Processing", "Dispensing Consumption", "Konsumsi per chemical, transaksi Automatic/Manual/Emergency, dan analisis per unit."],
+  solar: ["Solar Fueling", "Fuel Operations", "Distribusi solar, validasi flow meter dan totalizer, serta kesesuaian stok aktual."],
   alarms: ["Alarms & Events", "Exception Center", "Alarm aktif, acknowledgement, equipment event, dan impact context."],
   trends: ["Historical Trends", "Investigation Workspace", "Bandingkan actual, setpoint, machine state, dan alarm dalam satu timeline."],
   health: ["Data Health", "Collector & Tag Quality", "Koneksi PLC, gateway, meter, stale tag, dan historian health."],
@@ -783,6 +795,63 @@ async function fetchJson(url, label) {
   return response.json();
 }
 
+function solarRange() {
+  const end = state.solar.range === "CUSTOM" ? new Date(state.solar.customTo) : new Date();
+  const durations = { "TODAY": 86400000, "7D": 7 * 86400000, "30D": 30 * 86400000, "90D": 90 * 86400000 };
+  const start = state.solar.range === "CUSTOM" ? new Date(state.solar.customFrom) : new Date(end.getTime() - (durations[state.solar.range] || durations["30D"]));
+  return { from: start.toISOString(), to: end.toISOString() };
+}
+
+function solarRequestKey() {
+  const range = solarRange();
+  return `${range.from}|${range.to}|${state.solar.search}|${state.solar.status}|${state.solar.page}|${state.solar.pageSize}`;
+}
+
+async function loadSolarFueling({ force = false, preserveScroll = true } = {}) {
+  const key = solarRequestKey();
+  if (solarFueling.loading || (!force && solarFueling.key === key && solarFueling.data)) return;
+  const requestId = ++solarFueling.requestId;
+  solarFueling.loading = true;
+  solarFueling.error = null;
+  if (state.page === "solar") renderPage({ preserveScroll });
+  try {
+    const range = solarRange();
+    const common = new URLSearchParams({ from: range.from, to: range.to });
+    const transactionQuery = new URLSearchParams({ ...Object.fromEntries(common), search: state.solar.search, status: state.solar.status, page: String(state.solar.page), page_size: String(state.solar.pageSize) });
+    const [overview, transactions, movements, opnames] = await Promise.all([
+      fetchJson(`/api/v1/solar/overview?${common}`, "Solar overview API"),
+      fetchJson(`/api/v1/solar/transactions?${transactionQuery}`, "Solar transaction API"),
+      fetchJson(`/api/v1/solar/stock/movements?${common}`, "Solar stock movement API"),
+      fetchJson(`/api/v1/solar/stock-opnames?${common}`, "Solar stock opname API"),
+    ]);
+    if (requestId !== solarFueling.requestId) return;
+    solarFueling.key = key;
+    solarFueling.data = { overview, transactions, movements, opnames };
+  } catch (error) {
+    if (requestId !== solarFueling.requestId) return;
+    solarFueling.error = error instanceof Error ? error.message : "Solar fueling data unavailable";
+  } finally {
+    if (requestId !== solarFueling.requestId) return;
+    solarFueling.loading = false;
+    if (state.page === "solar") renderPage({ preserveScroll });
+  }
+}
+
+function invalidateSolarFueling() {
+  solarFueling.key = null;
+  solarFueling.requestId += 1;
+  solarFueling.loading = false;
+}
+
+async function submitSolarJson(url, method, payload) {
+  const response = await fetch(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.message || result.error || `Request gagal (${response.status})`);
+  invalidateSolarFueling();
+  await loadSolarFueling({ force: true });
+  return result;
+}
+
 function productionOutputRequestKey() {
   const config = state.productionOutput;
   return `${config.productionDate}|${config.shiftCode}|${config.process}`;
@@ -898,6 +967,7 @@ async function flushRealtimeBackendRefresh() {
 async function refreshBackendSources(sources) {
   const knownSources = new Set([
     "asset", "asset_snapshot", "utility_snapshot", "chemical_transaction", "alarm_event", "alarm_rule_state",
+    "solar_fueling_transaction", "solar_stock_movement", "solar_stock_opname",
     "production_batch", "batch_process_run", "equipment", "equipment_snapshot", "telemetry_sample",
     "process_deviation_rule", "process_target_execution", "process_setpoint_change_event", "process_deviation_event",
   ]);
@@ -914,6 +984,10 @@ async function refreshBackendSources(sources) {
   }
   if (refreshAll || sources.has("utility_snapshot")) {
     tasks.push(fetchJson("/api/v1/utilities/snapshot", "Utility API").then((payload) => { backendUtilities = payload.utilities || []; }));
+  }
+  if (refreshAll || sources.has("solar_fueling_transaction") || sources.has("solar_stock_movement") || sources.has("solar_stock_opname")) {
+    invalidateSolarFueling();
+    if (state.page === "solar") tasks.push(loadSolarFueling({ force: true }));
   }
   if (refreshAll || sources.has("alarm_event") || sources.has("alarm_rule_state")) {
     tasks.push(fetchJson("/api/v1/alarms/recent?limit=100", "Alarm API").then((payload) => {
@@ -964,11 +1038,13 @@ function realtimeSourcesAffectCurrentPage(sources, refreshAll = false) {
     equipment: new Set(["equipment", "equipment_snapshot"]),
     utility: new Set(["utility_snapshot"]),
     chemical: new Set(["chemical_transaction"]),
+    solar: new Set(["solar_fueling_transaction", "solar_stock_movement", "solar_stock_opname"]),
     telemetry: new Set(["telemetry_sample"]),
   };
   const matches = (...groups) => groups.some((group) => [...sourceGroups[group]].some((source) => sources.has(source)));
   if (["jetflow", "calator", "dryer", "kalender"].includes(state.page)) return matches("asset", "batch", "alarm", "equipment");
   if (state.page === "chemical") return matches("asset", "chemical", "alarm");
+  if (state.page === "solar") return matches("solar");
   if (state.page === "utilities") return matches("utility", "asset");
   if (state.page === "alarms") return matches("alarm");
   if (state.page === "trends") return matches("telemetry", "batch");
@@ -4053,6 +4129,81 @@ function actualChemicalPage() {
   `;
 }
 
+function solarNumber(value, decimals = 1) {
+  return Number(value || 0).toLocaleString("id-ID", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function solarStatusPill(status) {
+  const value = String(status || "UNKNOWN").toUpperCase();
+  const tone = ["COMPLETED", "VERIFIED", "POSTED"].includes(value) ? "good" : ["FAILED", "REJECTED", "MANUAL_REVIEW"].includes(value) ? "bad" : ["PARTIAL", "SUBMITTED", "DISPENSING"].includes(value) ? "warning" : "neutral";
+  return `<span class="data-pill ${tone}">${actualText(value.replaceAll("_", " "))}</span>`;
+}
+
+function solarRangeToolbar() {
+  const buttons = [["TODAY","Today"],["7D","7 days"],["30D","30 days"],["90D","90 days"],["CUSTOM","Custom"]].map(([value,label]) => `<button class="button small ${state.solar.range === value ? "primary" : "ghost"}" data-solar-range="${value}">${label}</button>`).join("");
+  return `<section class="card solar-toolbar"><div><span class="eyebrow">ANALYSIS RANGE</span><strong>${actualText(state.solar.range === "CUSTOM" ? `${actualTime(solarRange().from)} — ${actualTime(solarRange().to)}` : `${state.solar.range} rolling window`)}</strong></div><div class="solar-range-actions">${buttons}</div>${state.solar.range === "CUSTOM" ? `<div class="solar-custom-range"><label>From<input type="datetime-local" data-solar-date="from" value="${toDateTimeLocal(state.solar.customFrom)}"></label><label>To<input type="datetime-local" data-solar-date="to" value="${toDateTimeLocal(state.solar.customTo)}"></label><button class="button primary small" data-solar-apply-range>Apply</button></div>` : ""}</section>`;
+}
+
+function solarTransactionTable(data, compact = false) {
+  const rows = (data?.transactions || []).map((item) => {
+    const requested = Number(item.requested_liters || 0), metered = item.metered_liters == null ? null : Number(item.metered_liters), variance = metered == null ? null : metered-requested;
+    return `<tr><td><strong>${actualTime(item.fueling_completed_at || item.qr_created_at || item.ingested_at)}</strong><small>${actualText(item.source_system)}</small></td><td><strong class="mono">${actualText(item.qr_code)}</strong><small>${actualText(item.consumer_label || item.consumer_id || "Consumer belum dimapping")}</small></td><td><strong>${actualText(item.requester_name || "—")}</strong><small>${actualText(item.processed_by || item.qr_created_by || "—")}</small></td><td class="mono">${solarNumber(requested)} L</td><td class="mono"><strong>${metered == null ? "—" : `${solarNumber(metered)} L`}</strong></td><td class="mono ${variance != null && Math.abs(variance) > Math.max(1,requested*.02) ? "solar-variance-bad" : ""}">${variance == null ? "—" : `${variance >= 0 ? "+" : ""}${solarNumber(variance)} L`}</td><td class="mono">${item.machine_totalizer_liters == null ? "—" : `${solarNumber(item.machine_totalizer_liters)} L`}</td><td>${solarStatusPill(item.transaction_status)}</td></tr>`;
+  }).join("");
+  return `<div class="table-wrap solar-table-wrap"><table class="data-table solar-table"><thead><tr><th>Completed</th><th>QR / Consumer</th><th>Requester / Operator</th><th>Requested</th><th>Flow meter</th><th>Variance</th><th>Totalizer</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="8">${compact ? "Belum ada transaksi terbaru." : "Tidak ada transaksi sesuai filter."}</td></tr>`}</tbody></table></div>`;
+}
+
+function solarOverview(data) {
+  const overview = data.overview || {}, summary = overview.summary || {}, trend = overview.time_series || [], users = overview.user_ranking || [];
+  const maximum = Math.max(1, ...trend.map((item) => Number(item.metered_liters || 0)));
+  const bars = trend.map((item) => `<div class="solar-trend-column" title="${actualText(item.bucket)} · ${solarNumber(item.metered_liters)} L"><i style="height:${Math.max(4, Number(item.metered_liters || 0)/maximum*100)}%"></i><span>${actualText(String(item.bucket || "").slice(5,10) || "—")}</span></div>`).join("");
+  const userRows = users.map((item,index) => `<div class="solar-user-row"><b>${index+1}</b><span><strong>${actualText(item.user_name)}</strong><small>${solarNumber(item.transactions,0)} transactions</small></span><em>${solarNumber(item.liters)} L</em></div>`).join("");
+  const match = summary.metering_match_percent == null ? "N/A" : `${solarNumber(summary.metering_match_percent,1)}%`;
+  const accuracy = summary.stock_accuracy_percent == null ? "N/A" : `${solarNumber(summary.stock_accuracy_percent,1)}%`;
+  return `<section class="solar-kpi-grid">
+    ${actualMetric("System Stock", solarNumber(summary.system_stock_liters), "L", "Opening + receipts − metered dispensing")}
+    ${actualMetric("Fuel Consumption", solarNumber(summary.metered_liters), "L", "Flow meter · selected range")}
+    ${actualMetric("Completed Fueling", solarNumber(summary.completed_transactions,0), "QR", "Completed + partial transactions")}
+    ${actualMetric("Metering Match", match, "", "Backend sum vs machine totalizer")}
+    ${actualMetric("Stock Accuracy", accuracy, "", "Latest physical stock opname")}
+    ${actualMetric("Need Review", solarNumber(summary.review_count,0), "items", "Variance, partial, failed, manual review")}
+  </section>
+  <section class="solar-reconciliation-grid">
+    <article class="card solar-recon-card"><span>01 · DISPENSING</span><h3>Requested vs Flow Meter</h3><strong>${solarNumber(summary.requested_liters)} L <i>→</i> ${solarNumber(summary.metered_liters)} L</strong><p>Memastikan volume aktual sesuai permintaan QR.</p></article>
+    <article class="card solar-recon-card"><span>02 · TOTALIZER</span><h3>Backend vs Machine Counter</h3><strong>${solarNumber(summary.metered_liters)} L <i>↔</i> ${summary.machine_delta_liters == null ? "N/A" : `${solarNumber(summary.machine_delta_liters)} L`}</strong><p>${summary.totalizer_reset_count ? `${summary.totalizer_reset_count} reset totalizer terdeteksi.` : "Selisih totalizer dipantau per range."}</p></article>
+    <article class="card solar-recon-card"><span>03 · INVENTORY</span><h3>System vs Physical Stock</h3><strong>${solarNumber(summary.system_stock_liters)} L <i>↔</i> ${overview.latest_opname ? `${solarNumber(overview.latest_opname.physical_stock_liters)} L` : "Belum opname"}</strong><p>Akurasi stok hanya dinyatakan setelah verifikasi fisik.</p></article>
+  </section>
+  <section class="solar-analysis-grid">${panel("Consumption Trend", "Actual flow-meter output per interval", trend.length ? `<div class="solar-trend">${bars}</div>` : actualEmpty("Belum ada transaksi pada range ini"), `<span class="data-pill good">FLOW METER</span>`, "solar-trend-panel")}${panel("Top Requesters", "Total konsumsi berdasarkan user", userRows ? `<div class="solar-user-list">${userRows}</div>` : actualEmpty("Belum ada data requester"))}</section>
+  ${panel("Recent Fueling Transactions", "QR, volume requested, actual flow meter, dan totalizer", solarTransactionTable(data.transactions, true), `<button class="button small" data-solar-tab="transactions">Open full log →</button>`)}`;
+}
+
+function solarTransactions(data) {
+  const transactionData = data.transactions || {}, page = transactionData.pagination || { page:1,total_pages:1,total_rows:0 };
+  return `<section class="card solar-filter-card"><form data-solar-search-form><label>Search QR or user<input type="search" name="search" value="${actualText(state.solar.search)}" placeholder="QR code, requester, operator…"></label><label>Status<select name="status"><option value="all">All status</option>${["COMPLETED","PARTIAL","DISPENSING","FAILED","MANUAL_REVIEW","CANCELLED"].map((value) => `<option value="${value}" ${state.solar.status===value?"selected":""}>${value.replaceAll("_"," ")}</option>`).join("")}</select></label><button class="button primary" type="submit">Search log</button></form></section>${panel("Fueling Transaction Log", "Server-side search dan pagination · tidak menggeser posisi halaman saat auto-update", `${solarTransactionTable(transactionData)}<div class="solar-pagination"><span><strong>${solarNumber(page.total_rows,0)}</strong> records</span><div><button class="button small" data-solar-page="prev" ${page.page<=1?"disabled":""}>← Previous</button><span>Page ${page.page} / ${page.total_pages}</span><button class="button small" data-solar-page="next" ${page.page>=page.total_pages?"disabled":""}>Next →</button></div></div>`, `<span class="data-pill ${backendConnection.realtime === "connected" ? "good" : "warning"}">${backendConnection.realtime === "connected" ? "LIVE AUTO-UPDATE" : "AUTO-UPDATE PAUSED"}</span>`, "solar-log-panel")}`;
+}
+
+function solarMovements(data) {
+  const rows = (data.movements?.movements || []).map((item) => `<tr><td>${actualTime(item.occurred_at)}</td><td>${solarStatusPill(item.movement_type)}</td><td><strong>${actualText(item.direction)}</strong></td><td class="mono"><strong>${solarNumber(item.quantity_liters)} L</strong></td><td class="mono">${actualText(item.reference_code)}</td><td>${actualText(item.created_by)}</td><td>${actualText(item.notes)}</td></tr>`).join("");
+  return `<section class="solar-operation-grid">${panel("Register Stock Movement", "Catat penerimaan, adjustment, atau transfer selain fueling", `<form class="solar-entry-form" data-solar-movement-form><label>Movement<select name="movement_type"><option value="RECEIPT">Receipt</option><option value="ADJUSTMENT">Adjustment</option><option value="TRANSFER">Transfer</option></select></label><label>Direction<select name="direction"><option value="IN">IN</option><option value="OUT">OUT</option></select></label><label>Quantity (L)<input type="number" name="quantity_liters" min="0.001" step="0.001" required></label><label>Reference<input name="reference_code" maxlength="160" placeholder="Delivery note / adjustment"></label><label class="wide">Notes<textarea name="notes" rows="2"></textarea></label><button class="button primary" type="submit">Save movement</button></form>`)}${panel("Stock Control Rule", "Fueling OUT berasal dari transaksi flow meter dan tidak diduplikasi", `<div class="solar-stock-rule"><strong>System Stock</strong><span>Opening stock + receipts − metered fueling ± adjustments</span><small>Semua perubahan manual tercatat bersama user yang melakukan input.</small></div>`)}</section>${panel("Stock Movement Log", "Non-fueling inventory movement", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Type</th><th>Direction</th><th>Quantity</th><th>Reference</th><th>Created by</th><th>Notes</th></tr></thead><tbody>${rows || `<tr><td colspan="7">Belum ada stock movement.</td></tr>`}</tbody></table></div>`)}`;
+}
+
+function solarOpnames(data) {
+  const rows = (data.opnames?.opnames || []).map((item) => `<tr><td><strong class="mono">${actualText(item.opname_number)}</strong><small>${actualTime(item.cutoff_at)}</small></td><td class="mono">${solarNumber(item.system_stock_liters)} L</td><td class="mono"><strong>${solarNumber(item.physical_stock_liters)} L</strong></td><td class="mono ${Math.abs(Number(item.variance_liters||0))>1?"solar-variance-bad":""}">${Number(item.variance_liters)>=0?"+":""}${solarNumber(item.variance_liters)} L</td><td>${item.accuracy_percent==null?"N/A":`${solarNumber(item.accuracy_percent,2)}%`}</td><td>${solarStatusPill(item.status)}</td><td>${actualText(item.measured_by)}</td><td>${["SUBMITTED","VERIFIED"].includes(item.status) ? `<div class="solar-row-actions">${item.status==="SUBMITTED"?`<button class="button small" data-solar-opname-action="VERIFY" data-solar-opname-id="${actualText(item.opname_id)}">Verify</button>`:""}${item.status==="VERIFIED"?`<button class="button primary small" data-solar-opname-action="POST" data-solar-opname-id="${actualText(item.opname_id)}">Post</button>`:""}<button class="button ghost small" data-solar-opname-action="REJECT" data-solar-opname-id="${actualText(item.opname_id)}">Reject</button></div>` : "—"}</td></tr>`).join("");
+  return `<section class="solar-operation-grid">${panel("New Stock Opname", "Bandingkan stok sistem dengan hasil pengukuran fisik", `<form class="solar-entry-form" data-solar-opname-form><label>Physical stock (L)<input type="number" name="physical_stock_liters" min="0" step="0.001" required></label><label>Measurement method<select name="measurement_method"><option value="DIPSTICK">Dipstick</option><option value="TANK_GAUGE">Tank gauge</option><option value="FLOWMETER_RECONCILIATION">Flowmeter reconciliation</option></select></label><label>Status<select name="status"><option value="SUBMITTED">Submit for verification</option><option value="DRAFT">Save draft</option></select></label><label class="wide">Notes<textarea name="notes" rows="2" placeholder="Kondisi tank, waktu ukur, atau catatan selisih"></textarea></label><button class="button primary" type="submit">Record opname</button></form>`)}${panel("Approval Workflow", "Pemisahan input dan validasi menjaga audit trail", `<div class="solar-workflow"><span>DRAFT</span><i>→</i><span>SUBMITTED</span><i>→</i><span>VERIFIED</span><i>→</i><span>POSTED</span></div><p class="solar-workflow-note">Supervisor, Engineer, atau Admin dapat memverifikasi dan mem-posting hasil opname.</p>`)}</section>${panel("Stock Opname History", "System stock, physical stock, variance, dan accuracy", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Opname</th><th>System</th><th>Physical</th><th>Variance</th><th>Accuracy</th><th>Status</th><th>Measured by</th><th>Action</th></tr></thead><tbody>${rows || `<tr><td colspan="8">Belum ada stock opname.</td></tr>`}</tbody></table></div>`)}`;
+}
+
+function actualSolarPage() {
+  if (!solarFueling.data && !solarFueling.loading) void loadSolarFueling();
+  const tabs = [["overview","Overview"],["transactions","Transaction Log"],["movements","Stock Movement"],["opname","Stock Opname"]].map(([value,label]) => `<button class="${state.solar.tab===value?"active":""}" data-solar-tab="${value}">${label}</button>`).join("");
+  const header = `${pageHead("solar", `<span class="range-badge">ACTUAL DATABASE</span>`)}<nav class="solar-tabs">${tabs}</nav>${solarRangeToolbar()}`;
+  if (solarFueling.loading && !solarFueling.data) return `${header}${panel("Loading Solar Fueling", "Membaca transaksi, totalizer, dan inventory", `<div class="actual-historian-loading">Loading actual fuel operations…</div>`)}`;
+  if (solarFueling.error && !solarFueling.data) return `${header}${panel("Solar Fueling unavailable", "Periksa koneksi backend dan migration database", actualEmpty(solarFueling.error))}`;
+  const data = solarFueling.data || { overview:{summary:{}},transactions:{transactions:[]},movements:{movements:[]},opnames:{opnames:[]} };
+  if (state.solar.tab === "transactions") return `${header}${solarTransactions(data)}`;
+  if (state.solar.tab === "movements") return `${header}${solarMovements(data)}`;
+  if (state.solar.tab === "opname") return `${header}${solarOpnames(data)}`;
+  return `${header}${solarOverview(data)}`;
+}
+
 async function requestAlarmConfiguration(force = false) {
   if (alarmConfiguration.loading || (alarmConfiguration.loaded && !force)) return;
   alarmConfiguration.loading = true;
@@ -5348,6 +5499,7 @@ function databaseProcessPage(type) {
 function databaseDashboardPage() {
   if (state.page === "overview") return databaseOverviewPage();
   if (state.page === "chemical") return actualChemicalPage();
+  if (state.page === "solar") return actualSolarPage();
   if (["jetflow", "calator", "dryer", "kalender"].includes(state.page)) return databaseProcessPage(state.page);
   if (state.page === "utilities") return actualUtilitiesPage();
   if (state.page === "alarms") return actualAlarmsPage();
@@ -5361,6 +5513,7 @@ function actualDataPage() {
   if (["jetflow", "calator", "dryer", "kalender"].includes(state.page)) return actualProcessPage(state.page);
   if (state.page === "utilities") return actualUtilitiesPage();
   if (state.page === "chemical") return actualChemicalPage();
+  if (state.page === "solar") return actualSolarPage();
   if (state.page === "alarms") return actualAlarmsPage();
   if (state.page === "trends") return actualTrendsPage();
   if (state.page === "health") return actualHealthPage();
@@ -5563,6 +5716,56 @@ async function exportActualBatchProcessRun(processRunId, format, button) {
 }
 
 function bindPageEvents() {
+  document.querySelectorAll("[data-solar-tab]").forEach((button) => button.addEventListener("click", () => {
+    state.solar.tab = button.dataset.solarTab;
+    renderPage({ preserveScroll: true });
+  }));
+  document.querySelectorAll("[data-solar-range]").forEach((button) => button.addEventListener("click", () => {
+    state.solar.range = button.dataset.solarRange;
+    state.solar.page = 1;
+    invalidateSolarFueling();
+    if (state.solar.range === "CUSTOM") renderPage({ preserveScroll: true });
+    else void loadSolarFueling({ force: true });
+  }));
+  document.querySelectorAll("[data-solar-date]").forEach((input) => input.addEventListener("change", () => {
+    const timestamp = new Date(input.value).getTime();
+    if (Number.isFinite(timestamp)) state.solar[input.dataset.solarDate === "from" ? "customFrom" : "customTo"] = timestamp;
+  }));
+  document.querySelector("[data-solar-apply-range]")?.addEventListener("click", () => {
+    if (state.solar.customFrom > state.solar.customTo) [state.solar.customFrom,state.solar.customTo] = [state.solar.customTo,state.solar.customFrom];
+    state.solar.page = 1; invalidateSolarFueling(); void loadSolarFueling({ force: true });
+  });
+  document.querySelector("[data-solar-search-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    state.solar.search = String(form.get("search") || "").trim();
+    state.solar.status = String(form.get("status") || "all");
+    state.solar.page = 1; invalidateSolarFueling(); void loadSolarFueling({ force: true });
+  });
+  document.querySelectorAll("[data-solar-page]").forEach((button) => button.addEventListener("click", () => {
+    if (button.disabled) return;
+    const total = solarFueling.data?.transactions?.pagination?.total_pages || 1;
+    state.solar.page = button.dataset.solarPage === "prev" ? Math.max(1,state.solar.page-1) : Math.min(total,state.solar.page+1);
+    invalidateSolarFueling(); void loadSolarFueling({ force: true });
+  }));
+  document.querySelector("[data-solar-movement-form]")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const button = event.currentTarget.querySelector("button[type='submit']"); button.disabled = true;
+    try { const values = Object.fromEntries(new FormData(event.currentTarget)); await submitSolarJson("/api/v1/solar/stock/movements", "POST", values); showToast("Stock movement saved", `${values.direction} ${values.quantity_liters} liter berhasil dicatat.`); }
+    catch (error) { showToast("Stock movement failed", error instanceof Error ? error.message : "Data gagal disimpan."); }
+    finally { button.disabled = false; }
+  });
+  document.querySelector("[data-solar-opname-form]")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const button = event.currentTarget.querySelector("button[type='submit']"); button.disabled = true;
+    try { const values = Object.fromEntries(new FormData(event.currentTarget)); await submitSolarJson("/api/v1/solar/stock-opnames", "POST", { ...values, cutoff_at: new Date().toISOString() }); showToast("Stock opname recorded", "Perbandingan stok sistem dan stok fisik sudah dihitung."); }
+    catch (error) { showToast("Stock opname failed", error instanceof Error ? error.message : "Data gagal disimpan."); }
+    finally { button.disabled = false; }
+  });
+  document.querySelectorAll("[data-solar-opname-action]").forEach((button) => button.addEventListener("click", async () => {
+    button.disabled = true;
+    try { await submitSolarJson(`/api/v1/solar/stock-opnames/${encodeURIComponent(button.dataset.solarOpnameId)}`, "PATCH", { action: button.dataset.solarOpnameAction }); showToast("Stock opname updated", `Status berhasil diproses: ${button.dataset.solarOpnameAction}.`); }
+    catch (error) { showToast("Approval failed", error instanceof Error ? error.message : "Status gagal diperbarui."); }
+    finally { button.disabled = false; }
+  }));
   document.querySelectorAll("[data-pid-toggle]").forEach((button) => {
     button.addEventListener("click", () => {
       const panelType = button.dataset.pidToggle;
@@ -6373,6 +6576,7 @@ function navigate(page) {
   if (state.drill[page]) state.drill[page] = { area: null, machine: null };
   state.page = page;
   renderPage();
+  if (page === "solar") void loadSolarFueling();
   closeSidebar();
 }
 

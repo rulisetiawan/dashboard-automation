@@ -106,6 +106,15 @@ const schemaStatements = [
   "CREATE TABLE IF NOT EXISTS dashboard_user (user_id TEXT PRIMARY KEY, username TEXT NOT NULL COLLATE NOCASE UNIQUE, email TEXT COLLATE NOCASE UNIQUE, display_name TEXT NOT NULL, department TEXT NOT NULL DEFAULT 'Digital Automation', role_code TEXT NOT NULL DEFAULT 'VIEWER', password_hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, failed_login_count INTEGER NOT NULL DEFAULT 0, locked_until TEXT, last_login_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS dashboard_session (session_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, user_agent TEXT, ip_address TEXT, revoked_at TEXT, created_at TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES dashboard_user(user_id) ON DELETE CASCADE)",
   "CREATE INDEX IF NOT EXISTS idx_dashboard_session_active ON dashboard_session(user_id, expires_at DESC, revoked_at)",
+  "CREATE TABLE IF NOT EXISTS solar_stock_config (tank_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, capacity_liters REAL NOT NULL DEFAULT 0, opening_stock_liters REAL NOT NULL DEFAULT 0, opening_at TEXT NOT NULL, reorder_level_liters REAL NOT NULL DEFAULT 0, tolerance_percent REAL NOT NULL DEFAULT 1, updated_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS solar_fueling_transaction (transaction_id TEXT PRIMARY KEY, source_system TEXT NOT NULL, source_id INTEGER, qr_code TEXT NOT NULL, requested_liters REAL NOT NULL, metered_liters REAL, calculated_liters REAL, machine_totalizer_liters REAL, operation_type TEXT NOT NULL DEFAULT 'FUELING', movement_direction TEXT NOT NULL DEFAULT 'OUT', execution_mode TEXT NOT NULL DEFAULT 'QR', transaction_status TEXT NOT NULL, qr_created_at TEXT, fueling_started_at TEXT, fueling_completed_at TEXT, requester_name TEXT, qr_created_by TEXT, processed_by TEXT, consumer_id TEXT, consumer_label TEXT, notes TEXT, source_updated_at TEXT, raw_payload TEXT NOT NULL DEFAULT '{}', ingested_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(source_system, source_id))",
+  "CREATE INDEX IF NOT EXISTS idx_solar_transaction_completed ON solar_fueling_transaction(fueling_completed_at DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_solar_transaction_qr ON solar_fueling_transaction(qr_code)",
+  "CREATE TABLE IF NOT EXISTS solar_stock_movement (movement_id TEXT PRIMARY KEY, tank_id TEXT NOT NULL, movement_type TEXT NOT NULL, direction TEXT NOT NULL, quantity_liters REAL NOT NULL, occurred_at TEXT NOT NULL, reference_code TEXT, notes TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS idx_solar_movement_time ON solar_stock_movement(tank_id, occurred_at DESC)",
+  "CREATE TABLE IF NOT EXISTS solar_stock_opname (opname_id TEXT PRIMARY KEY, opname_number TEXT NOT NULL UNIQUE, tank_id TEXT NOT NULL, cutoff_at TEXT NOT NULL, system_stock_liters REAL NOT NULL, physical_stock_liters REAL NOT NULL, variance_liters REAL NOT NULL, accuracy_percent REAL, measurement_method TEXT NOT NULL, measured_by TEXT NOT NULL, verified_by TEXT, status TEXT NOT NULL, notes TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, verified_at TEXT, posted_at TEXT)",
+  "CREATE INDEX IF NOT EXISTS idx_solar_opname_time ON solar_stock_opname(tank_id, cutoff_at DESC)",
+  "PRAGMA optimize",
 ];
 
 async function executeInChunks(db, statements, chunkSize = 50) {
@@ -117,6 +126,11 @@ async function executeInChunks(db, statements, chunkSize = 50) {
 async function ensureDatabase(env) {
   if (!env.DB) return { available: false, mode: "FALLBACK" };
   await executeInChunks(env.DB, schemaStatements.map((statement) => env.DB.prepare(statement)));
+  const solarConfig = await env.DB.prepare("SELECT tank_id FROM solar_stock_config WHERE tank_id = ?").bind("SOLAR-MAIN").first();
+  if (!solarConfig) {
+    const createdAt = new Date().toISOString();
+    await env.DB.prepare("INSERT INTO solar_stock_config (tank_id, display_name, opening_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind("SOLAR-MAIN", "Main Solar Tank", "2000-01-01T00:00:00.000Z", createdAt, createdAt).run();
+  }
   const meta = await env.DB.prepare("SELECT meta_value FROM backend_meta WHERE meta_key = ?").bind("non_jetflow_seed_v1").first();
   if (!meta) {
     const now = new Date().toISOString();
@@ -325,8 +339,9 @@ async function apiResponse(request, env) {
   if (!ready.available) return json({ error: "D1 binding is unavailable", data_mode: "FALLBACK" }, 503);
 
   if (url.pathname.startsWith(`${API_PREFIX}/auth/`)) return authResponse(request, env, url.pathname);
-  const isEdgeIngestion = url.pathname === `${API_PREFIX}/edge/telemetry` && request.method === "POST";
-  if (!isEdgeIngestion && !await authenticatedSession(request, env)) return json({ error: "unauthorized", message: "Session dashboard tidak aktif." }, 401);
+  const isEdgeIngestion = (url.pathname === `${API_PREFIX}/edge/telemetry` || url.pathname === `${API_PREFIX}/ingestion/solar-fueling`) && request.method === "POST";
+  const session = isEdgeIngestion ? null : await authenticatedSession(request, env);
+  if (!isEdgeIngestion && !session) return json({ error: "unauthorized", message: "Session dashboard tidak aktif." }, 401);
 
   if (url.pathname === `${API_PREFIX}/integration/status`) {
     const rows = await env.DB.prepare("SELECT process_type, COUNT(*) AS asset_count FROM asset WHERE active = 1 GROUP BY process_type").all();
@@ -364,6 +379,89 @@ async function apiResponse(request, env) {
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     const result = await env.DB.prepare(`SELECT * FROM chemical_transaction ${where} ORDER BY occurred_at DESC LIMIT 250`).bind(...bindings).all();
     return json({ data_mode: "SIMULATED_SEED", transactions: result.results });
+  }
+
+  if (url.pathname === `${API_PREFIX}/solar/overview` && request.method === "GET") {
+    const to = url.searchParams.get("to") || new Date().toISOString();
+    const from = url.searchParams.get("from") || new Date(new Date(to).getTime() - 30 * 86400000).toISOString();
+    const summary = await env.DB.prepare(`SELECT COUNT(*) AS completed_transactions, COALESCE(SUM(metered_liters),0) AS metered_liters, COALESCE(SUM(requested_liters),0) AS requested_liters, COALESCE(AVG(CASE WHEN requested_liters>0 THEN metered_liters/requested_liters*100 END),0) AS fulfillment_percent, SUM(CASE WHEN transaction_status='MANUAL_REVIEW' OR (requested_liters>0 AND ABS(metered_liters-requested_liters)/requested_liters>.02) THEN 1 ELSE 0 END) AS review_count FROM solar_fueling_transaction WHERE transaction_status IN ('COMPLETED','PARTIAL','MANUAL_REVIEW') AND COALESCE(fueling_completed_at,qr_created_at,ingested_at)>=? AND COALESCE(fueling_completed_at,qr_created_at,ingested_at)<?`).bind(from,to).first();
+    const config = await env.DB.prepare("SELECT * FROM solar_stock_config WHERE tank_id='SOLAR-MAIN'").first();
+    const movement = await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN quantity_liters ELSE -quantity_liters END),0) AS net FROM solar_stock_movement WHERE tank_id='SOLAR-MAIN' AND occurred_at>=? AND occurred_at<=?").bind(config.opening_at,to).first();
+    const consumed = await env.DB.prepare("SELECT COALESCE(SUM(metered_liters),0) AS liters FROM solar_fueling_transaction WHERE transaction_status IN ('COMPLETED','PARTIAL') AND fueling_completed_at>=? AND fueling_completed_at<=?").bind(config.opening_at,to).first();
+    const totalizer = await env.DB.prepare("SELECT machine_totalizer_liters AS latest_totalizer_liters FROM solar_fueling_transaction WHERE machine_totalizer_liters IS NOT NULL AND fueling_completed_at>=? AND fueling_completed_at<? ORDER BY fueling_completed_at DESC LIMIT 1").bind(from,to).first();
+    const latestOpname = await env.DB.prepare("SELECT * FROM solar_stock_opname WHERE tank_id='SOLAR-MAIN' ORDER BY cutoff_at DESC LIMIT 1").first();
+    const trend = await env.DB.prepare("SELECT substr(fueling_completed_at,1,10) AS bucket, SUM(metered_liters) AS metered_liters, SUM(requested_liters) AS requested_liters FROM solar_fueling_transaction WHERE transaction_status IN ('COMPLETED','PARTIAL') AND fueling_completed_at>=? AND fueling_completed_at<? GROUP BY 1 ORDER BY 1").bind(from,to).all();
+    const users = await env.DB.prepare("SELECT COALESCE(requester_name,processed_by,'Unknown') AS user_name, COUNT(*) AS transactions, SUM(metered_liters) AS liters FROM solar_fueling_transaction WHERE transaction_status IN ('COMPLETED','PARTIAL') AND fueling_completed_at>=? AND fueling_completed_at<? GROUP BY 1 ORDER BY liters DESC LIMIT 8").bind(from,to).all();
+    return json({ data_mode:"ACTUAL_DATABASE", range:{from,to}, summary:{...summary,system_stock_liters:Number(config.opening_stock_liters||0)+Number(movement.net||0)-Number(consumed.liters||0),latest_totalizer_liters:totalizer?.latest_totalizer_liters??null,machine_delta_liters:null,totalizer_variance_liters:null,metering_match_percent:null,totalizer_reset_count:0,stock_accuracy_percent:latestOpname?.accuracy_percent??null}, latest_opname:latestOpname||null,time_series:trend.results,user_ranking:users.results,exceptions:[] });
+  }
+
+  if (url.pathname === `${API_PREFIX}/solar/transactions` && request.method === "GET") {
+    const to=url.searchParams.get("to")||new Date().toISOString(), from=url.searchParams.get("from")||new Date(new Date(to).getTime()-30*86400000).toISOString();
+    const search=`%${String(url.searchParams.get("search")||"").trim()}%`, status=String(url.searchParams.get("status")||"all").toUpperCase();
+    const page=Math.max(1,Number(url.searchParams.get("page"))||1), pageSize=Math.min(100,Math.max(10,Number(url.searchParams.get("page_size"))||25)), offset=(page-1)*pageSize;
+    const filter="COALESCE(fueling_completed_at,qr_created_at,ingested_at)>=? AND COALESCE(fueling_completed_at,qr_created_at,ingested_at)<? AND (?='%%' OR qr_code LIKE ? OR COALESCE(requester_name,'') LIKE ? OR COALESCE(processed_by,'') LIKE ?) AND (?='ALL' OR transaction_status=?)";
+    const args=[from,to,search,search,search,search,status,status];
+    const rows=await env.DB.prepare(`SELECT * FROM solar_fueling_transaction WHERE ${filter} ORDER BY COALESCE(fueling_completed_at,qr_created_at,ingested_at) DESC LIMIT ? OFFSET ?`).bind(...args,pageSize,offset).all();
+    const count=await env.DB.prepare(`SELECT COUNT(*) AS total FROM solar_fueling_transaction WHERE ${filter}`).bind(...args).first();
+    const total=Number(count.total||0); return json({data_mode:"ACTUAL_DATABASE",range:{from,to},transactions:rows.results,pagination:{page,page_size:pageSize,total_rows:total,total_pages:Math.max(1,Math.ceil(total/pageSize))}});
+  }
+
+  if (url.pathname === `${API_PREFIX}/solar/stock/movements` && request.method === "GET") {
+    const to=url.searchParams.get("to")||new Date().toISOString(), from=url.searchParams.get("from")||new Date(new Date(to).getTime()-30*86400000).toISOString();
+    const result=await env.DB.prepare("SELECT * FROM solar_stock_movement WHERE occurred_at>=? AND occurred_at<? ORDER BY occurred_at DESC LIMIT 100").bind(from,to).all();
+    return json({data_mode:"ACTUAL_DATABASE",movements:result.results,pagination:{page:1,page_size:100,total_rows:result.results.length,total_pages:1}});
+  }
+
+  if (url.pathname === `${API_PREFIX}/solar/stock/movements` && request.method === "POST") {
+    if (!["ADMIN","ENGINEER","SUPERVISOR","OPERATOR"].includes(session.role)) return json({message:"Role tidak diizinkan."},403);
+    const body=await request.json(), quantity=Number(body.quantity_liters), direction=String(body.direction||"IN").toUpperCase(), type=String(body.movement_type||"RECEIPT").toUpperCase();
+    if (!Number.isFinite(quantity)||quantity<=0||!["IN","OUT"].includes(direction)||!["RECEIPT","ADJUSTMENT","TRANSFER"].includes(type)) return json({message:"Stock movement tidak valid."},400);
+    const now=new Date().toISOString(), id=crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO solar_stock_movement (movement_id,tank_id,movement_type,direction,quantity_liters,occurred_at,reference_code,notes,created_by,created_at,updated_at) VALUES (?,'SOLAR-MAIN',?,?,?,?,?,?,?,?,?)").bind(id,type,direction,quantity,body.occurred_at||now,String(body.reference_code||"").trim()||null,String(body.notes||"").trim()||null,session.displayName,now,now).run();
+    return json({data_mode:"ACTUAL_DATABASE",movement:await env.DB.prepare("SELECT * FROM solar_stock_movement WHERE movement_id=?").bind(id).first()},201);
+  }
+
+  if (url.pathname === `${API_PREFIX}/solar/stock-opnames` && request.method === "GET") {
+    const to=url.searchParams.get("to")||new Date().toISOString(), from=url.searchParams.get("from")||new Date(new Date(to).getTime()-30*86400000).toISOString();
+    const result=await env.DB.prepare("SELECT * FROM solar_stock_opname WHERE cutoff_at>=? AND cutoff_at<? ORDER BY cutoff_at DESC LIMIT 100").bind(from,to).all();
+    return json({data_mode:"ACTUAL_DATABASE",opnames:result.results,pagination:{page:1,page_size:100,total_rows:result.results.length,total_pages:1}});
+  }
+
+  if (url.pathname === `${API_PREFIX}/solar/stock-opnames` && request.method === "POST") {
+    if (!["ADMIN","ENGINEER","SUPERVISOR","OPERATOR"].includes(session.role)) return json({message:"Role tidak diizinkan."},403);
+    const body=await request.json(), physical=Number(body.physical_stock_liters), cutoff=body.cutoff_at||new Date().toISOString();
+    if (!Number.isFinite(physical)||physical<0||!String(body.measurement_method||"").trim()) return json({message:"Stok fisik dan metode pengukuran wajib valid."},400);
+    const config=await env.DB.prepare("SELECT * FROM solar_stock_config WHERE tank_id='SOLAR-MAIN'").first();
+    const movement=await env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN quantity_liters ELSE -quantity_liters END),0) AS net FROM solar_stock_movement WHERE tank_id='SOLAR-MAIN' AND occurred_at>=? AND occurred_at<=?").bind(config.opening_at,cutoff).first();
+    const consumed=await env.DB.prepare("SELECT COALESCE(SUM(metered_liters),0) AS liters FROM solar_fueling_transaction WHERE transaction_status IN ('COMPLETED','PARTIAL') AND fueling_completed_at>=? AND fueling_completed_at<=?").bind(config.opening_at,cutoff).first();
+    const system=Number(config.opening_stock_liters||0)+Number(movement.net||0)-Number(consumed.liters||0), variance=physical-system, accuracy=system>0?Math.max(0,100-Math.abs(variance)/system*100):null, now=new Date().toISOString();
+    const row={id:crypto.randomUUID(),number:`OPN-${now.slice(0,10).replaceAll("-","")}-${Date.now().toString().slice(-6)}`};
+    await env.DB.prepare("INSERT INTO solar_stock_opname (opname_id,opname_number,tank_id,cutoff_at,system_stock_liters,physical_stock_liters,variance_liters,accuracy_percent,measurement_method,measured_by,status,notes,created_at,updated_at) VALUES (?,?,'SOLAR-MAIN',?,?,?,?,?,?,?,?,?,?,?)").bind(row.id,row.number,cutoff,system,physical,variance,accuracy,String(body.measurement_method).trim(),session.display_name||session.displayName,String(body.status||"SUBMITTED").toUpperCase(),String(body.notes||"").trim()||null,now,now).run();
+    return json({data_mode:"ACTUAL_DATABASE",opname:await env.DB.prepare("SELECT * FROM solar_stock_opname WHERE opname_id=?").bind(row.id).first()},201);
+  }
+
+  if (url.pathname.startsWith(`${API_PREFIX}/solar/stock-opnames/`) && request.method === "PATCH") {
+    if (!["ADMIN","ENGINEER","SUPERVISOR"].includes(session.role)) return json({message:"Role tidak diizinkan."},403);
+    const id=decodeURIComponent(url.pathname.split("/").at(-1)||""), body=await request.json(), action=String(body.action||"").toUpperCase(), target={VERIFY:"VERIFIED",POST:"POSTED",REJECT:"REJECTED"}[action];
+    if (!target) return json({message:"Action tidak valid."},400);
+    const current=await env.DB.prepare("SELECT * FROM solar_stock_opname WHERE opname_id=?").bind(id).first(); if (!current) return json({message:"Stock opname tidak ditemukan."},404);
+    const now=new Date().toISOString(); await env.DB.prepare("UPDATE solar_stock_opname SET status=?,verified_by=?,verified_at=CASE WHEN ? IN ('VERIFIED','POSTED') THEN COALESCE(verified_at,?) ELSE verified_at END,posted_at=CASE WHEN ?='POSTED' THEN ? ELSE posted_at END,updated_at=? WHERE opname_id=?").bind(target,session.displayName,target,now,target,now,now,id).run();
+    return json({data_mode:"ACTUAL_DATABASE",opname:await env.DB.prepare("SELECT * FROM solar_stock_opname WHERE opname_id=?").bind(id).first()});
+  }
+
+  if (url.pathname === `${API_PREFIX}/ingestion/solar-fueling` && request.method === "POST") {
+    const token=env.SOLAR_INGEST_TOKEN||env.EDGE_INGEST_TOKEN; if (!token) return json({message:"Solar ingestion belum diaktifkan."},503);
+    const supplied=request.headers.get("x-api-key")||String(request.headers.get("authorization")||"").replace(/^Bearer\s+/i,""); if (supplied!==token) return json({message:"X-API-Key tidak valid."},401);
+    const body=await request.json(), items=Array.isArray(body.transactions)?body.transactions:[body], source=String(body.source_system||"SOLAR_MACHINE").trim().toUpperCase(), now=new Date().toISOString();
+    if (!items.length||items.length>200) return json({message:"transactions harus berisi 1 sampai 200 item."},400);
+    const statements=[]; const accepted=[];
+    for (const raw of items) {
+      const code=String(raw.code||"").trim(), requested=Number(raw.jumlah); if (!code||!Number.isFinite(requested)||requested<0) return json({message:"code dan jumlah wajib valid."},400);
+      const id=raw.id==null?null:Number(raw.id), transactionId=crypto.randomUUID(), completed=raw.date_activated||null, status=String(raw.status|| (completed?"COMPLETED":"QR_CREATED")).trim().toUpperCase().replaceAll(" ","_");
+      statements.push(env.DB.prepare(`INSERT INTO solar_fueling_transaction (transaction_id,source_system,source_id,qr_code,requested_liters,metered_liters,calculated_liters,machine_totalizer_liters,transaction_status,qr_created_at,fueling_completed_at,requester_name,qr_created_by,processed_by,notes,source_updated_at,raw_payload,ingested_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_system,source_id) DO UPDATE SET qr_code=excluded.qr_code,requested_liters=excluded.requested_liters,metered_liters=excluded.metered_liters,calculated_liters=excluded.calculated_liters,machine_totalizer_liters=excluded.machine_totalizer_liters,transaction_status=excluded.transaction_status,qr_created_at=excluded.qr_created_at,fueling_completed_at=excluded.fueling_completed_at,requester_name=excluded.requester_name,qr_created_by=excluded.qr_created_by,processed_by=excluded.processed_by,notes=excluded.notes,source_updated_at=excluded.source_updated_at,raw_payload=excluded.raw_payload,updated_at=excluded.updated_at`).bind(transactionId,source,id,code,requested,raw.actual_solar==null?null:Number(raw.actual_solar),raw.calculated_volume==null?null:Number(raw.calculated_volume),raw.total_solar_IN==null?null:Number(raw.total_solar_IN),status,raw.date_created||null,completed,raw.nama_pemesan||null,raw.nama_pembuat||null,raw.process_by||null,raw.keterangan||null,raw.process_at||null,JSON.stringify(raw),now,now));
+      accepted.push({source_id:id,qr_code:code,transaction_status:status});
+    }
+    await executeInChunks(env.DB,statements); return json({data_mode:"ACTUAL_DATABASE",storage:"SOLAR_FUELING_TRANSACTION",received:items.length,applied:items.length,transactions:accepted,server_time:now});
   }
 
   if (url.pathname === `${API_PREFIX}/utilities/snapshot`) {

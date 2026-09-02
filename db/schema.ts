@@ -7,4 +7,9 @@ export const nonJetflowTables = [
   "telemetry_sample",
   "chemical_transaction",
   "utility_snapshot",
+  "solar_fueling_transaction",
+  "solar_stock_config",
+  "solar_stock_movement",
+  "solar_stock_opname",
+  "solar_audit_event",
 ] as const;

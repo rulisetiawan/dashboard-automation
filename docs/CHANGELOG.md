@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.27 / Solar Fueling V1.0 — 2 September 2026
+
+**Status:** Solar Fueling & Inventory Reconciliation implemented
+
+### Ditambahkan
+
+- Menu Resources `Solar Fueling` dengan Overview, Transaction Log, Stock Movement, dan Stock Opname.
+- Pencarian QR/user, time range, pagination, konsumsi aktual flow meter, dan ranking requester.
+- Rekonsiliasi requested–metered, backend–totalizer, serta system stock–physical stock.
+- Ingestion API idempotent, PostgreSQL/D1 schema, role-based inventory write, approval workflow, audit, dan realtime source marker.
+
+### Keputusan
+
+- `date_activated` diperlakukan sebagai waktu pengisian selesai.
+- Fueling OUT dihitung langsung dari transaksi aktual dan tidak diduplikasi pada stock movement.
+- Data kendaraan/equipment menunggu identifier aktual dari sistem sumber.
+
 ## Dashboard V2.26 — 1 September 2026
 
 **Status:** Operational UI copy simplified

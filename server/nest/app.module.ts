@@ -17,9 +17,10 @@ import { RealtimeGateway } from "./realtime.gateway.js";
 import { AuthController } from "./auth.controller.js";
 import { DashboardAuthMiddleware } from "./auth.middleware.js";
 import { AuthService } from "./auth.service.js";
+import { SolarFuelingController } from "./solar-fueling.controller.js";
 
 @Module({
-  controllers: [AuthController, ApiController, AlarmController, BatchController, BatchExportController, ChemicalController, LiveValueIngestionController, PerformanceController, ProcessDeviationController, ProductionOutputController],
+  controllers: [AuthController, ApiController, AlarmController, BatchController, BatchExportController, ChemicalController, LiveValueIngestionController, PerformanceController, ProcessDeviationController, ProductionOutputController, SolarFuelingController],
   providers: [DatabaseService, AuthService, DashboardAuthMiddleware, HistorianAggregationService, RealtimeGateway, AlarmEngineService, ProcessDeviationEngineService, BatchIngestionExceptionFilter],
 })
 export class AppModule {
