@@ -93,14 +93,22 @@ export class SolarFuelingController {
       this.database.query(`
         WITH ordered AS (
           SELECT machine_totalizer_liters, fueling_completed_at,
-                 LAG(machine_totalizer_liters) OVER (ORDER BY fueling_completed_at) AS previous_totalizer
+                 ROW_NUMBER() OVER (ORDER BY fueling_completed_at, transaction_id) AS first_rank,
+                 ROW_NUMBER() OVER (ORDER BY fueling_completed_at DESC, transaction_id DESC) AS last_rank,
+                 LAG(machine_totalizer_liters) OVER (ORDER BY fueling_completed_at, transaction_id) AS previous_totalizer
           FROM solar_fueling_transaction
           WHERE transaction_status IN ('COMPLETED','PARTIAL') AND fueling_completed_at >= $1 AND fueling_completed_at < $2 AND machine_totalizer_liters IS NOT NULL
+        ), boundaries AS (
+          SELECT MAX(machine_totalizer_liters) FILTER (WHERE first_rank=1) AS first_totalizer_liters,
+                 MAX(machine_totalizer_liters) FILTER (WHERE last_rank=1) AS latest_totalizer_liters,
+                 COUNT(*)::int AS sample_count,
+                 COUNT(*) FILTER (WHERE previous_totalizer IS NOT NULL AND machine_totalizer_liters < previous_totalizer)::int AS reset_count
+          FROM ordered
         )
-        SELECT COALESCE(SUM(CASE WHEN previous_totalizer IS NOT NULL AND machine_totalizer_liters >= previous_totalizer THEN machine_totalizer_liters-previous_totalizer ELSE 0 END),0) AS machine_delta_liters,
-               MAX(machine_totalizer_liters) AS latest_totalizer_liters,
-               COUNT(*) FILTER (WHERE previous_totalizer IS NOT NULL AND machine_totalizer_liters < previous_totalizer)::int AS reset_count
-        FROM ordered
+        SELECT first_totalizer_liters, latest_totalizer_liters,
+               CASE WHEN sample_count >= 2 THEN latest_totalizer_liters-first_totalizer_liters END AS machine_delta_liters,
+               reset_count
+        FROM boundaries
       `, [range.from, range.to]),
       this.database.query(this.stockAtSql("$1"), [range.to]),
       this.database.query("SELECT * FROM solar_stock_opname WHERE tank_id = 'SOLAR-MAIN' ORDER BY cutoff_at DESC LIMIT 1"),
@@ -146,16 +154,17 @@ export class SolarFuelingController {
     const values: any = summary.rows[0] || {};
     const totals: any = totalizer.rows[0] || {};
     const metered = Number(values.metered_liters || 0);
-    const machineDelta = Number(totals.machine_delta_liters || 0);
+    const machineDelta = totals.machine_delta_liters == null ? null : Number(totals.machine_delta_liters);
     return {
       data_mode: "ACTUAL_DATABASE", range,
       summary: {
         ...values,
         system_stock_liters: Number(stock.rows[0]?.system_stock_liters || 0),
+        first_totalizer_liters: totals.first_totalizer_liters == null ? null : Number(totals.first_totalizer_liters),
         latest_totalizer_liters: totals.latest_totalizer_liters == null ? null : Number(totals.latest_totalizer_liters),
         machine_delta_liters: machineDelta,
-        totalizer_variance_liters: machineDelta - metered,
-        metering_match_percent: machineDelta > 0 ? Math.max(0, 100 - Math.abs(machineDelta-metered)/machineDelta*100) : null,
+        totalizer_variance_liters: machineDelta == null ? null : machineDelta - metered,
+        metering_match_percent: machineDelta != null && machineDelta > 0 ? Math.max(0, 100 - Math.abs(machineDelta-metered)/machineDelta*100) : null,
         totalizer_reset_count: Number(totals.reset_count || 0),
         stock_accuracy_percent: latestOpname.rows[0]?.accuracy_percent == null ? null : Number(latestOpname.rows[0].accuracy_percent),
         live_stock_liters: latestLevel.rows[0]?.stock_liters == null ? null : Number(latestLevel.rows[0].stock_liters),

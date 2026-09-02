@@ -4,6 +4,23 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.30 / Solar Fueling V1.3 — 2 September 2026
+
+**Status:** Boundary totalizer delta and simplified reconciliation UI
+
+### Diperbaiki
+
+- Konsumsi totalizer pada range dihitung sebagai `totalizer terakhir − totalizer pertama`.
+- Nilai awal dan akhir dipilih berdasarkan urutan timestamp transaksi final, bukan nilai minimum/maksimum numerik.
+- Delta tidak dibentuk jika range hanya memiliki kurang dari dua sampel totalizer.
+- Rekonsiliasi membandingkan backend flow-meter sum dengan boundary delta totalizer.
+
+### Diperbarui
+
+- Kartu perbandingan disederhanakan menjadi dua nilai tanpa nested container.
+- Divider tipis memisahkan nilai acuan dan pembanding.
+- Selisih liter dan persen ditampilkan dalam satu baris ringkas dengan warna hanya pada hasilnya.
+
 ## Dashboard V2.29 / Solar Fueling V1.2 — 2 September 2026
 
 **Status:** Time range, final transaction, and reconciliation corrected
