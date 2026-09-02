@@ -4,6 +4,24 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.28 / Solar Fueling V1.1 — 2 September 2026
+
+**Status:** SMM_Mysql history and live tank level integrated
+
+### Ditambahkan
+
+- Migrasi idempotent `qr_code_db.qr_codes` ke transaksi Solar Fueling PostgreSQL.
+- Migrasi historian `qr_solar_level` ke `solar_level_sample` dengan quality gate.
+- Sinkronisasi incremental MySQL–PostgreSQL setiap 15 detik.
+- Live Tank Level, freshness status, dan Tank Level Trend pada Overview.
+- Pemisahan totalizer IN, totalizer OUT, serta calculated stock pada model canonical.
+
+### Diperbaiki
+
+- `total_solar_out` digunakan sebagai machine totalizer untuk transaksi keluar.
+- `calculated_volume` diperlakukan sebagai calculated stock, bukan actual dispensing.
+- System Stock memprioritaskan calculated stock sumber dan tidak lagi bergantung pada ledger yang belum memiliki seluruh receipt historis.
+
 ## Dashboard V2.27 / Solar Fueling V1.0 — 2 September 2026
 
 **Status:** Solar Fueling & Inventory Reconciliation implemented

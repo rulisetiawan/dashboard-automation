@@ -13,8 +13,8 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `machines/Machine_Concept_Kalender_v1.20.md` | 1.20 | Aktif | Fabric wrap pada cylinder Upper/Lower dan loadcell sebagai roller kecil setelah masing-masing felt |
 | `utilities/Plant_Utility_Concept_v1.1.md` | 1.1 | Aktif | Power meter 138 mesin dengan pie per area, ranking mesin, dan detail meter individual |
 | `chemicals/Chemical_Dispensing_Calator_Concept_v1.18.md` | 1.18 | Aktif | Route ketiga DSP-DPN-01 menuju Calator Depan 03 |
-| `dashboard/Dashboard_V2_Concept_v2.27.md` | 2.27 | Aktif | Solar Fueling, rekonsiliasi totalizer, stock movement, dan stock opname |
-| `solar/Solar_Fueling_System_Concept_v1.0.md` | 1.0 | Aktif | QR fueling, flow meter, totalizer, konsumsi user, inventory, dan stock accuracy |
+| `dashboard/Dashboard_V2_Concept_v2.28.md` | 2.28 | Aktif | Migrasi data Solar Fueling dan live tank-level historian dari SMM_Mysql |
+| `solar/Solar_Fueling_System_Concept_v1.1.md` | 1.1 | Aktif | QR fueling aktual, flow meter, totalizer OUT, calculated stock, dan live sensor level |
 | `dashboard/Dashboard_V1_Concept_v1.63.md` | 1.63 | Final V1 | Baseline presentasi V1 dengan tooltip tanpa blink saat refresh real-time |
 | `assets/Plant_Machine_Area_Mapping_v1.2.md` | 1.2 | Aktif | Master mapping 139 aset mesin: 134 mesin proses dan 5 dispensing Calator |
 | `backend/Backend_Data_Architecture_Concept_v1.0.md` | 1.0 | Aktif | Fondasi edge-to-historian, model database, API, security, dan roadmap integrasi backend |
@@ -28,7 +28,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `backend/NestJS_PostgreSQL_Integration_v1.20.md` | 1.20 | Aktif | Registrasi idempotent Calator Depan 03, canonical tags, dan route dispensing |
 | `backend/Dashboard_Authentication_v1.0.md` | 1.0 | Aktif | Kontrak user, password hashing, session, provisioning, dan pemisahan API OT |
 | `backend/Live_Value_Ingestion_API_v1.1.md` | 1.1 | Aktif | Payload latest-only feedback Auto/Manual Chemical Dispensing |
-| `backend/Solar_Fueling_Backend_Integration_v1.0.md` | 1.0 | Aktif | API ingestion, analytics, stock movement, opname, role, dan audit Solar Fueling |
+| `backend/Solar_Fueling_Backend_Integration_v1.1.md` | 1.1 | Aktif | Migrasi/sinkronisasi MySQL, level historian, quality gate, API, dan PostgreSQL |
 | `backend/Alarm_Rule_Engine_v1.0.md` | 1.0 | Aktif | Configurable threshold, hysteresis, delay, lifecycle, audit, dan WebSocket alarm engine |
 | `backend/Batch_Abnormal_Log_Backend_Implementation_v1.1.md` | 1.1 | Aktif | Implementasi target achievement, dynamic PV/SV deviation, SV revision log, API, export, dan konfigurasi frontend |
 | `backend/Batch_Abnormal_Log_Backend_Flow_v1.0.md` | 1.0 | Histori | Alur alarm aktual, korelasi batch, dan rancangan awal Process Deviation Engine |

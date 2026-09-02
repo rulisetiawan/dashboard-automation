@@ -49,7 +49,7 @@ function requireRole(request: DashboardRequest, allowed: Set<string>) {
 
 function normalizeSourceStatus(value: unknown, completedAt: string | null) {
   const source = String(value || "").trim().toUpperCase().replace(/[ -]+/g, "_");
-  const aliases: Record<string, string> = { ACTIVE: "DISPENSING", DONE: "COMPLETED", SUCCESS: "COMPLETED", FINISHED: "COMPLETED", ERROR: "FAILED", VOID: "CANCELLED" };
+  const aliases: Record<string, string> = { ACTIVE: "DISPENSING", AKTIF: "READY", TERPAKAI: "COMPLETED", TIDAK_AKTIF: "CANCELLED", DONE: "COMPLETED", SUCCESS: "COMPLETED", FINISHED: "COMPLETED", ERROR: "FAILED", VOID: "CANCELLED" };
   const normalized = aliases[source] || source || (completedAt ? "COMPLETED" : "QR_CREATED");
   return ["QR_CREATED","READY","DISPENSING","COMPLETED","PARTIAL","FAILED","CANCELLED","EXPIRED","MANUAL_REVIEW"].includes(normalized) ? normalized : "MANUAL_REVIEW";
 }
@@ -61,20 +61,27 @@ export class SolarFuelingController {
   private stockAtSql(alias = "$1") {
     return `
       SELECT config.tank_id,
-             config.opening_stock_liters
-             + COALESCE((SELECT SUM(CASE WHEN movement.direction = 'IN' THEN movement.quantity_liters ELSE -movement.quantity_liters END)
-                         FROM solar_stock_movement movement WHERE movement.tank_id = config.tank_id AND movement.occurred_at >= config.opening_at AND movement.occurred_at <= ${alias}), 0)
-             - COALESCE((SELECT SUM(transaction.metered_liters)
-                         FROM solar_fueling_transaction transaction
-                         WHERE transaction.movement_direction = 'OUT' AND transaction.transaction_status IN ('COMPLETED','PARTIAL')
-                           AND transaction.fueling_completed_at >= config.opening_at AND transaction.fueling_completed_at <= ${alias}), 0) AS system_stock_liters
+             COALESCE(
+               (SELECT transaction.calculated_stock_liters
+                FROM solar_fueling_transaction transaction
+                WHERE transaction.calculated_stock_liters IS NOT NULL
+                  AND COALESCE(transaction.fueling_completed_at,transaction.source_updated_at,transaction.qr_created_at) <= ${alias}
+                ORDER BY COALESCE(transaction.fueling_completed_at,transaction.source_updated_at,transaction.qr_created_at) DESC,transaction.source_id DESC LIMIT 1),
+               config.opening_stock_liters
+               + COALESCE((SELECT SUM(CASE WHEN movement.direction = 'IN' THEN movement.quantity_liters ELSE -movement.quantity_liters END)
+                           FROM solar_stock_movement movement WHERE movement.tank_id = config.tank_id AND movement.occurred_at >= config.opening_at AND movement.occurred_at <= ${alias}), 0)
+               - COALESCE((SELECT SUM(transaction.metered_liters)
+                           FROM solar_fueling_transaction transaction
+                           WHERE transaction.movement_direction = 'OUT' AND transaction.transaction_status IN ('COMPLETED','PARTIAL')
+                             AND transaction.fueling_completed_at >= config.opening_at AND transaction.fueling_completed_at <= ${alias}), 0)
+             ) AS system_stock_liters
       FROM solar_stock_config config WHERE config.tank_id = 'SOLAR-MAIN'`;
   }
 
   @Get("solar/overview")
   async overview(@Query("from") from?: string, @Query("to") to?: string) {
     const range = dateRange(from, to);
-    const [summary, totalizer, stock, latestOpname, trend, users, exceptions] = await Promise.all([
+    const [summary, totalizer, stock, latestOpname, trend, users, exceptions, latestLevel, levelTrend] = await Promise.all([
       this.database.query(`
         SELECT COUNT(*) FILTER (WHERE transaction_status IN ('COMPLETED','PARTIAL'))::int AS completed_transactions,
                COALESCE(SUM(metered_liters) FILTER (WHERE transaction_status IN ('COMPLETED','PARTIAL')), 0) AS metered_liters,
@@ -116,6 +123,25 @@ export class SolarFuelingController {
           AND (transaction_status IN ('FAILED','PARTIAL','MANUAL_REVIEW') OR (requested_liters > 0 AND metered_liters IS NOT NULL AND ABS(metered_liters-requested_liters)/requested_liters > 0.02))
         ORDER BY COALESCE(fueling_completed_at, qr_created_at, ingested_at) DESC LIMIT 10
       `, [range.from, range.to]),
+      this.database.query(`
+        SELECT sample.stock_liters,
+               CASE WHEN sample.quality = 'GOOD' AND sample.source_ts < clock_timestamp()-interval '3 minutes' THEN 'STALE' ELSE sample.quality END AS quality,
+               CASE WHEN sample.quality = 'GOOD' AND sample.source_ts < clock_timestamp()-interval '3 minutes' THEN 'Tidak ada pembaruan sensor lebih dari 3 menit' ELSE sample.quality_reason END AS quality_reason,
+               sample.source_ts,
+               CASE WHEN config.capacity_liters > 0 THEN sample.stock_liters / config.capacity_liters * 100 END AS level_percent
+        FROM solar_level_sample sample
+        JOIN solar_stock_config config ON config.tank_id = sample.tank_id
+        WHERE sample.tank_id = 'SOLAR-MAIN'
+        ORDER BY sample.source_ts DESC, sample.source_id DESC
+        LIMIT 1
+      `),
+      this.database.query(`
+        SELECT date_trunc(CASE WHEN $2::timestamptz-$1::timestamptz <= interval '2 days' THEN 'hour' ELSE 'day' END, source_ts) AS bucket,
+               AVG(stock_liters) AS average_stock_liters, MIN(stock_liters) AS minimum_stock_liters, MAX(stock_liters) AS maximum_stock_liters
+        FROM solar_level_sample
+        WHERE tank_id = 'SOLAR-MAIN' AND quality = 'GOOD' AND source_ts >= $1 AND source_ts < $2
+        GROUP BY 1 ORDER BY 1
+      `, [range.from, range.to]),
     ]);
     const values: any = summary.rows[0] || {};
     const totals: any = totalizer.rows[0] || {};
@@ -132,9 +158,15 @@ export class SolarFuelingController {
         metering_match_percent: machineDelta > 0 ? Math.max(0, 100 - Math.abs(machineDelta-metered)/machineDelta*100) : null,
         totalizer_reset_count: Number(totals.reset_count || 0),
         stock_accuracy_percent: latestOpname.rows[0]?.accuracy_percent == null ? null : Number(latestOpname.rows[0].accuracy_percent),
+        live_stock_liters: latestLevel.rows[0]?.stock_liters == null ? null : Number(latestLevel.rows[0].stock_liters),
+        live_level_percent: latestLevel.rows[0]?.level_percent == null ? null : Number(latestLevel.rows[0].level_percent),
+        live_level_quality: latestLevel.rows[0]?.quality || "NO_DATA",
+        live_level_quality_reason: latestLevel.rows[0]?.quality_reason || null,
+        live_level_source_ts: latestLevel.rows[0]?.source_ts || null,
       },
       latest_opname: latestOpname.rows[0] || null,
       time_series: trend.rows,
+      level_time_series: levelTrend.rows,
       user_ranking: users.rows,
       exceptions: exceptions.rows,
     };
@@ -247,11 +279,14 @@ export class SolarFuelingController {
       for (const raw of items) {
         const completedAt = raw.date_activated ? isoTimestamp(raw.date_activated,"date_activated") : null;
         const sourceId = raw.id == null || raw.id === "" ? null : Math.trunc(positiveNumber(raw.id,"id"));
-        const values = [sourceSystem,sourceId,boundedText(raw.code,"code",160,true),positiveNumber(raw.jumlah,"jumlah"),raw.actual_solar == null ? null : positiveNumber(raw.actual_solar,"actual_solar"),raw.calculated_volume == null ? null : positiveNumber(raw.calculated_volume,"calculated_volume"),raw.total_solar_IN == null ? null : positiveNumber(raw.total_solar_IN,"total_solar_IN"),normalizeSourceStatus(raw.status,completedAt),raw.date_created ? isoTimestamp(raw.date_created,"date_created") : null,completedAt,boundedText(raw.nama_pemesan,"nama_pemesan"),boundedText(raw.nama_pembuat,"nama_pembuat"),boundedText(raw.process_by,"process_by"),boundedText(raw.consumer_id,"consumer_id",120),boundedText(raw.consumer_label,"consumer_label",200),boundedText(raw.keterangan,"keterangan",2000),raw.process_at ? isoTimestamp(raw.process_at,"process_at") : null,JSON.stringify(raw)];
+        const totalizerIn = raw.total_solar_IN == null ? null : positiveNumber(raw.total_solar_IN,"total_solar_IN");
+        const totalizerOut = raw.total_solar_out == null ? null : positiveNumber(raw.total_solar_out,"total_solar_out");
+        const calculatedStock = raw.calculated_volume == null ? null : positiveNumber(raw.calculated_volume,"calculated_volume");
+        const values = [sourceSystem,sourceId,boundedText(raw.code,"code",160,true),positiveNumber(raw.jumlah,"jumlah"),raw.actual_solar == null ? null : positiveNumber(raw.actual_solar,"actual_solar"),totalizerOut ?? totalizerIn,totalizerIn,totalizerOut,calculatedStock,normalizeSourceStatus(raw.status,completedAt),raw.date_created ? isoTimestamp(raw.date_created,"date_created") : null,completedAt,boundedText(raw.nama_pemesan,"nama_pemesan"),boundedText(raw.nama_pembuat,"nama_pembuat"),boundedText(raw.process_by,"process_by"),boundedText(raw.consumer_id,"consumer_id",120),boundedText(raw.consumer_label,"consumer_label",200),boundedText(raw.keterangan,"keterangan",2000),raw.process_at ? isoTimestamp(raw.process_at,"process_at") : null,JSON.stringify(raw)];
         const upsert = await client.query(`
-          INSERT INTO solar_fueling_transaction (source_system,source_id,qr_code,requested_liters,metered_liters,calculated_liters,machine_totalizer_liters,transaction_status,qr_created_at,fueling_completed_at,requester_name,qr_created_by,processed_by,consumer_id,consumer_label,notes,source_updated_at,raw_payload)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb)
-          ON CONFLICT (source_system,source_id) DO UPDATE SET qr_code=EXCLUDED.qr_code,requested_liters=EXCLUDED.requested_liters,metered_liters=EXCLUDED.metered_liters,calculated_liters=EXCLUDED.calculated_liters,machine_totalizer_liters=EXCLUDED.machine_totalizer_liters,transaction_status=EXCLUDED.transaction_status,qr_created_at=EXCLUDED.qr_created_at,fueling_completed_at=EXCLUDED.fueling_completed_at,requester_name=EXCLUDED.requester_name,qr_created_by=EXCLUDED.qr_created_by,processed_by=EXCLUDED.processed_by,consumer_id=EXCLUDED.consumer_id,consumer_label=EXCLUDED.consumer_label,notes=EXCLUDED.notes,source_updated_at=EXCLUDED.source_updated_at,raw_payload=EXCLUDED.raw_payload,updated_at=clock_timestamp()
+          INSERT INTO solar_fueling_transaction (source_system,source_id,qr_code,requested_liters,metered_liters,calculated_liters,machine_totalizer_liters,source_totalizer_in_liters,source_totalizer_out_liters,calculated_stock_liters,transaction_status,qr_created_at,fueling_completed_at,requester_name,qr_created_by,processed_by,consumer_id,consumer_label,notes,source_updated_at,raw_payload)
+          VALUES ($1,$2,$3,$4,$5,NULL,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb)
+          ON CONFLICT (source_system,source_id) DO UPDATE SET qr_code=EXCLUDED.qr_code,requested_liters=EXCLUDED.requested_liters,metered_liters=EXCLUDED.metered_liters,calculated_liters=EXCLUDED.calculated_liters,machine_totalizer_liters=EXCLUDED.machine_totalizer_liters,source_totalizer_in_liters=EXCLUDED.source_totalizer_in_liters,source_totalizer_out_liters=EXCLUDED.source_totalizer_out_liters,calculated_stock_liters=EXCLUDED.calculated_stock_liters,transaction_status=EXCLUDED.transaction_status,qr_created_at=EXCLUDED.qr_created_at,fueling_completed_at=EXCLUDED.fueling_completed_at,requester_name=EXCLUDED.requester_name,qr_created_by=EXCLUDED.qr_created_by,processed_by=EXCLUDED.processed_by,consumer_id=EXCLUDED.consumer_id,consumer_label=EXCLUDED.consumer_label,notes=EXCLUDED.notes,source_updated_at=EXCLUDED.source_updated_at,raw_payload=EXCLUDED.raw_payload,updated_at=clock_timestamp()
           RETURNING transaction_id,source_id,qr_code,transaction_status
         `, values);
         operations.push(upsert.rows[0]);
@@ -260,5 +295,35 @@ export class SolarFuelingController {
     });
     this.realtime.publishDataRefresh(["solar_fueling_transaction"]);
     return { data_mode: "ACTUAL_DATABASE", storage: "SOLAR_FUELING_TRANSACTION", received: items.length, applied: result.length, transactions: result, server_time: new Date().toISOString() };
+  }
+
+  @Post("ingestion/solar-levels")
+  async ingestLevels(@Body() body: Record<string, any>, @Headers("x-api-key") apiKey?: string) {
+    const expected = process.env.INGEST_API_KEY?.trim();
+    if (expected && apiKey !== expected) throw new UnauthorizedException("X-API-Key tidak valid.");
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new BadRequestException("Payload harus berupa JSON object.");
+    const sourceSystem = String(body.source_system || "SOLAR_LEVEL_SENSOR").trim().toUpperCase();
+    const samples = Array.isArray(body.samples) ? body.samples : [body];
+    if (!samples.length || samples.length > 1000) throw new BadRequestException("samples harus berisi 1 sampai 1000 item.");
+    const rows = await this.database.transaction(async (client) => {
+      const applied = [];
+      for (const raw of samples) {
+        const stock = Number(raw.stock_liters ?? raw.stock ?? raw.value);
+        if (!Number.isFinite(stock)) throw new BadRequestException("stock_liters harus berupa angka finite.");
+        const sourceId = Math.trunc(positiveNumber(raw.source_id ?? raw.id, "source_id"));
+        const sourceTs = isoTimestamp(raw.source_ts ?? raw.update_at ?? raw.created_at, "source_ts", new Date());
+        const good = stock >= 0 && stock <= 100000;
+        const result = await client.query(`
+          INSERT INTO solar_level_sample (source_system,source_id,tank_id,stock_liters,quality,quality_reason,source_ts,source_created_at)
+          VALUES ($1,$2,'SOLAR-MAIN',$3,$4,$5,$6,$7)
+          ON CONFLICT (source_system,source_id) DO UPDATE SET stock_liters=EXCLUDED.stock_liters,quality=EXCLUDED.quality,quality_reason=EXCLUDED.quality_reason,source_ts=EXCLUDED.source_ts,source_created_at=EXCLUDED.source_created_at,updated_at=clock_timestamp()
+          RETURNING level_sample_id,source_id,stock_liters,quality,source_ts
+        `, [sourceSystem,sourceId,stock,good ? "GOOD" : "BAD",good ? null : "Nilai di luar sanity range 0–100000 liter",sourceTs,raw.created_at ? isoTimestamp(raw.created_at,"created_at") : sourceTs]);
+        applied.push(result.rows[0]);
+      }
+      return applied;
+    });
+    this.realtime.publishDataRefresh(["solar_level_sample"]);
+    return { data_mode:"ACTUAL_DATABASE",storage:"SOLAR_LEVEL_SAMPLE",received:samples.length,applied:rows.length,samples:rows,server_time:new Date().toISOString() };
   }
 }

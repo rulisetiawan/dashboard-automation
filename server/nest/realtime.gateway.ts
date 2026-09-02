@@ -278,7 +278,7 @@ export class RealtimeGateway implements OnModuleDestroy {
   }
 
   private async readDataVersions() {
-    const knownSources = ["asset_snapshot", "utility_snapshot", "chemical_transaction", "solar_fueling_transaction", "solar_stock_movement", "solar_stock_opname", "alarm_event", "production_batch", "batch_process_run", "process_deviation_rule", "process_target_execution", "process_setpoint_change_event", "process_deviation_event"];
+    const knownSources = ["asset_snapshot", "utility_snapshot", "chemical_transaction", "solar_fueling_transaction", "solar_level_sample", "solar_stock_movement", "solar_stock_opname", "alarm_event", "production_batch", "batch_process_run", "process_deviation_rule", "process_target_execution", "process_setpoint_change_event", "process_deviation_event"];
     const result = await this.database.query<{ source: string; data_version: Date | string | null }>(`
       SELECT source, MAX(changed_at) AS data_version
       FROM (
@@ -287,6 +287,7 @@ export class RealtimeGateway implements OnModuleDestroy {
         UNION ALL SELECT 'utility_snapshot', updated_at FROM utility_snapshot
         UNION ALL SELECT 'chemical_transaction', changed_at FROM dashboard_change_marker WHERE source_key = 'chemical_transaction'
         UNION ALL SELECT 'solar_fueling_transaction', changed_at FROM dashboard_change_marker WHERE source_key = 'solar_fueling_transaction'
+        UNION ALL SELECT 'solar_level_sample', changed_at FROM dashboard_change_marker WHERE source_key = 'solar_level_sample'
         UNION ALL SELECT 'solar_stock_movement', changed_at FROM dashboard_change_marker WHERE source_key = 'solar_stock_movement'
         UNION ALL SELECT 'solar_stock_opname', changed_at FROM dashboard_change_marker WHERE source_key = 'solar_stock_opname'
         UNION ALL SELECT 'alarm_event', GREATEST(created_at, COALESCE(cleared_at, created_at), COALESCE(acknowledged_at, created_at)) FROM alarm_event

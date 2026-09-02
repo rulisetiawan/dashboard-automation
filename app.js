@@ -967,7 +967,7 @@ async function flushRealtimeBackendRefresh() {
 async function refreshBackendSources(sources) {
   const knownSources = new Set([
     "asset", "asset_snapshot", "utility_snapshot", "chemical_transaction", "alarm_event", "alarm_rule_state",
-    "solar_fueling_transaction", "solar_stock_movement", "solar_stock_opname",
+    "solar_fueling_transaction", "solar_level_sample", "solar_stock_movement", "solar_stock_opname",
     "production_batch", "batch_process_run", "equipment", "equipment_snapshot", "telemetry_sample",
     "process_deviation_rule", "process_target_execution", "process_setpoint_change_event", "process_deviation_event",
   ]);
@@ -985,7 +985,7 @@ async function refreshBackendSources(sources) {
   if (refreshAll || sources.has("utility_snapshot")) {
     tasks.push(fetchJson("/api/v1/utilities/snapshot", "Utility API").then((payload) => { backendUtilities = payload.utilities || []; }));
   }
-  if (refreshAll || sources.has("solar_fueling_transaction") || sources.has("solar_stock_movement") || sources.has("solar_stock_opname")) {
+  if (refreshAll || sources.has("solar_fueling_transaction") || sources.has("solar_level_sample") || sources.has("solar_stock_movement") || sources.has("solar_stock_opname")) {
     invalidateSolarFueling();
     if (state.page === "solar") tasks.push(loadSolarFueling({ force: true }));
   }
@@ -1038,7 +1038,7 @@ function realtimeSourcesAffectCurrentPage(sources, refreshAll = false) {
     equipment: new Set(["equipment", "equipment_snapshot"]),
     utility: new Set(["utility_snapshot"]),
     chemical: new Set(["chemical_transaction"]),
-    solar: new Set(["solar_fueling_transaction", "solar_stock_movement", "solar_stock_opname"]),
+    solar: new Set(["solar_fueling_transaction", "solar_level_sample", "solar_stock_movement", "solar_stock_opname"]),
     telemetry: new Set(["telemetry_sample"]),
   };
   const matches = (...groups) => groups.some((group) => [...sourceGroups[group]].some((source) => sources.has(source)));
@@ -4153,14 +4153,19 @@ function solarTransactionTable(data, compact = false) {
 }
 
 function solarOverview(data) {
-  const overview = data.overview || {}, summary = overview.summary || {}, trend = overview.time_series || [], users = overview.user_ranking || [];
+  const overview = data.overview || {}, summary = overview.summary || {}, trend = overview.time_series || [], levelTrend = overview.level_time_series || [], users = overview.user_ranking || [];
   const maximum = Math.max(1, ...trend.map((item) => Number(item.metered_liters || 0)));
   const bars = trend.map((item) => `<div class="solar-trend-column" title="${actualText(item.bucket)} · ${solarNumber(item.metered_liters)} L"><i style="height:${Math.max(4, Number(item.metered_liters || 0)/maximum*100)}%"></i><span>${actualText(String(item.bucket || "").slice(5,10) || "—")}</span></div>`).join("");
+  const levelMaximum = Math.max(1, ...levelTrend.map((item) => Number(item.maximum_stock_liters || 0)));
+  const levelBars = levelTrend.map((item) => `<div class="solar-trend-column level" title="${actualText(item.bucket)} · avg ${solarNumber(item.average_stock_liters)} L"><i style="height:${Math.max(4, Number(item.average_stock_liters || 0)/levelMaximum*100)}%"></i><span>${actualText(String(item.bucket || "").slice(5,10) || "—")}</span></div>`).join("");
   const userRows = users.map((item,index) => `<div class="solar-user-row"><b>${index+1}</b><span><strong>${actualText(item.user_name)}</strong><small>${solarNumber(item.transactions,0)} transactions</small></span><em>${solarNumber(item.liters)} L</em></div>`).join("");
   const match = summary.metering_match_percent == null ? "N/A" : `${solarNumber(summary.metering_match_percent,1)}%`;
   const accuracy = summary.stock_accuracy_percent == null ? "N/A" : `${solarNumber(summary.stock_accuracy_percent,1)}%`;
+  const liveLevel = summary.live_stock_liters == null ? "—" : solarNumber(summary.live_stock_liters);
+  const levelFoot = summary.live_level_source_ts ? `${actualText(summary.live_level_quality)} · ${actualTime(summary.live_level_source_ts)}` : "Sensor level belum diterima";
   return `<section class="solar-kpi-grid">
-    ${actualMetric("System Stock", solarNumber(summary.system_stock_liters), "L", "Opening + receipts − metered dispensing")}
+    ${actualMetric("Live Tank Level", liveLevel, "L", levelFoot)}
+    ${actualMetric("System Stock", solarNumber(summary.system_stock_liters), "L", "Calculated stock dari sistem sumber")}
     ${actualMetric("Fuel Consumption", solarNumber(summary.metered_liters), "L", "Flow meter · selected range")}
     ${actualMetric("Completed Fueling", solarNumber(summary.completed_transactions,0), "QR", "Completed + partial transactions")}
     ${actualMetric("Metering Match", match, "", "Backend sum vs machine totalizer")}
@@ -4170,9 +4175,9 @@ function solarOverview(data) {
   <section class="solar-reconciliation-grid">
     <article class="card solar-recon-card"><span>01 · DISPENSING</span><h3>Requested vs Flow Meter</h3><strong>${solarNumber(summary.requested_liters)} L <i>→</i> ${solarNumber(summary.metered_liters)} L</strong><p>Memastikan volume aktual sesuai permintaan QR.</p></article>
     <article class="card solar-recon-card"><span>02 · TOTALIZER</span><h3>Backend vs Machine Counter</h3><strong>${solarNumber(summary.metered_liters)} L <i>↔</i> ${summary.machine_delta_liters == null ? "N/A" : `${solarNumber(summary.machine_delta_liters)} L`}</strong><p>${summary.totalizer_reset_count ? `${summary.totalizer_reset_count} reset totalizer terdeteksi.` : "Selisih totalizer dipantau per range."}</p></article>
-    <article class="card solar-recon-card"><span>03 · INVENTORY</span><h3>System vs Physical Stock</h3><strong>${solarNumber(summary.system_stock_liters)} L <i>↔</i> ${overview.latest_opname ? `${solarNumber(overview.latest_opname.physical_stock_liters)} L` : "Belum opname"}</strong><p>Akurasi stok hanya dinyatakan setelah verifikasi fisik.</p></article>
+    <article class="card solar-recon-card"><span>03 · INVENTORY</span><h3>Sensor Level vs System Stock</h3><strong>${summary.live_stock_liters == null ? "N/A" : `${solarNumber(summary.live_stock_liters)} L`} <i>↔</i> ${solarNumber(summary.system_stock_liters)} L</strong><p>Stock opname fisik tetap menjadi validasi final kesesuaian inventory.</p></article>
   </section>
-  <section class="solar-analysis-grid">${panel("Consumption Trend", "Actual flow-meter output per interval", trend.length ? `<div class="solar-trend">${bars}</div>` : actualEmpty("Belum ada transaksi pada range ini"), `<span class="data-pill good">FLOW METER</span>`, "solar-trend-panel")}${panel("Top Requesters", "Total konsumsi berdasarkan user", userRows ? `<div class="solar-user-list">${userRows}</div>` : actualEmpty("Belum ada data requester"))}</section>
+  <section class="solar-analysis-grid">${panel("Tank Level Trend", "Historian sensor level aktual dalam liter", levelTrend.length ? `<div class="solar-trend">${levelBars}</div>` : actualEmpty("Belum ada histori sensor level"), `<span class="data-pill ${summary.live_level_quality === "GOOD" ? "good" : "warning"}">${actualText(summary.live_level_quality || "NO DATA")}</span>`)}${panel("Consumption Trend", "Actual flow-meter output per interval", trend.length ? `<div class="solar-trend">${bars}</div>` : actualEmpty("Belum ada transaksi pada range ini"), `<span class="data-pill good">FLOW METER</span>`, "solar-trend-panel")}${panel("Top Requesters", "Total konsumsi berdasarkan user", userRows ? `<div class="solar-user-list">${userRows}</div>` : actualEmpty("Belum ada data requester"))}</section>
   ${panel("Recent Fueling Transactions", "QR, volume requested, actual flow meter, dan totalizer", solarTransactionTable(data.transactions, true), `<button class="button small" data-solar-tab="transactions">Open full log →</button>`)}`;
 }
 

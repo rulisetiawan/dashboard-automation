@@ -8,6 +8,7 @@ export const nonJetflowTables = [
   "chemical_transaction",
   "utility_snapshot",
   "solar_fueling_transaction",
+  "solar_level_sample",
   "solar_stock_config",
   "solar_stock_movement",
   "solar_stock_opname",
