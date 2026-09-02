@@ -84,6 +84,10 @@ export class SolarFuelingController {
     const [summary, totalizer, stock, latestOpname, trend, users, exceptions, latestLevel, levelTrend] = await Promise.all([
       this.database.query(`
         SELECT COUNT(*) FILTER (WHERE transaction_status IN ('COMPLETED','PARTIAL'))::int AS completed_transactions,
+               COUNT(*) FILTER (WHERE transaction_status IN ('QR_CREATED','READY','DISPENSING'))::int AS pending_qr_count,
+               COUNT(*) FILTER (WHERE transaction_status = 'CANCELLED')::int AS cancelled_qr_count,
+               COUNT(*) FILTER (WHERE transaction_status IN ('COMPLETED','PARTIAL') AND requested_liters > 0 AND metered_liters IS NOT NULL AND ABS(metered_liters-requested_liters)/requested_liters > 0.02)::int AS not_match_count,
+               COUNT(*) FILTER (WHERE transaction_status IN ('FAILED','MANUAL_REVIEW'))::int AS failed_review_count,
                COALESCE(SUM(metered_liters) FILTER (WHERE transaction_status IN ('COMPLETED','PARTIAL')), 0) AS metered_liters,
                COALESCE(SUM(requested_liters) FILTER (WHERE transaction_status IN ('COMPLETED','PARTIAL')), 0) AS requested_liters,
                COALESCE(AVG(CASE WHEN requested_liters > 0 AND transaction_status IN ('COMPLETED','PARTIAL') THEN metered_liters / requested_liters * 100 END), 0) AS fulfillment_percent,

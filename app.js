@@ -4181,10 +4181,14 @@ function solarComparisonCard(index,title,leftLabel,leftValue,rightLabel,rightVal
   return `<article class="card solar-recon-card"><header><span>${actualText(index)}</span><h3>${actualText(title)}</h3></header><div class="solar-compare-values"><div><small>${actualText(leftLabel)}</small><strong>${actualText(leftValue)}</strong></div><div><small>${actualText(rightLabel)}</small><strong>${actualText(rightValue)}</strong></div></div><div class="solar-compare-difference ${tone}"><span>Selisih</span><strong>${signedLiters}</strong><em>${signedPercent}</em></div><p>${actualText(detail)}</p></article>`;
 }
 
+function solarQrStatusCard(label,value,detail,tone) {
+  return `<article class="card solar-status-card ${tone}"><span></span><div><small>${actualText(label)}</small><strong>${solarNumber(value,0)}</strong><p>${actualText(detail)}</p></div></article>`;
+}
+
 function solarOverview(data) {
   const overview = data.overview || {}, summary = overview.summary || {}, trend = overview.time_series || [], users = overview.user_ranking || [];
   const maximum = solarNiceMaximum(Math.max(0,...trend.map((item) => Number(item.metered_liters || 0))));
-  const bars = trend.map((item) => { const value = Number(item.metered_liters || 0); return `<div class="solar-trend-column" title="${actualText(item.bucket)} · ${solarNumber(value)} L"><strong>${solarNumber(value,0)} L</strong><i style="height:${Math.max(2,value/maximum*100)}%"></i><span>${actualText(solarBucketLabel(item.bucket))}</span></div>`; }).join("");
+  const bars = trend.map((item) => { const value = Number(item.metered_liters || 0), requested = Number(item.requested_liters || 0), gap = value-requested, period = actualTime(item.bucket); return `<div class="solar-trend-column" tabindex="0" role="img" aria-label="${actualText(`${period}, actual ${solarNumber(value)} liter, requested ${solarNumber(requested)} liter, gap ${gap>=0?"+":""}${solarNumber(gap)} liter`)}" data-solar-trend-period="${actualText(period)}" data-solar-trend-actual="${actualText(`${solarNumber(value)} L`)}" data-solar-trend-requested="${actualText(`${solarNumber(requested)} L`)}" data-solar-trend-gap="${actualText(`${gap>=0?"+":""}${solarNumber(gap)} L`)}"><i style="height:${Math.max(2,value/maximum*100)}%"></i><span>${actualText(solarBucketLabel(item.bucket))}</span></div>`; }).join("");
   const yTicks = [1,.75,.5,.25,0].map((ratio) => `<span>${solarNumber(maximum*ratio,0)} L</span>`).join("");
   const gridLines = [1,.75,.5,.25,0].map(() => "<i></i>").join("");
   const consumptionChart = `<div class="solar-bar-chart"><div class="solar-y-axis">${yTicks}</div><div class="solar-plot"><div class="solar-grid-lines">${gridLines}</div><div class="solar-trend">${bars}</div></div></div>`;
@@ -4201,6 +4205,13 @@ function solarOverview(data) {
     ${actualMetric("Metering Match", match, "", "Flow-meter sum and totalizer delta")}
     ${actualMetric("Stock Accuracy", accuracy, "", "Latest physical stock opname")}
     ${actualMetric("Need Review", solarNumber(summary.review_count,0), "items", "Variance, partial, failed, manual review")}
+  </section>
+  <section class="solar-status-grid" aria-label="QR status summary">
+    ${solarQrStatusCard("QR Pending",summary.pending_qr_count,"Created, ready, or dispensing","pending")}
+    ${solarQrStatusCard("Completed",summary.completed_transactions,"Completed and partial","completed")}
+    ${solarQrStatusCard("Cancelled",summary.cancelled_qr_count,"Cancelled QR","cancelled")}
+    ${solarQrStatusCard("Not Match",summary.not_match_count,"Actual gap above 2%","mismatch")}
+    ${solarQrStatusCard("Failed / Review",summary.failed_review_count,"Failed or manual review","review")}
   </section>
   <section class="solar-reconciliation-grid">
     ${solarComparisonCard("01 · DISPENSING","Request & Actual","Requested",`${solarNumber(summary.requested_liters)} L`,"Flow meter actual",`${solarNumber(summary.metered_liters)} L`,Number(summary.metered_liters)-Number(summary.requested_liters),Number(summary.requested_liters),"Actual dikurangi request QR pada range terpilih.")}
@@ -5750,7 +5761,41 @@ async function exportActualBatchProcessRun(processRunId, format, button) {
   }
 }
 
+function bindSolarTrendTooltips() {
+  const bars = document.querySelectorAll("[data-solar-trend-period]");
+  let tooltip = document.querySelector("[data-solar-trend-tooltip]");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.className = "solar-trend-tooltip";
+    tooltip.dataset.solarTrendTooltip = "true";
+    tooltip.setAttribute("role", "tooltip");
+    document.body.appendChild(tooltip);
+  }
+  tooltip.classList.remove("visible");
+  if (!bars.length) return;
+  const position = (x,y) => {
+    const left = Math.min(window.innerWidth-tooltip.offsetWidth-12,Math.max(12,x+14));
+    const top = Math.min(window.innerHeight-tooltip.offsetHeight-12,Math.max(12,y-tooltip.offsetHeight-14));
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  };
+  const show = (bar,x,y) => {
+    tooltip.textContent = `${bar.dataset.solarTrendPeriod}\nActual      ${bar.dataset.solarTrendActual}\nRequested   ${bar.dataset.solarTrendRequested}\nGap         ${bar.dataset.solarTrendGap}`;
+    tooltip.classList.add("visible");
+    position(x,y);
+  };
+  const hide = () => tooltip.classList.remove("visible");
+  bars.forEach((bar) => {
+    bar.addEventListener("pointerenter", (event) => show(bar,event.clientX,event.clientY));
+    bar.addEventListener("pointermove", (event) => position(event.clientX,event.clientY));
+    bar.addEventListener("pointerleave", hide);
+    bar.addEventListener("focus", () => { const rect=bar.getBoundingClientRect(); show(bar,rect.left+rect.width/2,rect.top); });
+    bar.addEventListener("blur", hide);
+  });
+}
+
 function bindPageEvents() {
+  bindSolarTrendTooltips();
   document.querySelectorAll("[data-solar-tab]").forEach((button) => button.addEventListener("click", () => {
     state.solar.tab = button.dataset.solarTab;
     renderPage({ preserveScroll: true });

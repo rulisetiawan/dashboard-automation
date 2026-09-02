@@ -4,6 +4,22 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.31 / Solar Fueling V1.4 — 2 September 2026
+
+**Status:** QR status summary and cursor-driven consumption trend
+
+### Ditambahkan
+
+- Lima card status QR: Pending, Completed, Cancelled, Not Match, dan Failed/Review.
+- Tooltip trend yang mengikuti cursor dan menampilkan periode, actual, requested, serta gap.
+- Dukungan focus keyboard pada setiap batang dengan informasi yang sama.
+
+### Diperbarui
+
+- Angka aktual di atas batang dihapus; skala nilai hanya ditampilkan pada garis sumbu Y.
+- Jarak horizontal antarbatang diperbesar agar interval lebih mudah dibedakan.
+- Not Match dihitung hanya untuk transaksi final dengan gap volume lebih dari 2%.
+
 ## Dashboard V2.30 / Solar Fueling V1.3 — 2 September 2026
 
 **Status:** Boundary totalizer delta and simplified reconciliation UI
