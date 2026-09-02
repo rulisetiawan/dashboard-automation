@@ -6,6 +6,7 @@ const fullSync = process.argv.includes("--full");
 const follow = process.argv.includes("--follow");
 const batchSize = Math.min(5000, Math.max(250, Number(process.env.SOLAR_MIGRATION_BATCH_SIZE) || 2000));
 const pollMilliseconds = Math.max(5000, Number(process.env.SOLAR_SYNC_INTERVAL_MS) || 15000);
+const refreshWindow = Math.max(250, Number(process.env.SOLAR_TRANSACTION_REFRESH_WINDOW) || 500);
 
 const mysqlConfig = {
   host: process.env.SMM_MYSQL_HOST || "192.168.100.82",
@@ -60,6 +61,12 @@ function cleanRecord(record) {
   return Object.fromEntries(Object.entries(record).map(([key,value]) => [key,typeof value === "string" ? value.replaceAll("\u0000", "") : value]));
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+
 function sqlRows(rowCount, columnCount, offset = 0) {
   return Array.from({ length: rowCount }, (_, row) => `(${Array.from({ length: columnCount }, (_, column) => `$${offset + row * columnCount + column + 1}`).join(",")})`).join(",");
 }
@@ -69,7 +76,7 @@ async function updateSyncState(client, table, lastId, rowCount, lastTs, status =
     INSERT INTO solar_source_sync_state (source_system,source_table,last_source_id,source_row_count,last_source_ts,last_sync_at,last_status,last_error)
     VALUES ($1,$2,$3,$4,$5,clock_timestamp(),$6,$7)
     ON CONFLICT (source_system,source_table) DO UPDATE SET
-      last_source_id=EXCLUDED.last_source_id,source_row_count=EXCLUDED.source_row_count,last_source_ts=EXCLUDED.last_source_ts,
+      last_source_id=EXCLUDED.last_source_id,source_row_count=EXCLUDED.source_row_count,last_source_ts=COALESCE(EXCLUDED.last_source_ts,solar_source_sync_state.last_source_ts),
       last_sync_at=EXCLUDED.last_sync_at,last_status=EXCLUDED.last_status,last_error=EXCLUDED.last_error
   `, [sourceSystem,table,lastId,rowCount,lastTs,status,error]);
 }
@@ -85,10 +92,51 @@ async function startingId(postgres, table, targetTable) {
 async function syncTransactions(source, postgres) {
   let cursor = await startingId(postgres, "qr_codes", "solar_fueling_transaction");
   let processed = 0;
+  let scanned = 0;
   let lastSourceTs = null;
-  for (;;) {
-    const [rows] = await source.query("SELECT * FROM qr_codes WHERE id > ? ORDER BY id LIMIT ?", [cursor,batchSize]);
-    if (!rows.length) break;
+  const sourceRows = [];
+  if (fullSync) {
+    let scanCursor = 0;
+    for (;;) {
+      const [rows] = await source.query("SELECT * FROM qr_codes WHERE id > ? ORDER BY id LIMIT ?", [scanCursor,batchSize]);
+      if (!rows.length) break;
+      sourceRows.push(...rows);
+      scanCursor = Math.max(scanCursor,...rows.map((row) => Number(row.id)));
+    }
+  } else {
+    const refreshFrom = Math.max(0,cursor-refreshWindow);
+    let scanCursor = refreshFrom;
+    for (;;) {
+      const [rows] = await source.query("SELECT * FROM qr_codes WHERE id > ? ORDER BY id LIMIT ?", [scanCursor,batchSize]);
+      if (!rows.length) break;
+      sourceRows.push(...rows);
+      scanCursor = Math.max(scanCursor,...rows.map((row) => Number(row.id)));
+    }
+    const openTargets = await postgres.query(`
+      SELECT source_id FROM solar_fueling_transaction
+      WHERE source_system=$1 AND transaction_status IN ('QR_CREATED','READY','DISPENSING') AND source_id <= $2
+    `, [sourceSystem,refreshFrom]);
+    const activeIds = openTargets.rows.map((row) => Number(row.source_id)).filter(Number.isFinite);
+    for (let offset = 0; offset < activeIds.length; offset += batchSize) {
+      const chunk = activeIds.slice(offset,offset+batchSize);
+      const [rows] = await source.query(`SELECT * FROM qr_codes WHERE id IN (${chunk.map(() => "?").join(",")})`, chunk);
+      sourceRows.push(...rows);
+    }
+  }
+  const uniqueRows = [...new Map(sourceRows.map((row) => [Number(row.id),row])).values()].sort((a,b) => Number(a.id)-Number(b.id));
+  scanned = uniqueRows.length;
+  const currentPayload = new Map();
+  for (let offset = 0; offset < uniqueRows.length; offset += batchSize) {
+    const ids = uniqueRows.slice(offset,offset+batchSize).map((row) => Number(row.id));
+    const existing = await postgres.query(`
+      SELECT source_id,raw_payload FROM solar_fueling_transaction
+      WHERE source_system=$1 AND source_id = ANY($2::bigint[])
+    `, [sourceSystem,ids]);
+    for (const row of existing.rows) currentPayload.set(Number(row.source_id),canonicalJson(row.raw_payload));
+  }
+  const changedRows = fullSync ? uniqueRows : uniqueRows.filter((row) => currentPayload.get(Number(row.id)) !== canonicalJson(cleanRecord(row)));
+  for (let offset = 0; offset < changedRows.length; offset += batchSize) {
+    const rows = changedRows.slice(offset,offset+batchSize);
     const values = [];
     for (const row of rows) {
       const totalizerIn = row.total_solar_IN == null ? null : Number(row.total_solar_IN);
@@ -104,7 +152,6 @@ async function syncTransactions(source, postgres) {
         "FUELING","OUT",executionMode(row.process_type),normalizedStatus(row.status),createdAt,startedAt,completedAt,
         cleanText(row.nama_pemesan),cleanText(row.nama_pembuat),cleanText(row.process_by),cleanText(row.keterangan),sourceUpdatedAt,JSON.stringify(raw),
       );
-      cursor = Math.max(cursor,Number(row.id));
       if (sourceUpdatedAt && (!lastSourceTs || sourceUpdatedAt > lastSourceTs)) lastSourceTs = sourceUpdatedAt;
     }
     await postgres.query(`
@@ -126,9 +173,10 @@ async function syncTransactions(source, postgres) {
     `, values);
     processed += rows.length;
   }
+  if (uniqueRows.length) cursor = Math.max(cursor,...uniqueRows.map((row) => Number(row.id)));
   const count = await postgres.query("SELECT COUNT(*)::int AS total FROM solar_fueling_transaction WHERE source_system=$1", [sourceSystem]);
   await updateSyncState(postgres,"qr_codes",cursor,Number(count.rows[0].total),lastSourceTs);
-  return { processed,total:Number(count.rows[0].total),lastId:cursor };
+  return { scanned,processed,total:Number(count.rows[0].total),lastId:cursor };
 }
 
 async function syncLevels(source, postgres) {

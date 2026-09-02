@@ -797,8 +797,14 @@ async function fetchJson(url, label) {
 
 function solarRange() {
   const end = state.solar.range === "CUSTOM" ? new Date(state.solar.customTo) : new Date();
-  const durations = { "TODAY": 86400000, "7D": 7 * 86400000, "30D": 30 * 86400000, "90D": 90 * 86400000 };
-  const start = state.solar.range === "CUSTOM" ? new Date(state.solar.customFrom) : new Date(end.getTime() - (durations[state.solar.range] || durations["30D"]));
+  const durations = { "7D": 7 * 86400000, "30D": 30 * 86400000, "90D": 90 * 86400000, "ALL": 5 * 365 * 86400000 };
+  let start;
+  if (state.solar.range === "CUSTOM") start = new Date(state.solar.customFrom);
+  else if (state.solar.range === "TODAY") {
+    const dateParts = new Intl.DateTimeFormat("en-CA", { timeZone:"Asia/Jakarta",year:"numeric",month:"2-digit",day:"2-digit" }).formatToParts(end);
+    const part = Object.fromEntries(dateParts.filter((item) => item.type !== "literal").map((item) => [item.type,item.value]));
+    start = new Date(`${part.year}-${part.month}-${part.day}T00:00:00+07:00`);
+  } else start = new Date(end.getTime() - (durations[state.solar.range] || durations["30D"]));
   return { from: start.toISOString(), to: end.toISOString() };
 }
 
@@ -4140,24 +4146,48 @@ function solarStatusPill(status) {
 }
 
 function solarRangeToolbar() {
-  const buttons = [["TODAY","Today"],["7D","7 days"],["30D","30 days"],["90D","90 days"],["CUSTOM","Custom"]].map(([value,label]) => `<button class="button small ${state.solar.range === value ? "primary" : "ghost"}" data-solar-range="${value}">${label}</button>`).join("");
-  return `<section class="card solar-toolbar"><div><span class="eyebrow">ANALYSIS RANGE</span><strong>${actualText(state.solar.range === "CUSTOM" ? `${actualTime(solarRange().from)} — ${actualTime(solarRange().to)}` : `${state.solar.range} rolling window`)}</strong></div><div class="solar-range-actions">${buttons}</div>${state.solar.range === "CUSTOM" ? `<div class="solar-custom-range"><label>From<input type="datetime-local" data-solar-date="from" value="${toDateTimeLocal(state.solar.customFrom)}"></label><label>To<input type="datetime-local" data-solar-date="to" value="${toDateTimeLocal(state.solar.customTo)}"></label><button class="button primary small" data-solar-apply-range>Apply</button></div>` : ""}</section>`;
+  const buttons = [["TODAY","Today"],["7D","7 days"],["30D","30 days"],["90D","90 days"],["ALL","All history"],["CUSTOM","Custom"]].map(([value,label]) => `<button class="button small ${state.solar.range === value ? "primary" : "ghost"}" data-solar-range="${value}">${label}</button>`).join("");
+  const rangeLabel = state.solar.range === "TODAY" ? `Today · 00:00—${actualTime(solarRange().to)}` : state.solar.range === "ALL" ? "All available history" : state.solar.range === "CUSTOM" ? `${actualTime(solarRange().from)} — ${actualTime(solarRange().to)}` : `${state.solar.range} rolling window`;
+  return `<section class="card solar-toolbar"><div><span class="eyebrow">ANALYSIS RANGE</span><strong>${actualText(rangeLabel)}</strong></div><div class="solar-range-actions">${buttons}</div>${state.solar.range === "CUSTOM" ? `<div class="solar-custom-range"><label>From<input type="datetime-local" data-solar-date="from" value="${toDateTimeLocal(state.solar.customFrom)}"></label><label>To<input type="datetime-local" data-solar-date="to" value="${toDateTimeLocal(state.solar.customTo)}"></label><button class="button primary small" data-solar-apply-range>Apply</button></div>` : ""}</section>`;
 }
 
 function solarTransactionTable(data, compact = false) {
   const rows = (data?.transactions || []).map((item) => {
-    const requested = Number(item.requested_liters || 0), metered = item.metered_liters == null ? null : Number(item.metered_liters), variance = metered == null ? null : metered-requested;
-    return `<tr><td><strong>${actualTime(item.fueling_completed_at || item.qr_created_at || item.ingested_at)}</strong><small>${actualText(item.source_system)}</small></td><td><strong class="mono">${actualText(item.qr_code)}</strong><small>${actualText(item.consumer_label || item.consumer_id || "Consumer belum dimapping")}</small></td><td><strong>${actualText(item.requester_name || "—")}</strong><small>${actualText(item.processed_by || item.qr_created_by || "—")}</small></td><td class="mono">${solarNumber(requested)} L</td><td class="mono"><strong>${metered == null ? "—" : `${solarNumber(metered)} L`}</strong></td><td class="mono ${variance != null && Math.abs(variance) > Math.max(1,requested*.02) ? "solar-variance-bad" : ""}">${variance == null ? "—" : `${variance >= 0 ? "+" : ""}${solarNumber(variance)} L`}</td><td class="mono">${item.machine_totalizer_liters == null ? "—" : `${solarNumber(item.machine_totalizer_liters)} L`}</td><td>${solarStatusPill(item.transaction_status)}</td></tr>`;
+    const requested = Number(item.requested_liters || 0), final = ["COMPLETED","PARTIAL"].includes(String(item.transaction_status || "").toUpperCase());
+    const metered = final && item.metered_liters != null ? Number(item.metered_liters) : null, variance = metered == null ? null : metered-requested;
+    const totalizer = final && item.machine_totalizer_liters != null ? Number(item.machine_totalizer_liters) : null;
+    return `<tr><td><strong>${actualTime(item.fueling_completed_at || item.qr_created_at || item.fueling_started_at || item.source_updated_at || item.ingested_at)}</strong><small>${actualText(item.source_system)}</small></td><td><strong class="mono">${actualText(item.qr_code)}</strong><small>${actualText(item.consumer_label || item.consumer_id || "Consumer belum dimapping")}</small></td><td><strong>${actualText(item.requester_name || "—")}</strong><small>${actualText(item.processed_by || item.qr_created_by || "—")}</small></td><td class="mono">${solarNumber(requested)} L</td><td class="mono"><strong>${metered == null ? "—" : `${solarNumber(metered)} L`}</strong></td><td class="mono ${variance != null && Math.abs(variance) > Math.max(1,requested*.02) ? "solar-variance-bad" : ""}">${variance == null ? "—" : `${variance >= 0 ? "+" : ""}${solarNumber(variance)} L`}</td><td class="mono">${totalizer == null ? "—" : `${solarNumber(totalizer)} L`}</td><td>${solarStatusPill(item.transaction_status)}</td></tr>`;
   }).join("");
-  return `<div class="table-wrap solar-table-wrap"><table class="data-table solar-table"><thead><tr><th>Completed</th><th>QR / Consumer</th><th>Requester / Operator</th><th>Requested</th><th>Flow meter</th><th>Variance</th><th>Totalizer</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="8">${compact ? "Belum ada transaksi terbaru." : "Tidak ada transaksi sesuai filter."}</td></tr>`}</tbody></table></div>`;
+  return `<div class="table-wrap solar-table-wrap"><table class="data-table solar-table"><thead><tr><th>Activity time</th><th>QR / Consumer</th><th>Requester / Operator</th><th>Requested</th><th>Flow meter</th><th>Variance</th><th>Totalizer</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="8">${compact ? "Belum ada transaksi terbaru." : "Tidak ada transaksi sesuai filter."}</td></tr>`}</tbody></table></div>`;
+}
+
+function solarNiceMaximum(value) {
+  const numeric = Math.max(1,Number(value) || 0), magnitude = 10 ** Math.floor(Math.log10(numeric)), normalized = numeric/magnitude;
+  return (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude;
+}
+
+function solarBucketLabel(value) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return new Intl.DateTimeFormat("id-ID", state.solar.range === "TODAY" ? { timeZone:"Asia/Jakarta",hour:"2-digit",minute:"2-digit",hourCycle:"h23" } : { timeZone:"Asia/Jakarta",day:"2-digit",month:"short" }).format(parsed);
+}
+
+function solarComparisonCard(index,title,leftLabel,leftValue,rightLabel,rightValue,difference,reference,detail) {
+  const available = difference != null && reference != null && Number.isFinite(Number(difference)) && Number.isFinite(Number(reference));
+  const liters = available ? Number(difference) : null, percent = available && Number(reference) !== 0 ? liters/Math.abs(Number(reference))*100 : null;
+  const tone = liters == null ? "neutral" : Math.abs(liters) <= Math.max(1,Math.abs(Number(reference))*0.02) ? "good" : "bad";
+  const signedLiters = liters == null ? "N/A" : `${liters >= 0 ? "+" : ""}${solarNumber(liters)} L`;
+  const signedPercent = percent == null ? "N/A" : `${percent >= 0 ? "+" : ""}${solarNumber(percent,2)}%`;
+  return `<article class="card solar-recon-card"><span>${actualText(index)}</span><h3>${actualText(title)}</h3><div class="solar-compare-values"><div><small>${actualText(leftLabel)}</small><strong>${actualText(leftValue)}</strong></div><div><small>${actualText(rightLabel)}</small><strong>${actualText(rightValue)}</strong></div></div><div class="solar-compare-difference ${tone}"><span>Selisih</span><strong>${signedLiters}</strong><em>${signedPercent}</em></div><p>${actualText(detail)}</p></article>`;
 }
 
 function solarOverview(data) {
-  const overview = data.overview || {}, summary = overview.summary || {}, trend = overview.time_series || [], levelTrend = overview.level_time_series || [], users = overview.user_ranking || [];
-  const maximum = Math.max(1, ...trend.map((item) => Number(item.metered_liters || 0)));
-  const bars = trend.map((item) => `<div class="solar-trend-column" title="${actualText(item.bucket)} · ${solarNumber(item.metered_liters)} L"><i style="height:${Math.max(4, Number(item.metered_liters || 0)/maximum*100)}%"></i><span>${actualText(String(item.bucket || "").slice(5,10) || "—")}</span></div>`).join("");
-  const levelMaximum = Math.max(1, ...levelTrend.map((item) => Number(item.maximum_stock_liters || 0)));
-  const levelBars = levelTrend.map((item) => `<div class="solar-trend-column level" title="${actualText(item.bucket)} · avg ${solarNumber(item.average_stock_liters)} L"><i style="height:${Math.max(4, Number(item.average_stock_liters || 0)/levelMaximum*100)}%"></i><span>${actualText(String(item.bucket || "").slice(5,10) || "—")}</span></div>`).join("");
+  const overview = data.overview || {}, summary = overview.summary || {}, trend = overview.time_series || [], users = overview.user_ranking || [];
+  const maximum = solarNiceMaximum(Math.max(0,...trend.map((item) => Number(item.metered_liters || 0))));
+  const bars = trend.map((item) => { const value = Number(item.metered_liters || 0); return `<div class="solar-trend-column" title="${actualText(item.bucket)} · ${solarNumber(value)} L"><strong>${solarNumber(value,0)} L</strong><i style="height:${Math.max(2,value/maximum*100)}%"></i><span>${actualText(solarBucketLabel(item.bucket))}</span></div>`; }).join("");
+  const yTicks = [1,.75,.5,.25,0].map((ratio) => `<span>${solarNumber(maximum*ratio,0)} L</span>`).join("");
+  const gridLines = [1,.75,.5,.25,0].map(() => "<i></i>").join("");
+  const consumptionChart = `<div class="solar-bar-chart"><div class="solar-y-axis">${yTicks}</div><div class="solar-plot"><div class="solar-grid-lines">${gridLines}</div><div class="solar-trend">${bars}</div></div></div>`;
   const userRows = users.map((item,index) => `<div class="solar-user-row"><b>${index+1}</b><span><strong>${actualText(item.user_name)}</strong><small>${solarNumber(item.transactions,0)} transactions</small></span><em>${solarNumber(item.liters)} L</em></div>`).join("");
   const match = summary.metering_match_percent == null ? "N/A" : `${solarNumber(summary.metering_match_percent,1)}%`;
   const accuracy = summary.stock_accuracy_percent == null ? "N/A" : `${solarNumber(summary.stock_accuracy_percent,1)}%`;
@@ -4168,22 +4198,22 @@ function solarOverview(data) {
     ${actualMetric("System Stock", solarNumber(summary.system_stock_liters), "L", "Calculated stock dari sistem sumber")}
     ${actualMetric("Fuel Consumption", solarNumber(summary.metered_liters), "L", "Flow meter · selected range")}
     ${actualMetric("Completed Fueling", solarNumber(summary.completed_transactions,0), "QR", "Completed + partial transactions")}
-    ${actualMetric("Metering Match", match, "", "Backend sum vs machine totalizer")}
+    ${actualMetric("Metering Match", match, "", "Backend sum and machine totalizer")}
     ${actualMetric("Stock Accuracy", accuracy, "", "Latest physical stock opname")}
     ${actualMetric("Need Review", solarNumber(summary.review_count,0), "items", "Variance, partial, failed, manual review")}
   </section>
   <section class="solar-reconciliation-grid">
-    <article class="card solar-recon-card"><span>01 · DISPENSING</span><h3>Requested vs Flow Meter</h3><strong>${solarNumber(summary.requested_liters)} L <i>→</i> ${solarNumber(summary.metered_liters)} L</strong><p>Memastikan volume aktual sesuai permintaan QR.</p></article>
-    <article class="card solar-recon-card"><span>02 · TOTALIZER</span><h3>Backend vs Machine Counter</h3><strong>${solarNumber(summary.metered_liters)} L <i>↔</i> ${summary.machine_delta_liters == null ? "N/A" : `${solarNumber(summary.machine_delta_liters)} L`}</strong><p>${summary.totalizer_reset_count ? `${summary.totalizer_reset_count} reset totalizer terdeteksi.` : "Selisih totalizer dipantau per range."}</p></article>
-    <article class="card solar-recon-card"><span>03 · INVENTORY</span><h3>Sensor Level vs System Stock</h3><strong>${summary.live_stock_liters == null ? "N/A" : `${solarNumber(summary.live_stock_liters)} L`} <i>↔</i> ${solarNumber(summary.system_stock_liters)} L</strong><p>Stock opname fisik tetap menjadi validasi final kesesuaian inventory.</p></article>
+    ${solarComparisonCard("01 · DISPENSING","Requested and Flow Meter","Requested",`${solarNumber(summary.requested_liters)} L`,"Flow meter actual",`${solarNumber(summary.metered_liters)} L`,Number(summary.metered_liters)-Number(summary.requested_liters),Number(summary.requested_liters),"Selisih dihitung dari actual dikurangi request QR.")}
+    ${solarComparisonCard("02 · TOTALIZER","Backend and Machine Counter","Backend transaction sum",`${solarNumber(summary.metered_liters)} L`,"Machine totalizer delta",summary.machine_delta_liters == null?"N/A":`${solarNumber(summary.machine_delta_liters)} L`,summary.machine_delta_liters == null?null:Number(summary.machine_delta_liters)-Number(summary.metered_liters),Number(summary.metered_liters),summary.totalizer_reset_count?`${summary.totalizer_reset_count} reset totalizer terdeteksi.`:"Acuan selisih adalah jumlah transaksi backend.")}
+    ${solarComparisonCard("03 · INVENTORY","Sensor and System Stock","Calculated system stock",`${solarNumber(summary.system_stock_liters)} L`,"Live level sensor",summary.live_stock_liters == null?"N/A":`${solarNumber(summary.live_stock_liters)} L`,summary.live_stock_liters == null?null:Number(summary.live_stock_liters)-Number(summary.system_stock_liters),Number(summary.system_stock_liters),"Stock opname fisik tetap menjadi validasi final inventory.")}
   </section>
-  <section class="solar-analysis-grid">${panel("Tank Level Trend", "Historian sensor level aktual dalam liter", levelTrend.length ? `<div class="solar-trend">${levelBars}</div>` : actualEmpty("Belum ada histori sensor level"), `<span class="data-pill ${summary.live_level_quality === "GOOD" ? "good" : "warning"}">${actualText(summary.live_level_quality || "NO DATA")}</span>`)}${panel("Consumption Trend", "Actual flow-meter output per interval", trend.length ? `<div class="solar-trend">${bars}</div>` : actualEmpty("Belum ada transaksi pada range ini"), `<span class="data-pill good">FLOW METER</span>`, "solar-trend-panel")}${panel("Top Requesters", "Total konsumsi berdasarkan user", userRows ? `<div class="solar-user-list">${userRows}</div>` : actualEmpty("Belum ada data requester"))}</section>
+  <section class="solar-analysis-grid">${panel("Consumption Trend", "Actual flow-meter output per interval · nilai sumbu Y dalam liter", trend.length ? consumptionChart : actualEmpty("Belum ada transaksi pada range ini"), `<span class="data-pill good">FLOW METER</span>`, "solar-trend-panel")}${panel("Top Requesters", "Total konsumsi berdasarkan user", userRows ? `<div class="solar-user-list">${userRows}</div>` : actualEmpty("Belum ada data requester"))}</section>
   ${panel("Recent Fueling Transactions", "QR, volume requested, actual flow meter, dan totalizer", solarTransactionTable(data.transactions, true), `<button class="button small" data-solar-tab="transactions">Open full log →</button>`)}`;
 }
 
 function solarTransactions(data) {
   const transactionData = data.transactions || {}, page = transactionData.pagination || { page:1,total_pages:1,total_rows:0 };
-  return `<section class="card solar-filter-card"><form data-solar-search-form><label>Search QR or user<input type="search" name="search" value="${actualText(state.solar.search)}" placeholder="QR code, requester, operator…"></label><label>Status<select name="status"><option value="all">All status</option>${["COMPLETED","PARTIAL","DISPENSING","FAILED","MANUAL_REVIEW","CANCELLED"].map((value) => `<option value="${value}" ${state.solar.status===value?"selected":""}>${value.replaceAll("_"," ")}</option>`).join("")}</select></label><button class="button primary" type="submit">Search log</button></form></section>${panel("Fueling Transaction Log", "Server-side search dan pagination · tidak menggeser posisi halaman saat auto-update", `${solarTransactionTable(transactionData)}<div class="solar-pagination"><span><strong>${solarNumber(page.total_rows,0)}</strong> records</span><div><button class="button small" data-solar-page="prev" ${page.page<=1?"disabled":""}>← Previous</button><span>Page ${page.page} / ${page.total_pages}</span><button class="button small" data-solar-page="next" ${page.page>=page.total_pages?"disabled":""}>Next →</button></div></div>`, `<span class="data-pill ${backendConnection.realtime === "connected" ? "good" : "warning"}">${backendConnection.realtime === "connected" ? "LIVE AUTO-UPDATE" : "AUTO-UPDATE PAUSED"}</span>`, "solar-log-panel")}`;
+  return `<section class="card solar-filter-card"><form data-solar-search-form><label>Search QR or user<input type="search" name="search" value="${actualText(state.solar.search)}" placeholder="QR code, requester, operator…"></label><label>Status<select name="status"><option value="all">All status</option>${["QR_CREATED","READY","DISPENSING","COMPLETED","PARTIAL","FAILED","MANUAL_REVIEW","CANCELLED"].map((value) => `<option value="${value}" ${state.solar.status===value?"selected":""}>${value.replaceAll("_"," ")}</option>`).join("")}</select></label><button class="button primary" type="submit">Search log</button></form></section>${panel("Fueling Transaction Log", "Server-side search dan pagination · tidak menggeser posisi halaman saat auto-update", `${solarTransactionTable(transactionData)}<div class="solar-pagination"><span><strong>${solarNumber(page.total_rows,0)}</strong> records</span><div><button class="button small" data-solar-page="prev" ${page.page<=1?"disabled":""}>← Previous</button><span>Page ${page.page} / ${page.total_pages}</span><button class="button small" data-solar-page="next" ${page.page>=page.total_pages?"disabled":""}>Next →</button></div></div>`, `<span class="data-pill ${backendConnection.realtime === "connected" ? "good" : "warning"}">${backendConnection.realtime === "connected" ? "LIVE AUTO-UPDATE" : "AUTO-UPDATE PAUSED"}</span>`, "solar-log-panel")}`;
 }
 
 function solarMovements(data) {

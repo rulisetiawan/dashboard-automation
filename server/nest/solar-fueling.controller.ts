@@ -31,7 +31,7 @@ function dateRange(from?: string, to?: string) {
   const end = to ? new Date(to) : new Date();
   const start = from ? new Date(from) : new Date(end.getTime() - 30 * 86400000);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) throw new BadRequestException("Time range tidak valid.");
-  if (end.getTime() - start.getTime() > 366 * 86400000) throw new BadRequestException("Time range maksimal 366 hari.");
+  if (end.getTime() - start.getTime() > 5 * 366 * 86400000) throw new BadRequestException("Time range maksimal 5 tahun.");
   return { from: start.toISOString(), to: end.toISOString() };
 }
 
@@ -87,8 +87,8 @@ export class SolarFuelingController {
                COALESCE(SUM(metered_liters) FILTER (WHERE transaction_status IN ('COMPLETED','PARTIAL')), 0) AS metered_liters,
                COALESCE(SUM(requested_liters) FILTER (WHERE transaction_status IN ('COMPLETED','PARTIAL')), 0) AS requested_liters,
                COALESCE(AVG(CASE WHEN requested_liters > 0 AND transaction_status IN ('COMPLETED','PARTIAL') THEN metered_liters / requested_liters * 100 END), 0) AS fulfillment_percent,
-               COUNT(*) FILTER (WHERE transaction_status = 'MANUAL_REVIEW' OR (requested_liters > 0 AND metered_liters IS NOT NULL AND ABS(metered_liters-requested_liters)/requested_liters > 0.02))::int AS review_count
-        FROM solar_fueling_transaction WHERE COALESCE(fueling_completed_at, qr_created_at, ingested_at) >= $1 AND COALESCE(fueling_completed_at, qr_created_at, ingested_at) < $2
+               COUNT(*) FILTER (WHERE transaction_status = 'MANUAL_REVIEW' OR (transaction_status IN ('COMPLETED','PARTIAL') AND requested_liters > 0 AND metered_liters IS NOT NULL AND ABS(metered_liters-requested_liters)/requested_liters > 0.02))::int AS review_count
+        FROM solar_fueling_transaction WHERE COALESCE(fueling_completed_at, qr_created_at, fueling_started_at, source_updated_at, ingested_at) >= $1 AND COALESCE(fueling_completed_at, qr_created_at, fueling_started_at, source_updated_at, ingested_at) < $2
       `, [range.from, range.to]),
       this.database.query(`
         WITH ordered AS (
@@ -119,9 +119,9 @@ export class SolarFuelingController {
         SELECT transaction_id, qr_code, requested_liters, metered_liters, transaction_status, fueling_completed_at,
                CASE WHEN requested_liters > 0 AND metered_liters IS NOT NULL THEN (metered_liters-requested_liters) ELSE NULL END AS variance_liters
         FROM solar_fueling_transaction
-        WHERE COALESCE(fueling_completed_at, qr_created_at, ingested_at) >= $1 AND COALESCE(fueling_completed_at, qr_created_at, ingested_at) < $2
-          AND (transaction_status IN ('FAILED','PARTIAL','MANUAL_REVIEW') OR (requested_liters > 0 AND metered_liters IS NOT NULL AND ABS(metered_liters-requested_liters)/requested_liters > 0.02))
-        ORDER BY COALESCE(fueling_completed_at, qr_created_at, ingested_at) DESC LIMIT 10
+        WHERE COALESCE(fueling_completed_at, qr_created_at, fueling_started_at, source_updated_at, ingested_at) >= $1 AND COALESCE(fueling_completed_at, qr_created_at, fueling_started_at, source_updated_at, ingested_at) < $2
+          AND (transaction_status IN ('FAILED','PARTIAL','MANUAL_REVIEW') OR (transaction_status = 'COMPLETED' AND requested_liters > 0 AND metered_liters IS NOT NULL AND ABS(metered_liters-requested_liters)/requested_liters > 0.02))
+        ORDER BY COALESCE(fueling_completed_at, qr_created_at, fueling_started_at, source_updated_at, ingested_at) DESC LIMIT 10
       `, [range.from, range.to]),
       this.database.query(`
         SELECT sample.stock_liters,
@@ -181,7 +181,7 @@ export class SolarFuelingController {
     const where = `event_at >= $1 AND event_at < $2 AND ($3 = '%%' OR qr_code ILIKE $3 OR COALESCE(requester_name,'') ILIKE $3 OR COALESCE(qr_created_by,'') ILIKE $3 OR COALESCE(processed_by,'') ILIKE $3 OR COALESCE(consumer_label,'') ILIKE $3) AND ($4 = 'ALL' OR transaction_status = $4)`;
     const rows = await this.database.query(`
       WITH ordered AS (
-        SELECT transaction.*, COALESCE(fueling_completed_at, qr_created_at, ingested_at) AS event_at,
+        SELECT transaction.*, COALESCE(fueling_completed_at, qr_created_at, fueling_started_at, source_updated_at, ingested_at) AS event_at,
                LAG(machine_totalizer_liters) OVER (ORDER BY fueling_completed_at) AS previous_totalizer_liters
         FROM solar_fueling_transaction transaction
       )
@@ -189,7 +189,7 @@ export class SolarFuelingController {
       FROM ordered WHERE ${where} ORDER BY event_at DESC LIMIT $5 OFFSET $6
     `, values);
     const count = await this.database.query(`
-      SELECT COUNT(*)::int AS total FROM (SELECT *, COALESCE(fueling_completed_at, qr_created_at, ingested_at) AS event_at FROM solar_fueling_transaction) transaction WHERE ${where}
+      SELECT COUNT(*)::int AS total FROM (SELECT *, COALESCE(fueling_completed_at, qr_created_at, fueling_started_at, source_updated_at, ingested_at) AS event_at FROM solar_fueling_transaction) transaction WHERE ${where}
     `, values.slice(0, 4));
     const total = Number(count.rows[0]?.total || 0);
     return { data_mode: "ACTUAL_DATABASE", range, transactions: rows.rows, pagination: { page, page_size: pageSize, total_rows: total, total_pages: Math.max(1, Math.ceil(total/pageSize)) } };

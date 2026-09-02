@@ -4,6 +4,25 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.29 / Solar Fueling V1.2 — 2 September 2026
+
+**Status:** Time range, final transaction, and reconciliation corrected
+
+### Diperbaiki
+
+- Filter `Today` menggunakan awal hari kalender `00:00 WIB`, bukan rolling 24 jam.
+- Event time transaksi legacy menggunakan `process_at/source_updated_at` sebelum `ingested_at`, sehingga histori lama tidak salah masuk ke tanggal migrasi.
+- Rentang API diperpanjang sampai lima tahun dan pilihan `All history` ditambahkan agar log lama dapat ditampilkan.
+- QR `READY` tidak lagi menampilkan placeholder `actual_solar=0` sebagai hasil flow meter atau variance `-request`.
+- `Need Review` hanya menghitung deviasi volume transaksi final `COMPLETED/PARTIAL`.
+- Sinkronisasi incremental memeriksa ulang transaksi recent dan seluruh QR target yang masih terbuka, sehingga perubahan baris MySQL lama ikut ter-upsert.
+
+### Diperbarui
+
+- Consumption Trend tetap berbentuk batang dengan sumbu Y, grid, dan label nilai liter pada setiap batang.
+- Tank Level Trend dihapus dari Overview; live tank level tetap tersedia sebagai KPI aktual.
+- Tiga kartu rekonsiliasi menampilkan nilai pembanding secara terpisah serta selisih eksplisit dalam liter dan persen.
+
 ## Dashboard V2.28 / Solar Fueling V1.1 — 2 September 2026
 
 **Status:** SMM_Mysql history and live tank level integrated
