@@ -6,6 +6,7 @@
   "scripts": {
     "build": "node build.mjs",
     "build:backend": "tsc -p tsconfig.backend.json",
+    "start": "node dist-backend/server/nest/main.js",
     "dev:postgres": "npm run build:backend && npm run start:postgres",
     "start:postgres": "node --env-file=.env dist-backend/server/nest/main.js",
     "user:create": "node --env-file=.env scripts/create-dashboard-user.mjs",

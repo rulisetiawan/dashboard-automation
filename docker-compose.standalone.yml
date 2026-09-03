@@ -1,0 +1,31 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pt_smm_dashboard
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8787}:8787"
+    environment:
+      PORT: ${PORT:-8787}
+      DB_HOST: ${DB_HOST:-localhost}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-pt_smm_scada}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      DATABASE_URL: ${DATABASE_URL:-}
+      INGEST_API_KEY: ${INGEST_API_KEY:-}
+      SMM_MYSQL_HOST: ${SMM_MYSQL_HOST:-192.168.100.82}
+      SMM_MYSQL_PORT: ${SMM_MYSQL_PORT:-3306}
+      SMM_MYSQL_USER: ${SMM_MYSQL_USER:-root}
+      SMM_MYSQL_PASSWORD: ${SMM_MYSQL_PASSWORD:-}
+      SMM_MYSQL_DATABASE: ${SMM_MYSQL_DATABASE:-qr_code_db}
+      SOLAR_SYNC_INTERVAL_MS: ${SOLAR_SYNC_INTERVAL_MS:-15000}
+    env_file:
+      - path: .env
+        required: false
+    # Mengizinkan container mengakses database yang berjalan di host machine (jika DB_HOST=host.docker.internal)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

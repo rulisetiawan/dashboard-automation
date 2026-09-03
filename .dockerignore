@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+dist
+dist-backend
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.data
+.cursor
+.openai
+*.md
