@@ -10,7 +10,9 @@
     "dev:postgres": "npm run build:backend && npm run start:postgres",
     "start:postgres": "node --env-file=.env dist-backend/server/nest/main.js",
     "user:create": "node --env-file=.env scripts/create-dashboard-user.mjs",
+    "migrate": "node --env-file=.env scripts/apply-migrations.mjs",
     "seed:kalender-batch": "node --env-file=.env scripts/inject-kalender-batch-tracking.mjs",
+    "seed:samples": "node --env-file=.env scripts/inject-test-samples.mjs",
     "migrate:solar-mysql": "node --env-file=.env scripts/migrate-solar-mysql-to-postgres.mjs --full",
     "sync:solar-mysql": "node --env-file=.env scripts/migrate-solar-mysql-to-postgres.mjs --follow"
   },
