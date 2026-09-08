@@ -9,7 +9,7 @@ async function bootstrap() {
   app.enableCors();
   app.use(express.static(resolve(process.cwd()), { dotfiles: "deny", index: "index.html" }));
   const port = Number(process.env.PORT || 8787);
-  await app.listen(port);
+  await app.listen(port, "0.0.0.0");
   console.log(`PT.SMM NestJS + PostgreSQL dashboard running at http://localhost:${port}`);
 }
 
