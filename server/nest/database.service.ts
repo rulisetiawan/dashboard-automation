@@ -9,8 +9,16 @@ const migrationDirectory = resolve(projectRoot, "postgres", "migrations");
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly pool: Pool;
+  private readonly readyPromise: Promise<void>;
+  private readyResolver!: () => void;
+  private readyRejecter!: (reason?: unknown) => void;
 
   constructor() {
+    this.readyPromise = new Promise<void>((resolve, reject) => {
+      this.readyResolver = resolve;
+      this.readyRejecter = reject;
+    });
+
     const databaseUrl = process.env.DATABASE_URL;
     const required = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"];
     if (!databaseUrl && required.some((field) => !process.env[field])) {
@@ -55,7 +63,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         await client.query("SELECT pg_advisory_unlock(hashtext('pt_smm_schema_migration'))").catch(() => undefined);
         client.release();
       }
+      this.readyResolver();
     } catch (error) {
+      this.readyRejecter(error);
       const detail = error instanceof Error ? error.message : "unknown database error";
       throw new Error(`Koneksi PostgreSQL native gagal: ${detail}`);
     }
@@ -65,11 +75,17 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     await this.pool.end();
   }
 
-  query<T extends QueryResultRow = QueryResultRow>(text: string, values?: unknown[]) {
+  async waitForReady(): Promise<void> {
+    await this.readyPromise;
+  }
+
+  async query<T extends QueryResultRow = QueryResultRow>(text: string, values?: unknown[]) {
+    await this.waitForReady();
     return this.pool.query<T>(text, values);
   }
 
   async transaction<T>(handler: (client: PoolClient) => Promise<T>) {
+    await this.waitForReady();
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");

@@ -18,10 +18,35 @@ import { AuthController } from "./auth.controller.js";
 import { DashboardAuthMiddleware } from "./auth.middleware.js";
 import { AuthService } from "./auth.service.js";
 import { SolarFuelingController } from "./solar-fueling.controller.js";
+import { AiAssistantController } from "./ai-assistant.controller.js";
+import { AiAssistantService } from "./ai-assistant.service.js";
 
 @Module({
-  controllers: [AuthController, ApiController, AlarmController, BatchController, BatchExportController, ChemicalController, LiveValueIngestionController, PerformanceController, ProcessDeviationController, ProductionOutputController, SolarFuelingController],
-  providers: [DatabaseService, AuthService, DashboardAuthMiddleware, HistorianAggregationService, RealtimeGateway, AlarmEngineService, ProcessDeviationEngineService, BatchIngestionExceptionFilter],
+  controllers: [
+    AuthController,
+    ApiController,
+    AlarmController,
+    BatchController,
+    BatchExportController,
+    ChemicalController,
+    LiveValueIngestionController,
+    PerformanceController,
+    ProcessDeviationController,
+    ProductionOutputController,
+    SolarFuelingController,
+    AiAssistantController,
+  ],
+  providers: [
+    DatabaseService,
+    AuthService,
+    DashboardAuthMiddleware,
+    HistorianAggregationService,
+    RealtimeGateway,
+    AlarmEngineService,
+    ProcessDeviationEngineService,
+    BatchIngestionExceptionFilter,
+    AiAssistantService,
+  ],
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {
@@ -30,6 +55,8 @@ export class AppModule {
       { path: "api/v1/ingestion/{*path}", method: RequestMethod.POST },
       { path: "api/v1/batch/production-batches", method: RequestMethod.POST },
       { path: "api/v1/batch/process-runs", method: RequestMethod.POST },
+      { path: "api/v1/ai-status", method: RequestMethod.ALL },
+      { path: "api/v1/ai-assist", method: RequestMethod.ALL },
     ).forRoutes({ path: "api/v1/{*path}", method: RequestMethod.ALL });
   }
 }
