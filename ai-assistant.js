@@ -376,6 +376,37 @@
     }
   }
 
+  function createStreamingMessageBubble(model) {
+    const list = document.getElementById("aiMessageList");
+    if (!list) return null;
+
+    const el = document.createElement("div");
+    el.className = "ai-msg assistant";
+    const time = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+
+    el.innerHTML = `
+      <div class="ai-msg-avatar">✨</div>
+      <div class="ai-msg-bubble">
+        <div class="ai-msg-content"></div>
+        <div class="ai-msg-meta"><span>${model || "mlx:Llama-3.2-1B"}</span><span>${time}</span></div>
+      </div>
+    `;
+
+    list.appendChild(el);
+    scrollToBottom();
+
+    const contentEl = el.querySelector(".ai-msg-content");
+    return {
+      element: el,
+      update(text) {
+        if (contentEl) {
+          contentEl.innerHTML = formatMarkdown(text);
+          scrollToBottom();
+        }
+      }
+    };
+  }
+
   async function handleUserSubmit(messageText) {
     const text = (messageText || "").trim();
     if (!text || isSending) return;
@@ -418,11 +449,61 @@
     try {
       const res = await fetch("/api/v1/ai-assist", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream, application/json",
+        },
         body: JSON.stringify(payload),
       });
 
       removeTypingIndicator();
+
+      const contentType = res.headers.get("content-type") || "";
+      if (res.ok && contentType.includes("text/event-stream") && res.body) {
+        const streamBubble = createStreamingMessageBubble(activeAiModel);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullReply = "";
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith(":")) continue;
+            if (trimmed === "data: [DONE]") continue;
+
+            if (trimmed.startsWith("data: ")) {
+              try {
+                const parsed = JSON.parse(trimmed.slice(6));
+                if (parsed.token) {
+                  fullReply += parsed.token;
+                  if (streamBubble) streamBubble.update(fullReply);
+                }
+              } catch {}
+            }
+          }
+        }
+
+        if (!fullReply) {
+          fullReply = "Tidak ada balasan dari server AI.";
+          if (streamBubble) streamBubble.update(fullReply);
+        }
+
+        history.push({
+          role: "assistant",
+          text: fullReply,
+          time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          model: activeAiModel,
+        });
+        saveChatHistory(history);
+        return;
+      }
 
       if (res.ok) {
         const data = await res.json();
