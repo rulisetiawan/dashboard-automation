@@ -10,7 +10,9 @@ export class ProcessDeviationEngineService implements OnModuleInit, OnModuleDest
   private readonly logger = new Logger(ProcessDeviationEngineService.name);
   private timer?: NodeJS.Timeout;
   private running = false;
+  private hasIdColumn = false;
   private lastTelemetryId = 0;
+  private lastTelemetryTs: Date = new Date(0);
   private lastFinalizationAt = 0;
 
   constructor(private readonly database: DatabaseService, private readonly realtime: RealtimeGateway) {}
@@ -27,14 +29,31 @@ export class ProcessDeviationEngineService implements OnModuleInit, OnModuleDest
 
   private async initializeCursor() {
     try {
-      const stored = await this.database.query("SELECT meta_value FROM backend_meta WHERE meta_key='process_deviation_engine.last_telemetry_id'");
-      if (stored.rows[0]?.meta_value != null) {
-        this.lastTelemetryId = Number(stored.rows[0].meta_value) || 0;
-        return;
+      const colCheck = await this.database.query(`
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'telemetry_sample' AND column_name = 'id'
+      `);
+      this.hasIdColumn = (colCheck.rowCount ?? 0) > 0;
+
+      if (this.hasIdColumn) {
+        const stored = await this.database.query("SELECT meta_value FROM backend_meta WHERE meta_key='process_deviation_engine.last_telemetry_id'");
+        if (stored.rows[0]?.meta_value != null) {
+          this.lastTelemetryId = Number(stored.rows[0].meta_value) || 0;
+          return;
+        }
+        const latest = await this.database.query("SELECT COALESCE(MAX(id), 0)::bigint AS id FROM telemetry_sample");
+        this.lastTelemetryId = Number(latest.rows[0]?.id || 0);
+        await this.saveCursor();
+      } else {
+        const stored = await this.database.query("SELECT meta_value FROM backend_meta WHERE meta_key='process_deviation_engine.last_telemetry_ts'");
+        if (stored.rows[0]?.meta_value != null) {
+          this.lastTelemetryTs = new Date(stored.rows[0].meta_value);
+          return;
+        }
+        const latest = await this.database.query("SELECT MAX(source_ts) AS ts FROM telemetry_sample");
+        this.lastTelemetryTs = latest.rows[0]?.ts ? new Date(latest.rows[0].ts) : new Date(0);
+        await this.saveCursor();
       }
-      const latest = await this.database.query("SELECT COALESCE(MAX(id), 0)::bigint AS id FROM telemetry_sample");
-      this.lastTelemetryId = Number(latest.rows[0]?.id || 0);
-      await this.saveCursor();
     } catch (error) {
       this.logger.error(`Process deviation engine initialization failed: ${this.errorMessage(error)}`);
     }
@@ -45,17 +64,21 @@ export class ProcessDeviationEngineService implements OnModuleInit, OnModuleDest
     this.running = true;
     let changed = false;
     try {
+      const idSelect = this.hasIdColumn ? "ts.id," : "";
+      const whereOrder = this.hasIdColumn
+        ? "WHERE ts.id > $1 AND ts.value_number IS NOT NULL ORDER BY ts.id LIMIT 2000"
+        : "WHERE ts.source_ts > $1 AND ts.value_number IS NOT NULL ORDER BY ts.source_ts ASC LIMIT 2000";
+      const cursorParam = this.hasIdColumn ? this.lastTelemetryId : this.lastTelemetryTs.toISOString();
+
       const samples = await this.database.query(`
-        SELECT ts.id, ts.asset_id, ts.tag_code, ts.source_ts, ts.value_number,
+        SELECT ${idSelect} ts.asset_id, ts.tag_code, ts.source_ts, ts.value_number,
                ts.quality, ts.gateway_id, ts.message_id, td.signal_role,
                td.engineering_unit, a.process_type, a.area_code
         FROM telemetry_sample ts
         JOIN tag_definition td ON td.tag_code = ts.tag_code
         JOIN asset a ON a.asset_id = ts.asset_id AND a.active = TRUE
-        WHERE ts.id > $1 AND ts.value_number IS NOT NULL
-        ORDER BY ts.id
-        LIMIT 2000
-      `, [this.lastTelemetryId]);
+        ${whereOrder}
+      `, [cursorParam]);
 
       for (const sample of samples.rows) {
         const sampleChanged = await this.evaluateSample(sample);
@@ -63,14 +86,30 @@ export class ProcessDeviationEngineService implements OnModuleInit, OnModuleDest
       }
 
       if (samples.rows.length) {
-        this.lastTelemetryId = Math.max(this.lastTelemetryId, ...samples.rows.map((sample) => Number(sample.id)));
+        if (this.hasIdColumn) {
+          this.lastTelemetryId = Math.max(this.lastTelemetryId, ...samples.rows.map((sample) => Number(sample.id)));
+        } else {
+          const maxTs = Math.max(...samples.rows.map((sample) => new Date(sample.source_ts).getTime()));
+          if (maxTs > this.lastTelemetryTs.getTime()) {
+            this.lastTelemetryTs = new Date(maxTs);
+          }
+        }
         await this.saveCursor();
       } else {
-        const latest = await this.database.query("SELECT COALESCE(MAX(id), $1)::bigint AS id FROM telemetry_sample", [this.lastTelemetryId]);
-        const latestId = Number(latest.rows[0]?.id || this.lastTelemetryId);
-        if (latestId > this.lastTelemetryId) {
-          this.lastTelemetryId = latestId;
-          await this.saveCursor();
+        if (this.hasIdColumn) {
+          const latest = await this.database.query("SELECT COALESCE(MAX(id), $1)::bigint AS id FROM telemetry_sample", [this.lastTelemetryId]);
+          const latestId = Number(latest.rows[0]?.id || this.lastTelemetryId);
+          if (latestId > this.lastTelemetryId) {
+            this.lastTelemetryId = latestId;
+            await this.saveCursor();
+          }
+        } else {
+          const latest = await this.database.query("SELECT MAX(source_ts) AS ts FROM telemetry_sample");
+          const latestTs = latest.rows[0]?.ts ? new Date(latest.rows[0].ts) : null;
+          if (latestTs && latestTs.getTime() > this.lastTelemetryTs.getTime()) {
+            this.lastTelemetryTs = latestTs;
+            await this.saveCursor();
+          }
         }
       }
 
@@ -250,10 +289,11 @@ export class ProcessDeviationEngineService implements OnModuleInit, OnModuleDest
   }
 
   private async latestSample(tagCode: string, sourceTs: Date) {
+    const orderClause = this.hasIdColumn ? "ORDER BY source_ts DESC, id DESC LIMIT 1" : "ORDER BY source_ts DESC LIMIT 1";
     const result = await this.database.query(`
       SELECT * FROM telemetry_sample
       WHERE tag_code=$1 AND source_ts <= $2 AND value_number IS NOT NULL
-      ORDER BY source_ts DESC, id DESC LIMIT 1
+      ${orderClause}
     `, [tagCode, sourceTs.toISOString()]);
     return result.rows[0] || null;
   }
@@ -625,11 +665,19 @@ export class ProcessDeviationEngineService implements OnModuleInit, OnModuleDest
   }
 
   private saveCursor() {
-    return this.database.query(`
-      INSERT INTO backend_meta (meta_key, meta_value, updated_at)
-      VALUES ('process_deviation_engine.last_telemetry_id', $1, NOW())
-      ON CONFLICT (meta_key) DO UPDATE SET meta_value=EXCLUDED.meta_value, updated_at=EXCLUDED.updated_at
-    `, [String(this.lastTelemetryId)]);
+    if (this.hasIdColumn) {
+      return this.database.query(`
+        INSERT INTO backend_meta (meta_key, meta_value, updated_at)
+        VALUES ('process_deviation_engine.last_telemetry_id', $1, NOW())
+        ON CONFLICT (meta_key) DO UPDATE SET meta_value=EXCLUDED.meta_value, updated_at=EXCLUDED.updated_at
+      `, [String(this.lastTelemetryId)]);
+    } else {
+      return this.database.query(`
+        INSERT INTO backend_meta (meta_key, meta_value, updated_at)
+        VALUES ('process_deviation_engine.last_telemetry_ts', $1, NOW())
+        ON CONFLICT (meta_key) DO UPDATE SET meta_value=EXCLUDED.meta_value, updated_at=EXCLUDED.updated_at
+      `, [this.lastTelemetryTs.toISOString()]);
+    }
   }
 
   private errorMessage(error: unknown) {
