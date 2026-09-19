@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "build:backend": "tsc -p tsconfig.backend.json",
+    "build:backend": "node node_modules/typescript/bin/tsc -p tsconfig.backend.json",
     "start": "node dist-backend/server/nest/main.js",
     "dev:postgres": "npm run build:backend && npm run start:postgres",
     "start:postgres": "node --env-file=.env dist-backend/server/nest/main.js",
