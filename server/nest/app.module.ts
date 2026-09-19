@@ -18,6 +18,7 @@ import { AuthController } from "./auth.controller.js";
 import { DashboardAuthMiddleware } from "./auth.middleware.js";
 import { AuthService } from "./auth.service.js";
 import { SolarFuelingController } from "./solar-fueling.controller.js";
+import { WwtpController } from "./wwtp.controller.js";
 import { AiAssistantController } from "./ai-assistant.controller.js";
 import { AiAssistantService } from "./ai-assistant.service.js";
 
@@ -34,6 +35,7 @@ import { AiAssistantService } from "./ai-assistant.service.js";
     ProcessDeviationController,
     ProductionOutputController,
     SolarFuelingController,
+    WwtpController,
     AiAssistantController,
   ],
   providers: [

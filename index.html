@@ -56,7 +56,9 @@
       <aside class="sidebar" id="sidebar">
         <div class="brand">
           <img class="sidebar-brand-logo" src="/assets/smm-logo-themed-4k.png" alt="PT. Sarana Makin Mulya" />
-          <button class="sidebar-close" id="sidebar-close" aria-label="Tutup navigasi">×</button>
+          <button class="sidebar-close" id="sidebar-close" type="button" aria-label="Tutup navigasi" title="Tutup Navigasi (Sidebar)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
         </div>
 
         <nav class="nav" id="main-nav" aria-label="Navigasi utama">
@@ -92,6 +94,9 @@
           <button class="nav-item" data-page="solar">
             <span class="nav-icon">◒</span><span class="nav-text">Solar Fueling</span>
           </button>
+          <button class="nav-item" data-page="wwtp">
+            <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path></svg></span><span class="nav-text">WWTP (IPAL)</span>
+          </button>
 
           <div class="nav-group-label">Intelligence</div>
           <button class="nav-item" data-page="alarms">
@@ -121,7 +126,9 @@
         <header class="topbar">
           <div class="topbar-main">
             <div class="topbar-left">
-              <button class="menu-button" id="menu-button" aria-label="Buka navigasi">☰</button>
+              <button class="menu-button" id="menu-button" type="button" aria-label="Buka atau tutup navigasi" title="Buka/Tutup Sidebar (Ctrl+B)">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+              </button>
               <div class="breadcrumb">
                 <span>Digital Automation Dashboard</span><span class="dashboard-version">V2.31</span><span class="crumb-separator">/</span><strong id="breadcrumb-page">Overview</strong>
               </div>
