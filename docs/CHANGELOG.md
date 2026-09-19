@@ -13,6 +13,7 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 - Inspecting memperoleh contoh defect, quality grade, status kamera, tipe cacat, dan posisi cacat.
 - Follower heartbeat demo 10 detik menjaga card koneksi tetap connected selama validasi.
 - API asset menerima empat `process_type` baru.
+- Nilai numerik live sensor dibulatkan maksimal dua angka di belakang koma agar tidak menampilkan artefak floating-point.
 - Seluruh data ditandai `FINISHING-DEMO` dan tidak diposisikan sebagai data produksi.
 
 ## Dashboard V2.32 / Finishing Line V1.0 — 19 September 2026

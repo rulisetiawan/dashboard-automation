@@ -3998,10 +3998,18 @@ function actualSensorValues(assets) {
     return `<article class="actual-sensor-card">
       <div class="actual-sensor-card-top"><span class="actual-sensor-asset">${actualText(asset.id)}</span><span class="quality-pill ${String(asset.quality).toLowerCase() === "good" ? "good" : "stale"}">${actualText(asset.quality)}</span></div>
       <span class="actual-sensor-label">${actualText(actualLabel(key))}</span>
-      <strong class="actual-sensor-value">${actualText(value)}<small>${actualText(unit)}</small></strong>
+      <strong class="actual-sensor-value">${actualText(actualMeasuredValue(value))}<small>${actualText(unit)}</small></strong>
       <span class="actual-sensor-time">Updated ${actualTime(asset.sourceTs)}</span>
     </article>`;
   }).join("")}</div>`;
+}
+
+function actualMeasuredValue(value, maximumFractionDigits = 2) {
+  if (typeof value === "boolean" || value == null || String(value).trim() === "") return value;
+  const number = Number(value);
+  return Number.isFinite(number)
+    ? number.toLocaleString("id-ID", { minimumFractionDigits: 0, maximumFractionDigits })
+    : value;
 }
 
 function actualHistorianRange() {
@@ -5583,7 +5591,7 @@ function databaseSnapshotMetrics(machine, limit = 4) {
     .map(([key, value]) => {
       const normalizedKey = key.toUpperCase();
       const tag = backendTelemetry.find((item) => item.asset_id === machine.id && String(item.signal_role || "").replace(/[._]/g, "_") === normalizedKey);
-      return { label: actualLabel(key), value, unit: tag?.engineering_unit || "" };
+      return { label: actualLabel(key), value: actualMeasuredValue(value), unit: tag?.engineering_unit || "" };
     });
 }
 
