@@ -62,7 +62,7 @@
         </div>
 
         <nav class="nav" id="main-nav" aria-label="Navigasi utama">
-          <div class="nav-group-label">Operations</div>
+          <div class="nav-group-label" data-nav-group="operations">Operations</div>
           <button class="nav-item active" data-page="overview">
             <span class="nav-icon">⌁</span><span class="nav-text">Plant Overview</span>
           </button>
@@ -83,7 +83,7 @@
             <span class="nav-count">21</span>
           </button>
 
-          <div class="nav-group-label">Resources</div>
+          <div class="nav-group-label" data-nav-group="resources">Resources</div>
           <button class="nav-item" data-page="utilities">
             <span class="nav-icon">ϟ</span><span class="nav-text">Utilities</span>
           </button>
@@ -98,7 +98,7 @@
             <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path></svg></span><span class="nav-text">WWTP (IPAL)</span>
           </button>
 
-          <div class="nav-group-label">Intelligence</div>
+          <div class="nav-group-label" data-nav-group="intelligence">Intelligence</div>
           <button class="nav-item" data-page="alarms">
             <span class="nav-icon">△</span><span class="nav-text">Alarms & Events</span>
             <span class="nav-alert" id="nav-alarm-count">0</span>
@@ -108,6 +108,14 @@
           </button>
           <button class="nav-item" data-page="health">
             <span class="nav-icon">⊕</span><span class="nav-text">Data Health</span>
+          </button>
+
+          <div class="nav-group-label" data-nav-group="administration">Administration</div>
+          <button class="nav-item" data-page="roles">
+            <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span><span class="nav-text">Role & Permission</span>
+          </button>
+          <button class="nav-item" data-page="users">
+            <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span><span class="nav-text">User Management</span>
           </button>
         </nav>
 
@@ -148,6 +156,8 @@
                 </button>
                 <div class="user-session-menu" id="user-session-menu" hidden>
                   <div><span>Signed in as</span><strong id="session-menu-name">—</strong><small id="session-menu-department">Digital Automation</small></div>
+                  <button type="button" id="admin-rbac-button" hidden><span>⚙ Kelola Role & Menu</span><i aria-hidden="true">→</i></button>
+                  <button type="button" id="admin-users-button" hidden><span>👥 Kelola Pengguna</span><i aria-hidden="true">→</i></button>
                   <button type="button" id="logout-button"><span>Sign out</span><i aria-hidden="true">→</i></button>
                 </div>
               </div>
@@ -157,6 +167,72 @@
 
         <div id="page-content" class="page-content" aria-live="polite"></div>
       </main>
+    </div>
+
+    <!-- Modal Add/Edit User (Admin) -->
+    <div id="user-modal" class="motor-modal-backdrop user-modal-backdrop" hidden>
+      <section class="card user-modal-box" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+        <header class="user-modal-header">
+          <div>
+            <span class="data-pill good" id="user-modal-badge">User Administration</span>
+            <h2 id="user-modal-title">Tambah Pengguna Baru</h2>
+          </div>
+          <button type="button" class="icon-button user-modal-close" id="user-modal-close" aria-label="Tutup dialog">✕</button>
+        </header>
+
+        <form id="user-modal-form" class="user-modal-form">
+          <input type="hidden" id="user-form-id" value="" />
+          
+          <div class="user-form-group">
+            <label for="user-form-username"><strong>Username</strong> <span class="required-star" style="color:var(--danger)">*</span></label>
+            <input type="text" id="user-form-username" class="input-control" placeholder="misal: operator_pagi" required autocomplete="off" />
+            <small class="user-form-hint">Hanya huruf kecil, angka, titik, strip, dan underscore (3-50 karakter).</small>
+          </div>
+
+          <div class="user-form-group">
+            <label for="user-form-display-name"><strong>Nama Lengkap</strong> <span class="required-star" style="color:var(--danger)">*</span></label>
+            <input type="text" id="user-form-display-name" class="input-control" placeholder="misal: Budi Setiawan" required />
+          </div>
+
+          <div class="user-form-row-2">
+            <div class="user-form-group">
+              <label for="user-form-email"><strong>Email</strong></label>
+              <input type="email" id="user-form-email" class="input-control" placeholder="budi@ptsmm.co.id" />
+            </div>
+
+            <div class="user-form-group">
+              <label for="user-form-department"><strong>Departemen</strong></label>
+              <input type="text" id="user-form-department" class="input-control" placeholder="Produksi Tekstil" value="Digital Automation" />
+            </div>
+          </div>
+
+          <div class="user-form-row-2">
+            <div class="user-form-group">
+              <label for="user-form-role"><strong>Role Akses</strong> <span class="required-star" style="color:var(--danger)">*</span></label>
+              <select id="user-form-role" class="select-control" required></select>
+            </div>
+
+            <div class="user-form-group user-status-toggle-wrap">
+              <label><strong>Status Akun</strong></label>
+              <label class="toggle-checkbox-label">
+                <input type="checkbox" id="user-form-active" checked />
+                <span>Akun Aktif (Dapat Login)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="user-form-group" id="user-form-password-group">
+            <label for="user-form-password"><strong id="user-form-password-label">Password</strong> <span id="user-form-password-star" class="required-star" style="color:var(--danger)">*</span></label>
+            <input type="password" id="user-form-password" class="input-control" placeholder="Minimal 12 karakter" autocomplete="new-password" />
+            <small class="user-form-hint" id="user-form-password-hint">Minimal 12 karakter. Disarankan kombinasi huruf, angka, dan simbol.</small>
+          </div>
+
+          <div class="user-modal-footer">
+            <button type="button" class="button ghost" id="user-modal-cancel">Batal</button>
+            <button type="submit" class="button primary" id="user-modal-submit">Simpan Pengguna</button>
+          </div>
+        </form>
+      </section>
     </div>
 
     <div id="toast-root" class="toast-root" aria-live="polite"></div>

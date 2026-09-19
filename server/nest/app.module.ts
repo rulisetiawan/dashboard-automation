@@ -21,10 +21,12 @@ import { SolarFuelingController } from "./solar-fueling.controller.js";
 import { WwtpController } from "./wwtp.controller.js";
 import { AiAssistantController } from "./ai-assistant.controller.js";
 import { AiAssistantService } from "./ai-assistant.service.js";
+import { RbacController } from "./rbac.controller.js";
 
 @Module({
   controllers: [
     AuthController,
+    RbacController,
     ApiController,
     AlarmController,
     BatchController,
@@ -59,6 +61,12 @@ export class AppModule {
       { path: "api/v1/batch/process-runs", method: RequestMethod.POST },
       { path: "api/v1/ai-status", method: RequestMethod.ALL },
       { path: "api/v1/ai-assist", method: RequestMethod.ALL },
-    ).forRoutes({ path: "api/v1/{*path}", method: RequestMethod.ALL });
+      { path: "api/ai-status", method: RequestMethod.ALL },
+      { path: "api/login", method: RequestMethod.ALL },
+    ).forRoutes(
+      { path: "api/v1/{*path}", method: RequestMethod.ALL },
+      { path: "api/{*path}", method: RequestMethod.ALL },
+      { path: "simulasi-full-process.html", method: RequestMethod.ALL },
+    );
   }
 }
