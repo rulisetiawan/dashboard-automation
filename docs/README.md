@@ -30,6 +30,7 @@ Dokumentasi pada folder ini menggunakan versioning agar setiap perubahan konsep 
 | `backend/Dashboard_Authentication_v1.0.md` | 1.0 | Aktif | Kontrak user, password hashing, session, provisioning, dan pemisahan API OT |
 | `backend/Live_Value_Ingestion_API_v1.1.md` | 1.1 | Aktif | Payload latest-only feedback Auto/Manual Chemical Dispensing |
 | `backend/Solar_Fueling_Backend_Integration_v1.4.md` | 1.4 | Aktif | Agregasi Pending, Completed, Cancelled, Not Match, dan Failed/Review |
+| `backend/Finishing_Demo_Data_v1.0.md` | 1.0 | Demo | Seed telemetry, batch, runtime, equipment, alarm, dan heartbeat untuk 21 mesin baru |
 | `backend/Alarm_Rule_Engine_v1.0.md` | 1.0 | Aktif | Configurable threshold, hysteresis, delay, lifecycle, audit, dan WebSocket alarm engine |
 | `backend/Batch_Abnormal_Log_Backend_Implementation_v1.1.md` | 1.1 | Aktif | Implementasi target achievement, dynamic PV/SV deviation, SV revision log, API, export, dan konfigurasi frontend |
 | `backend/Batch_Abnormal_Log_Backend_Flow_v1.0.md` | 1.0 | Histori | Alur alarm aktual, korelasi batch, dan rancangan awal Process Deviation Engine |

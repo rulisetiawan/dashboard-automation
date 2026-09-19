@@ -4,6 +4,17 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.33 / Finishing Demo Data V1.0 — 19 September 2026
+
+**Status:** Demo database seeded for feature validation
+
+- Seed idempotent khusus 21 asset Continuous, Inspecting, Finishing, dan Setting Dongnam.
+- Data contoh mencakup snapshot, heartbeat, telemetry 8 jam, batch/process run, runtime, output, equipment drive, dan alarm.
+- Inspecting memperoleh contoh defect, quality grade, status kamera, tipe cacat, dan posisi cacat.
+- Follower heartbeat demo 10 detik menjaga card koneksi tetap connected selama validasi.
+- API asset menerima empat `process_type` baru.
+- Seluruh data ditandai `FINISHING-DEMO` dan tidak diposisikan sebagai data produksi.
+
 ## Dashboard V2.32 / Finishing Line V1.0 — 19 September 2026
 
 **Status:** Continuous, Inspecting, Finishing, dan Setting Dongnam implemented

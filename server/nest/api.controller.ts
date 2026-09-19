@@ -1,7 +1,8 @@
 import { BadRequestException, Controller, Get, NotFoundException, Param, Query } from "@nestjs/common";
 import { DatabaseService } from "./database.service.js";
 
-const validProcesses = new Set(["jetflow", "calator", "dryer", "kalender", "chemical"]);
+const supportedProcesses = ["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "chemical"];
+const validProcesses = new Set(supportedProcesses);
 const assetProjection = `
   SELECT
     a.*,
@@ -174,7 +175,7 @@ export class ApiController {
 
   @Get("assets")
   async assets(@Query("process") process?: string, @Query("area") area?: string) {
-    if (!process || !validProcesses.has(process)) throw new BadRequestException("process must be jetflow, calator, dryer, kalender, or chemical");
+    if (!process || !validProcesses.has(process)) throw new BadRequestException(`process must be one of: ${supportedProcesses.join(", ")}`);
     const result = area
       ? await this.database.query(`${assetProjection} WHERE a.process_type = $1 AND a.area_code = $2 AND a.active = TRUE ORDER BY a.asset_id`, [process, area])
       : await this.database.query(`${assetProjection} WHERE a.process_type = $1 AND a.active = TRUE ORDER BY a.asset_id`, [process]);

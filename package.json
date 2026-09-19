@@ -1,6 +1,6 @@
 {
   "name": "pt-smm-digital-automation-dashboard",
-  "version": "2.32.0",
+  "version": "2.33.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,8 @@
     "migrate": "node --env-file=.env scripts/apply-migrations.mjs",
     "seed:kalender-batch": "node --env-file=.env scripts/inject-kalender-batch-tracking.mjs",
     "seed:samples": "node --env-file=.env scripts/inject-test-samples.mjs",
+    "seed:finishing-demo": "node --env-file=.env scripts/seed-finishing-demo.mjs",
+    "demo:finishing:follow": "node --env-file=.env scripts/seed-finishing-demo.mjs --follow",
     "migrate:solar-mysql": "node --env-file=.env scripts/migrate-solar-mysql-to-postgres.mjs --full",
     "sync:solar-mysql": "node --env-file=.env scripts/migrate-solar-mysql-to-postgres.mjs --follow"
   },
