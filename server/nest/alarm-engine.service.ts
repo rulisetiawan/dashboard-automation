@@ -20,7 +20,9 @@ export class AlarmEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AlarmEngineService.name);
   private timer?: NodeJS.Timeout;
   private running = false;
+  private hasIdColumn = false;
   private lastTelemetryId = 0;
+  private lastTelemetryTs: Date = new Date(0);
 
   constructor(private readonly database: DatabaseService, private readonly realtime: RealtimeGateway) {}
 
@@ -36,14 +38,31 @@ export class AlarmEngineService implements OnModuleInit, OnModuleDestroy {
 
   private async initializeCursor() {
     try {
-      const stored = await this.database.query("SELECT meta_value FROM backend_meta WHERE meta_key='alarm_engine.last_telemetry_id'");
-      if (stored.rows[0]?.meta_value != null) {
-        this.lastTelemetryId = Number(stored.rows[0].meta_value) || 0;
-        return;
+      const colCheck = await this.database.query(`
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'telemetry_sample' AND column_name = 'id'
+      `);
+      this.hasIdColumn = (colCheck.rowCount ?? 0) > 0;
+
+      if (this.hasIdColumn) {
+        const stored = await this.database.query("SELECT meta_value FROM backend_meta WHERE meta_key='alarm_engine.last_telemetry_id'");
+        if (stored.rows[0]?.meta_value != null) {
+          this.lastTelemetryId = Number(stored.rows[0].meta_value) || 0;
+          return;
+        }
+        const latest = await this.database.query("SELECT COALESCE(MAX(id), 0)::bigint AS id FROM telemetry_sample");
+        this.lastTelemetryId = Number(latest.rows[0]?.id || 0);
+        await this.saveCursor();
+      } else {
+        const stored = await this.database.query("SELECT meta_value FROM backend_meta WHERE meta_key='alarm_engine.last_telemetry_ts'");
+        if (stored.rows[0]?.meta_value != null) {
+          this.lastTelemetryTs = new Date(stored.rows[0].meta_value);
+          return;
+        }
+        const latest = await this.database.query("SELECT MAX(source_ts) AS ts FROM telemetry_sample");
+        this.lastTelemetryTs = latest.rows[0]?.ts ? new Date(latest.rows[0].ts) : new Date(0);
+        await this.saveCursor();
       }
-      const latest = await this.database.query("SELECT COALESCE(MAX(id), 0)::bigint AS id FROM telemetry_sample");
-      this.lastTelemetryId = Number(latest.rows[0]?.id || 0);
-      await this.saveCursor();
     } catch (error) {
       this.logger.error(`Alarm engine initialization failed: ${error instanceof Error ? error.message : "unknown error"}`);
     }
@@ -53,9 +72,15 @@ export class AlarmEngineService implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
+      const idSelect = this.hasIdColumn ? "ts.id," : "";
+      const whereOrder = this.hasIdColumn
+        ? "WHERE ts.id > $1 AND ts.value_number IS NOT NULL ORDER BY ts.id, r.rule_id LIMIT 5000"
+        : "WHERE ts.source_ts > $1 AND ts.value_number IS NOT NULL ORDER BY ts.source_ts ASC, r.rule_id LIMIT 5000";
+      const cursorParam = this.hasIdColumn ? this.lastTelemetryId : this.lastTelemetryTs.toISOString();
+
       const samples = await this.database.query(`
         SELECT
-          ts.id, ts.source_ts, ts.value_number, ts.quality,
+          ${idSelect} ts.source_ts, ts.value_number, ts.quality,
           r.rule_id, r.rule_name, r.asset_id, r.tag_code, r.rule_type,
           r.threshold_value, r.hysteresis_value, r.delay_seconds, r.severity,
           r.alarm_message, r.recommendation,
@@ -89,16 +114,23 @@ export class AlarmEngineService implements OnModuleInit, OnModuleDestroy {
         ) active_step ON TRUE
         LEFT JOIN asset_snapshot snapshot ON snapshot.asset_id = ts.asset_id
         LEFT JOIN production_batch pb ON pb.batch_no = snapshot.batch_no
-        WHERE ts.id > $1 AND ts.value_number IS NOT NULL
-        ORDER BY ts.id, r.rule_id
-        LIMIT 5000
-      `, [this.lastTelemetryId]);
+        ${whereOrder}
+      `, [cursorParam]);
       if (!samples.rows.length) {
-        const latest = await this.database.query("SELECT COALESCE(MAX(id), $1)::bigint AS id FROM telemetry_sample", [this.lastTelemetryId]);
-        const latestId = Number(latest.rows[0]?.id || this.lastTelemetryId);
-        if (latestId > this.lastTelemetryId) {
-          this.lastTelemetryId = latestId;
-          await this.saveCursor();
+        if (this.hasIdColumn) {
+          const latest = await this.database.query("SELECT COALESCE(MAX(id), $1)::bigint AS id FROM telemetry_sample", [this.lastTelemetryId]);
+          const latestId = Number(latest.rows[0]?.id || this.lastTelemetryId);
+          if (latestId > this.lastTelemetryId) {
+            this.lastTelemetryId = latestId;
+            await this.saveCursor();
+          }
+        } else {
+          const latest = await this.database.query("SELECT MAX(source_ts) AS ts FROM telemetry_sample");
+          const latestTs = latest.rows[0]?.ts ? new Date(latest.rows[0].ts) : null;
+          if (latestTs && latestTs.getTime() > this.lastTelemetryTs.getTime()) {
+            this.lastTelemetryTs = latestTs;
+            await this.saveCursor();
+          }
         }
         return;
       }
@@ -180,7 +212,14 @@ export class AlarmEngineService implements OnModuleInit, OnModuleDestroy {
         `, [state.ruleId, state.evaluationState, state.pendingSince?.toISOString() || null, state.activeAlarmEventId, state.lastValue, state.lastQuality, state.lastEvaluatedTs?.toISOString() || null]);
       }
 
-      this.lastTelemetryId = Math.max(this.lastTelemetryId, ...samples.rows.map((sample) => Number(sample.id)));
+      if (this.hasIdColumn) {
+        this.lastTelemetryId = Math.max(this.lastTelemetryId, ...samples.rows.map((sample) => Number(sample.id)));
+      } else {
+        const maxTs = Math.max(...samples.rows.map((sample) => new Date(sample.source_ts).getTime()));
+        if (maxTs > this.lastTelemetryTs.getTime()) {
+          this.lastTelemetryTs = new Date(maxTs);
+        }
+      }
       await this.saveCursor();
     } catch (error) {
       this.logger.error(`Alarm evaluation failed: ${error instanceof Error ? error.message : "unknown error"}`);
@@ -224,10 +263,18 @@ export class AlarmEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   private saveCursor() {
-    return this.database.query(`
-      INSERT INTO backend_meta (meta_key, meta_value, updated_at)
-      VALUES ('alarm_engine.last_telemetry_id', $1, NOW())
-      ON CONFLICT (meta_key) DO UPDATE SET meta_value=EXCLUDED.meta_value, updated_at=EXCLUDED.updated_at
-    `, [String(this.lastTelemetryId)]);
+    if (this.hasIdColumn) {
+      return this.database.query(`
+        INSERT INTO backend_meta (meta_key, meta_value, updated_at)
+        VALUES ('alarm_engine.last_telemetry_id', $1, NOW())
+        ON CONFLICT (meta_key) DO UPDATE SET meta_value=EXCLUDED.meta_value, updated_at=EXCLUDED.updated_at
+      `, [String(this.lastTelemetryId)]);
+    } else {
+      return this.database.query(`
+        INSERT INTO backend_meta (meta_key, meta_value, updated_at)
+        VALUES ('alarm_engine.last_telemetry_ts', $1, NOW())
+        ON CONFLICT (meta_key) DO UPDATE SET meta_value=EXCLUDED.meta_value, updated_at=EXCLUDED.updated_at
+      `, [this.lastTelemetryTs.toISOString()]);
+    }
   }
 }
