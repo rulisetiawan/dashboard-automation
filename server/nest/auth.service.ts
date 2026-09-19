@@ -8,12 +8,28 @@ const sessionLifetimeMs = 12 * 60 * 60_000;
 const failedLoginLimit = 5;
 const lockDurationMinutes = 15;
 
+export const ALL_CANONICAL_MENUS = [
+  "overview",
+  "jetflow",
+  "calator",
+  "dryer",
+  "kalender",
+  "utilities",
+  "chemical",
+  "solar",
+  "wwtp",
+  "alarms",
+  "trends",
+  "health",
+] as const;
+
 export type DashboardUserSession = {
   userId: string;
   username: string;
   displayName: string;
   department: string;
   role: string;
+  allowedMenus: string[];
   expiresAt: string;
 };
 
@@ -69,7 +85,8 @@ export class AuthService {
         WHERE user_id = $1 AND revoked_at IS NULL AND expires_at <= clock_timestamp()
       `, [user.user_id]);
     });
-    return { token, user: this.userPayload(user, expiresAt) };
+    const allowedMenus = await this.getRoleMenus(user.role_code);
+    return { token, user: this.userPayload(user, expiresAt, allowedMenus) };
   }
 
   async sessionFromRequest(request: Pick<Request, "headers">) {
@@ -88,7 +105,8 @@ export class AuthService {
     if (!row.last_seen_at || Date.now() - new Date(row.last_seen_at).getTime() > 5 * 60_000) {
       void this.database.query("UPDATE dashboard_session SET last_seen_at = clock_timestamp() WHERE session_id = $1", [row.session_id]).catch(() => undefined);
     }
-    return this.userPayload(row, new Date(row.expires_at).toISOString());
+    const allowedMenus = await this.getRoleMenus(row.role_code);
+    return this.userPayload(row, new Date(row.expires_at).toISOString(), allowedMenus);
   }
 
   async logout(request: Pick<Request, "headers">) {
@@ -97,13 +115,36 @@ export class AuthService {
     await this.database.query("UPDATE dashboard_session SET revoked_at = clock_timestamp() WHERE token_hash = $1 AND revoked_at IS NULL", [hashDashboardSessionToken(token)]);
   }
 
-  private userPayload(row: Record<string, any>, expiresAt: string): DashboardUserSession {
+  async getRoleMenus(roleCode: string): Promise<string[]> {
+    const role = String(roleCode || "VIEWER").trim().toUpperCase();
+    if (role === "ADMIN") return [...ALL_CANONICAL_MENUS];
+    try {
+      const result = await this.database.query(`
+        SELECT menu_code FROM dashboard_role_menu
+        WHERE role_code = $1
+      `, [role]);
+      if (result.rows.length > 0) {
+        return result.rows.map((row) => String(row.menu_code));
+      }
+    } catch {
+      // Table may not exist yet if migration pending
+    }
+    if (role === "WWTP") return ["wwtp"];
+    if (role === "PRODUCTION") return ALL_CANONICAL_MENUS.filter((m) => m !== "wwtp");
+    if (role === "ENGINEER") return [...ALL_CANONICAL_MENUS];
+    if (role === "SUPERVISOR") return ["overview", "jetflow", "calator", "dryer", "kalender", "utilities", "chemical", "solar", "wwtp", "alarms", "trends"];
+    if (role === "OPERATOR") return ["overview", "jetflow", "calator", "dryer", "kalender", "solar"];
+    return ["overview", "trends"];
+  }
+
+  private userPayload(row: Record<string, any>, expiresAt: string, allowedMenus: string[]): DashboardUserSession {
     return {
       userId: row.user_id,
       username: row.username,
       displayName: row.display_name,
       department: row.department || "Digital Automation",
       role: row.role_code || "VIEWER",
+      allowedMenus,
       expiresAt,
     };
   }

@@ -176,14 +176,27 @@ const state = {
 };
 
 const navigationStorageKey = "pt-smm.dashboard.navigation.v2";
-const navigationPages = new Set(["overview", "jetflow", "calator", "dryer", "kalender", "utilities", "chemical", "solar", "wwtp", "alarms", "trends", "health"]);
+const navigationPages = new Set(["overview", "jetflow", "calator", "dryer", "kalender", "utilities", "chemical", "solar", "wwtp", "alarms", "trends", "health", "roles", "users"]);
 const processNavigationPages = ["jetflow", "calator", "dryer", "kalender", "chemical"];
+
+function getPageFromUrl() {
+  const hash = String(window.location.hash || "").replace(/^#\/?/, "").split("?")[0].trim().toLowerCase();
+  if (hash && navigationPages.has(hash)) return hash;
+  const params = new URLSearchParams(window.location.search);
+  const pageParam = String(params.get("page") || "").trim().toLowerCase();
+  if (pageParam && navigationPages.has(pageParam)) return pageParam;
+  return null;
+}
 
 function restoreDashboardNavigation() {
   try {
+    const urlPage = getPageFromUrl();
+    if (urlPage) {
+      state.page = urlPage;
+    }
     const saved = JSON.parse(window.localStorage.getItem(navigationStorageKey) || "null");
     if (!saved || typeof saved !== "object") return;
-    if (navigationPages.has(saved.page)) state.page = saved.page;
+    if (!urlPage && navigationPages.has(saved.page)) state.page = saved.page;
     processNavigationPages.forEach((type) => {
       if (typeof saved.selected?.[type] === "string") state.selected[type] = saved.selected[type];
       const savedDrill = saved.drill?.[type];
@@ -339,6 +352,8 @@ const pageMeta = {
   alarms: ["Alarms & Events", "Exception Center", "Alarm aktif, acknowledgement, equipment event, dan impact context."],
   trends: ["Historical Trends", "Investigation Workspace", "Bandingkan actual, setpoint, machine state, dan alarm dalam satu timeline."],
   health: ["Data Health", "Collector & Tag Quality", "Koneksi PLC, gateway, meter, stale tag, dan historian health."],
+  roles: ["Role & Permission", "Access Control", "Pengaturan hak akses menu dashboard per role dan penugasan role pengguna."],
+  users: ["User Management", "Account Administration", "Manajemen data akun, penambahan pengguna, reset password, dan status akses."],
 };
 
 const processAreas = {
@@ -1172,7 +1187,7 @@ async function refreshBackendSources(sources) {
 }
 
 function realtimeSourcesAffectCurrentPage(sources, refreshAll = false) {
-  if (state.page === "wwtp") return false;
+  if (state.page === "wwtp" || state.page === "roles" || state.page === "users") return false;
   if (refreshAll || state.page === "overview") return true;
   const sourceGroups = {
     asset: new Set(["asset", "asset_snapshot"]),
@@ -6015,6 +6030,9 @@ function databaseProcessPage(type) {
 }
 
 function databaseDashboardPage() {
+  if (!isPageAllowed(state.page)) return accessDeniedPage(state.page);
+  if (state.page === "roles") return rolePermissionPage();
+  if (state.page === "users") return userManagementPage();
   if (state.page === "overview") return databaseOverviewPage();
   if (state.page === "chemical") return actualChemicalPage();
   if (state.page === "solar") return actualSolarPage();
@@ -6028,6 +6046,9 @@ function databaseDashboardPage() {
 }
 
 function actualDataPage() {
+  if (!isPageAllowed(state.page)) return accessDeniedPage(state.page);
+  if (state.page === "roles") return rolePermissionPage();
+  if (state.page === "users") return userManagementPage();
   if (state.page === "overview") return actualOverviewPage();
   if (["jetflow", "calator", "dryer", "kalender"].includes(state.page)) return actualProcessPage(state.page);
   if (state.page === "utilities") return actualUtilitiesPage();
@@ -6096,10 +6117,20 @@ function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
     if (state.selected[state.page] && !fleet.some((machine) => machine.id === state.selected[state.page])) state.selected[state.page] = fleet[0]?.id || null;
   }
   persistDashboardNavigation();
-  content.innerHTML = (backendConnection.status !== "connected" || !hasActualAssets)
-    ? databaseIntegrationPage()
-    : databaseDashboardPage();
-  document.getElementById("breadcrumb-page").textContent = pageMeta[state.page][0];
+  let pageContentHtml = "";
+  if (!isPageAllowed(state.page)) {
+    pageContentHtml = accessDeniedPage(state.page);
+  } else if (state.page === "roles") {
+    pageContentHtml = rolePermissionPage();
+  } else if (state.page === "users") {
+    pageContentHtml = userManagementPage();
+  } else {
+    pageContentHtml = (backendConnection.status !== "connected" || !hasActualAssets)
+      ? databaseIntegrationPage()
+      : databaseDashboardPage();
+  }
+  content.innerHTML = pageContentHtml;
+  document.getElementById("breadcrumb-page").textContent = pageMeta[state.page]?.[0] || state.page;
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === state.page));
   bindPageEvents();
   if (backendConnection.status === "connected" && state.page === "overview") void loadProductionOutputByBatch();
@@ -7157,14 +7188,38 @@ function bindPageEvents() {
   const fleetSearch = document.getElementById("fleet-search");
   const fleetState = document.getElementById("fleet-state-filter");
   if (fleetSearch) fleetSearch.addEventListener("input", filterFleetMachines);
-  if (fleetState) fleetState.addEventListener("change", filterFleetMachines);
+  if (state.page === "roles") bindRolePermissionPageEvents();
+  if (state.page === "users") bindUserManagementPageEvents();
 }
 
-function navigate(page) {
-  if (state.drill[page]) state.drill[page] = { area: null, machine: null };
-  state.page = page;
+function isPageAllowed(page) {
+  if (!authentication.user) return true;
+  const role = String(authentication.user.role || "").toUpperCase();
+  if (role === "ADMIN") return true;
+  if (page === "roles" || page === "users") return false;
+  const allowed = Array.isArray(authentication.user.allowedMenus) ? authentication.user.allowedMenus : [];
+  return allowed.includes(page);
+}
+
+function navigate(page, { replaceState = false } = {}) {
+  const targetPage = navigationPages.has(page) ? page : "overview";
+  state.page = targetPage;
+  const targetHash = `#/${targetPage}`;
+  if (window.location.hash !== targetHash) {
+    if (replaceState) {
+      window.history.replaceState(null, "", targetHash);
+    } else {
+      window.history.pushState(null, "", targetHash);
+    }
+  }
+  if (state.drill[targetPage]) state.drill[targetPage] = { area: null, machine: null };
   renderPage();
-  if (page === "solar") void loadSolarFueling();
+  if (targetPage === "solar") void loadSolarFueling();
+  if (targetPage === "roles") void loadRbacData();
+  if (targetPage === "users") {
+    void loadRbacUsers();
+    void loadRbacData();
+  }
   if (isMobileScreen()) closeSidebar();
 }
 
@@ -8479,6 +8534,51 @@ function authenticationInitials(name) {
   return (parts.length > 1 ? `${parts[0][0]}${parts.at(-1)[0]}` : parts[0]?.slice(0, 2) || "DA").toUpperCase();
 }
 
+function applyMenuPermissions(user) {
+  if (!user) return;
+  const role = String(user.role || "").toUpperCase();
+  const isAdmin = role === "ADMIN";
+  const allowed = Array.isArray(user.allowedMenus) ? user.allowedMenus : [];
+
+  const adminBtn = document.getElementById("admin-rbac-button");
+  if (adminBtn) adminBtn.hidden = !isAdmin;
+  const adminUsersBtn = document.getElementById("admin-users-button");
+  if (adminUsersBtn) adminUsersBtn.hidden = !isAdmin;
+
+  // Filter main navigation buttons
+  const nav = document.getElementById("main-nav");
+  if (nav) {
+    const navItems = nav.querySelectorAll(".nav-item[data-page]");
+    navItems.forEach((btn) => {
+      const page = btn.dataset.page;
+      const canAccess = (page === "roles" || page === "users") ? isAdmin : (isAdmin || allowed.includes(page));
+      btn.classList.toggle("hidden", !canAccess);
+    });
+
+    // Filter group headers (Operations, Resources, Intelligence, Administration)
+    const groupLabels = nav.querySelectorAll(".nav-group-label[data-nav-group]");
+    groupLabels.forEach((label) => {
+      let el = label.nextElementSibling;
+      let hasVisibleChild = false;
+      while (el && !el.classList.contains("nav-group-label")) {
+        if (el.classList.contains("nav-item") && !el.classList.contains("hidden")) {
+          hasVisibleChild = true;
+          break;
+        }
+        el = el.nextElementSibling;
+      }
+      label.classList.toggle("hidden", !hasVisibleChild);
+    });
+  }
+
+  // Jika page saat ini tidak diizinkan dan bukan berasal dari URL hash yang diketik:
+  const urlPage = getPageFromUrl();
+  if (!urlPage && !isAdmin && !allowed.includes(state.page)) {
+    const firstAllowed = allowed.find((p) => p !== "roles" && p !== "users") || "overview";
+    state.page = firstAllowed;
+  }
+}
+
 function applyAuthenticatedUser(user) {
   authentication.user = user;
   const displayName = user?.displayName || user?.username || "Authorized User";
@@ -8494,6 +8594,7 @@ function applyAuthenticatedUser(user) {
   if (roleLabel) roleLabel.textContent = role;
   if (menuName) menuName.textContent = displayName;
   if (menuDepartment) menuDepartment.textContent = `${department} · ${role}`;
+  applyMenuPermissions(user);
 }
 
 function showAuthenticationScreen(message = "") {
@@ -8686,6 +8787,11 @@ document.addEventListener("keydown", (event) => {
     return;
   }
   if (event.key === "Escape") {
+    const userModal = document.getElementById("user-modal");
+    if (userModal && !userModal.hidden) {
+      closeUserModal();
+      return;
+    }
     if (isMobileScreen() && isSidebarOpen()) closeSidebar();
     if (state.motorDrive.selected) {
       state.motorDrive.selected = null;
@@ -8699,6 +8805,922 @@ document.addEventListener("touchmove", markRealtimeInteraction, { capture: true,
 document.addEventListener("scroll", markRealtimeInteraction, { capture: true, passive: true });
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && realtimeUiRefresh.pending) scheduleSafeRealtimeRender();
+});
+
+/* ── Utility: Escape HTML ── */
+function escapeHtml(value) {
+  if (value == null) return "";
+  return String(value).replace(/[&<>'"]/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  }[char] || char));
+}
+
+/* ── 403 Access Denied View ── */
+function accessDeniedPage(targetPage) {
+  const meta = pageMeta[targetPage] || [targetPage, "Restricted Modul", ""];
+  const title = meta[0];
+  const role = authentication.user?.role || "GUEST";
+  const allowed = Array.isArray(authentication.user?.allowedMenus) ? authentication.user.allowedMenus : [];
+  const firstAllowed = allowed.find((p) => p !== "roles") || "overview";
+
+  return `
+    <div class="access-denied-container">
+      <div class="access-denied-card card">
+        <div class="access-denied-icon-badge" aria-hidden="true">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <div class="access-denied-meta">
+          <span class="data-pill bad">403 FORBIDDEN</span>
+          <h2>Akses Ditolak / Dibatasi</h2>
+          <p>Role akun Anda (<strong>${escapeHtml(role)}</strong>) tidak memiliki izin akses untuk membuka modul <strong>${escapeHtml(title)}</strong>.</p>
+        </div>
+        <div class="access-denied-details">
+          <div class="access-denied-detail-item">
+            <span>Role Aktif Saat Ini:</span>
+            <div><span class="data-pill good">${escapeHtml(role)}</span></div>
+          </div>
+          <div class="access-denied-detail-item">
+            <span>Menu yang Diizinkan untuk Role Anda:</span>
+            <div class="allowed-chips-wrap">
+              ${
+                allowed.length > 0
+                  ? allowed
+                      .map((m) => `<span class="data-chip">${escapeHtml(pageMeta[m]?.[0] || m)}</span>`)
+                      .join("")
+                  : `<em style="color:var(--muted)">Tidak ada modul yang diizinkan</em>`
+              }
+            </div>
+          </div>
+        </div>
+        <div class="access-denied-actions">
+          <button type="button" class="button primary" onclick="navigate('${firstAllowed}')">
+            ← Kembali ke Menu Utama (${escapeHtml(pageMeta[firstAllowed]?.[0] || firstAllowed)})
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ── Role & Permission Management (RBAC Dedicated Page) ── */
+const rbacState = {
+  roles: [],
+  menus: [],
+  users: [],
+  selectedRole: "ADMIN",
+  activeTab: "permissions",
+  userSearchFilter: "",
+};
+
+async function loadRbacData() {
+  try {
+    const [rolesRes, menusRes] = await Promise.all([
+      fetch("/api/v1/rbac/roles", { cache: "no-store" }),
+      fetch("/api/v1/rbac/menus", { cache: "no-store" }),
+    ]);
+    if (!rolesRes.ok || !menusRes.ok) throw new Error("Gagal memuat data role dan menu.");
+    const rolesJson = await rolesRes.json();
+    const menusJson = await menusRes.json();
+    rbacState.roles = rolesJson.roles || [];
+    rbacState.menus = menusJson.menus || [];
+    if (!rbacState.roles.some((r) => r.role_code === rbacState.selectedRole) && rbacState.roles[0]) {
+      rbacState.selectedRole = rbacState.roles[0].role_code;
+    }
+    if (state.page === "roles" || state.page === "users") {
+      renderPage({ preserveScroll: true });
+    }
+  } catch (err) {
+    showToast("RBAC Error", err instanceof Error ? err.message : "Gagal memuat konfigurasi hak akses.");
+  }
+}
+
+async function loadRbacUsers() {
+  try {
+    const usersRes = await fetch("/api/v1/rbac/users", { cache: "no-store" });
+    if (!usersRes.ok) throw new Error("Gagal memuat data pengguna.");
+    const usersJson = await usersRes.json();
+    rbacState.users = usersJson.users || [];
+    const tbody = document.getElementById("rbac-users-tbody");
+    if (tbody) tbody.innerHTML = renderRbacUsersRowsHtml(rbacState.userSearchFilter);
+    const userMgmtTbody = document.getElementById("user-mgmt-tbody");
+    if (userMgmtTbody) userMgmtTbody.innerHTML = renderUserManagementRowsHtml();
+    updateUserManagementStats();
+  } catch (err) {
+    showToast("RBAC Error", err instanceof Error ? err.message : "Gagal memuat daftar pengguna.");
+  }
+}
+
+function renderRbacMenuGridHtml(assignedMenus = []) {
+  const groups = { Operations: [], Resources: [], Intelligence: [] };
+  rbacState.menus.forEach((m) => {
+    const grp = m.menu_group || "Operations";
+    if (!groups[grp]) groups[grp] = [];
+    groups[grp].push(m);
+  });
+
+  let html = "";
+  for (const [groupName, groupMenus] of Object.entries(groups)) {
+    if (!groupMenus.length) continue;
+    html += `
+      <div class="rbac-group-box">
+        <div class="rbac-group-title">${escapeHtml(groupName)}</div>
+        ${groupMenus
+          .map((m) => {
+            const checked = assignedMenus.includes(m.menu_code) ? "checked" : "";
+            return `
+              <label class="rbac-menu-item-label">
+                <input type="checkbox" data-menu-code="${escapeHtml(m.menu_code)}" ${checked} />
+                <span class="rbac-menu-icon">${m.icon || "⌁"}</span>
+                <div class="rbac-menu-info">
+                  <span class="rbac-menu-name">${escapeHtml(m.menu_title)}</span>
+                  <span class="rbac-menu-sub">${escapeHtml(m.description || m.menu_code)}</span>
+                </div>
+              </label>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
+  }
+  return html;
+}
+
+function renderRbacUsersRowsHtml(filterText = "") {
+  const query = String(filterText || "").trim().toLowerCase();
+  const filteredUsers = rbacState.users.filter((u) => {
+    if (!query) return true;
+    return (
+      String(u.display_name || "").toLowerCase().includes(query) ||
+      String(u.username || "").toLowerCase().includes(query) ||
+      String(u.department || "").toLowerCase().includes(query) ||
+      String(u.role_code || "").toLowerCase().includes(query)
+    );
+  });
+
+  if (!filteredUsers.length) {
+    return `<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--muted)">Tidak ada pengguna yang cocok.</td></tr>`;
+  }
+
+  return filteredUsers
+    .map((u) => {
+      const roleOptions = rbacState.roles
+        .map((r) => `<option value="${r.role_code}" ${r.role_code === u.role_code ? "selected" : ""}>${escapeHtml(r.role_name)}</option>`)
+        .join("");
+      return `
+        <tr>
+          <td><strong>${escapeHtml(u.display_name || u.username)}</strong></td>
+          <td><code>${escapeHtml(u.username)}</code></td>
+          <td>${escapeHtml(u.department || "-")}</td>
+          <td><span class="data-pill good">${escapeHtml(u.role_code)}</span></td>
+          <td>
+            <select class="rbac-user-role-select" data-user-select="${escapeHtml(u.user_id)}">
+              ${roleOptions}
+            </select>
+          </td>
+          <td>
+            <button type="button" class="button small" data-save-user-role="${escapeHtml(u.user_id)}">Simpan</button>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function rolePermissionPage() {
+  const currentRole = rbacState.roles.find((r) => r.role_code === rbacState.selectedRole) || rbacState.roles[0];
+  const assignedMenus = currentRole ? (currentRole.menus || []) : [];
+  const totalRoles = rbacState.roles.length || 0;
+  const totalMenus = rbacState.menus.length || 0;
+  const totalUsers = rbacState.users.length || 0;
+
+  return `
+    <div class="rbac-page">
+      <section class="card rbac-hero-card">
+        <div class="rbac-hero-header">
+          <div class="rbac-hero-copy">
+            <span class="data-pill good">Administrator Access Control</span>
+            <h1>Role & Permission Management</h1>
+            <p>Konfigurasi hak akses menu dashboard per role dan penugasan peran pengguna secara terpusat.</p>
+          </div>
+        </div>
+        <div class="rbac-stats-strip">
+          <div class="rbac-stat-tile">
+            <small>Total Role</small>
+            <strong>${totalRoles}</strong>
+          </div>
+          <div class="rbac-stat-tile">
+            <small>Total Modul Menu</small>
+            <strong>${totalMenus}</strong>
+          </div>
+          <div class="rbac-stat-tile">
+            <small>Total Pengguna</small>
+            <strong>${totalUsers}</strong>
+          </div>
+          <div class="rbac-stat-tile">
+            <small>Role Dipilih</small>
+            <strong style="color:var(--primary)">${currentRole ? currentRole.role_code : "ADMIN"}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="card rbac-page-box">
+        <div class="rbac-page-nav">
+          <button type="button" class="rbac-tab-btn ${rbacState.activeTab === "permissions" ? "active" : ""}" data-rbac-tab="permissions">
+            <span>Hak Akses Menu per Role</span>
+          </button>
+          <button type="button" class="rbac-tab-btn ${rbacState.activeTab === "users" ? "active" : ""}" data-rbac-tab="users">
+            <span>Penugasan Role Pengguna</span>
+          </button>
+        </div>
+
+        <!-- Tab 1: Permissions per Role -->
+        <div class="rbac-tab-panel ${rbacState.activeTab === "permissions" ? "" : "hidden"}" id="rbac-tab-permissions">
+          <div class="rbac-role-selector-bar">
+            <label for="rbac-selected-role"><strong>Pilih Role:</strong></label>
+            <select id="rbac-selected-role" class="select-control">
+              ${rbacState.roles
+                .map((r) => `<option value="${r.role_code}" ${r.role_code === rbacState.selectedRole ? "selected" : ""}>${escapeHtml(r.role_name)} (${escapeHtml(r.role_code)})</option>`)
+                .join("")}
+            </select>
+            <span id="rbac-role-desc" class="rbac-role-desc">${currentRole?.description ? `“${escapeHtml(currentRole.description)}”` : ""}</span>
+          </div>
+
+          <div class="rbac-menu-grid" id="rbac-menu-grid">
+            ${renderRbacMenuGridHtml(assignedMenus)}
+          </div>
+
+          <div class="rbac-page-footer">
+            <div class="rbac-batch-actions">
+              <button type="button" class="button ghost small" id="rbac-select-all">Pilih Semua</button>
+              <button type="button" class="button ghost small" id="rbac-deselect-all">Hapus Semua</button>
+            </div>
+            <button type="button" class="button primary" id="rbac-save-permissions">Simpan Hak Akses</button>
+          </div>
+        </div>
+
+        <!-- Tab 2: User Role Assignment -->
+        <div class="rbac-tab-panel ${rbacState.activeTab === "users" ? "" : "hidden"}" id="rbac-tab-users">
+          <div class="rbac-users-filter-bar">
+            <input type="search" id="rbac-users-search" placeholder="Cari nama atau username pengguna..." value="${escapeHtml(rbacState.userSearchFilter)}" aria-label="Cari pengguna" />
+            <small style="color:var(--muted)">Menampilkan pengguna terdaftar pada sistem.</small>
+          </div>
+
+          <div class="table-wrap rbac-table-wrap">
+            <table class="data-table rbac-users-table">
+              <thead>
+                <tr>
+                  <th>Nama Pengguna</th>
+                  <th>Username</th>
+                  <th>Departemen</th>
+                  <th>Role Saat Ini</th>
+                  <th>Ubah Role</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="rbac-users-tbody">
+                ${renderRbacUsersRowsHtml(rbacState.userSearchFilter)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function bindRolePermissionPageEvents() {
+  document.querySelectorAll("[data-rbac-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("[data-rbac-tab]").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const tab = btn.dataset.rbacTab;
+      rbacState.activeTab = tab;
+      document.getElementById("rbac-tab-permissions")?.classList.toggle("hidden", tab !== "permissions");
+      document.getElementById("rbac-tab-users")?.classList.toggle("hidden", tab !== "users");
+      if (tab === "users" && !rbacState.users.length) void loadRbacUsers();
+    });
+  });
+
+  document.getElementById("rbac-selected-role")?.addEventListener("change", (e) => {
+    rbacState.selectedRole = e.target.value;
+    const currentRole = rbacState.roles.find((r) => r.role_code === rbacState.selectedRole);
+    const descEl = document.getElementById("rbac-role-desc");
+    if (descEl) descEl.textContent = currentRole?.description ? `“${currentRole.description}”` : "";
+    const grid = document.getElementById("rbac-menu-grid");
+    if (grid) grid.innerHTML = renderRbacMenuGridHtml(currentRole ? currentRole.menus || [] : []);
+  });
+
+  document.getElementById("rbac-select-all")?.addEventListener("click", () => {
+    document.querySelectorAll("#rbac-menu-grid input[type='checkbox']").forEach((cb) => (cb.checked = true));
+  });
+
+  document.getElementById("rbac-deselect-all")?.addEventListener("click", () => {
+    document.querySelectorAll("#rbac-menu-grid input[type='checkbox']").forEach((cb) => (cb.checked = false));
+  });
+
+  document.getElementById("rbac-save-permissions")?.addEventListener("click", saveRbacPermissions);
+
+  document.getElementById("rbac-users-search")?.addEventListener("input", (e) => {
+    rbacState.userSearchFilter = e.target.value;
+    const tbody = document.getElementById("rbac-users-tbody");
+    if (tbody) tbody.innerHTML = renderRbacUsersRowsHtml(rbacState.userSearchFilter);
+  });
+
+  document.getElementById("rbac-users-tbody")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-save-user-role]");
+    if (btn) {
+      void saveSingleUserRole(btn.dataset.saveUserRole);
+    }
+  });
+
+  if (!rbacState.roles.length) void loadRbacData();
+  if (rbacState.activeTab === "users" && !rbacState.users.length) void loadRbacUsers();
+}
+
+async function saveRbacPermissions() {
+  const saveBtn = document.getElementById("rbac-save-permissions");
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const checkboxes = document.querySelectorAll("#rbac-menu-grid input[type='checkbox']:checked");
+    const selectedMenus = Array.from(checkboxes).map((cb) => cb.dataset.menuCode);
+    const roleCode = rbacState.selectedRole;
+
+    const res = await fetch(`/api/v1/rbac/roles/${encodeURIComponent(roleCode)}/menus`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ menus: selectedMenus }),
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || "Gagal menyimpan hak akses menu.");
+    }
+
+    const r = rbacState.roles.find((item) => item.role_code === roleCode);
+    if (r) r.menus = selectedMenus;
+
+    if (authentication.user && authentication.user.role === roleCode) {
+      authentication.user.allowedMenus = selectedMenus;
+      applyMenuPermissions(authentication.user);
+      renderPage({ preserveScroll: true });
+    }
+
+    showToast("Berhasil Disimpan", `Hak akses menu untuk role ${roleCode} berhasil diperbarui.`);
+  } catch (err) {
+    showToast("Gagal Menyimpan", err instanceof Error ? err.message : "Terjadi kesalahan.");
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function saveSingleUserRole(userId) {
+  const select = document.querySelector(`select[data-user-select="${userId}"]`);
+  if (!select) return;
+  const newRole = select.value;
+  try {
+    const res = await fetch(`/api/v1/rbac/users/${encodeURIComponent(userId)}/role`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role_code: newRole }),
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || "Gagal mengubah role pengguna.");
+    }
+    const json = await res.json();
+    showToast("Role Diperbarui", `Role pengguna berhasil diubah ke ${json.role_name || newRole}.`);
+    await loadRbacUsers();
+    if (authentication.user && authentication.user.userId === userId) {
+      authentication.user.role = newRole;
+      const roleObj = rbacState.roles.find((r) => r.role_code === newRole);
+      if (roleObj) authentication.user.allowedMenus = roleObj.menus;
+      applyAuthenticatedUser(authentication.user);
+      renderPage({ preserveScroll: true });
+    }
+  } catch (err) {
+    showToast("Gagal Mengubah Role", err instanceof Error ? err.message : "Terjadi kesalahan.");
+  }
+}
+
+/* ── User Management Dedicated Page ── */
+const userMgmtState = {
+  search: "",
+  role: "all",
+  status: "all",
+};
+
+function updateUserManagementStats() {
+  const totalUsers = rbacState.users.length;
+  const activeUsers = rbacState.users.filter((u) => u.active).length;
+  const now = Date.now();
+  const lockedOrInactiveUsers = rbacState.users.filter(
+    (u) => !u.active || (u.locked_until && new Date(u.locked_until).getTime() > now)
+  ).length;
+  const totalRoles = rbacState.roles.length;
+
+  const totalEl = document.getElementById("user-mgmt-stat-total");
+  const activeEl = document.getElementById("user-mgmt-stat-active");
+  const lockedEl = document.getElementById("user-mgmt-stat-locked");
+  const rolesEl = document.getElementById("user-mgmt-stat-roles");
+
+  if (totalEl) totalEl.textContent = String(totalUsers);
+  if (activeEl) activeEl.textContent = String(activeUsers);
+  if (lockedEl) lockedEl.textContent = String(lockedOrInactiveUsers);
+  if (rolesEl) rolesEl.textContent = String(totalRoles);
+}
+
+function renderUserManagementRowsHtml() {
+  const query = (userMgmtState.search || "").trim().toLowerCase();
+  const roleFilter = userMgmtState.role || "all";
+  const statusFilter = userMgmtState.status || "all";
+  const now = Date.now();
+
+  const filtered = rbacState.users.filter((u) => {
+    const isLocked = Boolean(u.locked_until && new Date(u.locked_until).getTime() > now);
+    if (roleFilter !== "all" && u.role_code !== roleFilter) return false;
+    if (statusFilter === "active" && (!u.active || isLocked)) return false;
+    if (statusFilter === "inactive" && u.active) return false;
+    if (statusFilter === "locked" && !isLocked) return false;
+    if (query) {
+      const match =
+        String(u.username || "").toLowerCase().includes(query) ||
+        String(u.display_name || "").toLowerCase().includes(query) ||
+        String(u.email || "").toLowerCase().includes(query) ||
+        String(u.department || "").toLowerCase().includes(query) ||
+        String(u.role_code || "").toLowerCase().includes(query) ||
+        String(u.role_name || "").toLowerCase().includes(query);
+      if (!match) return false;
+    }
+    return true;
+  });
+
+  if (!filtered.length) {
+    return `<tr><td colspan="6" style="text-align:center;padding:36px;color:var(--muted)">Tidak ada data pengguna yang sesuai dengan kriteria pencarian atau filter.</td></tr>`;
+  }
+
+  const currentUserId = authentication.user?.userId;
+
+  return filtered
+    .map((u) => {
+      const isSelf = currentUserId && String(u.user_id) === String(currentUserId);
+      const isLocked = Boolean(u.locked_until && new Date(u.locked_until).getTime() > now);
+      const initials = (u.display_name || u.username || "U")
+        .split(" ")
+        .filter(Boolean)
+        .map((w) => w[0])
+        .slice(0, 2)
+        .join("")
+        .toUpperCase();
+
+      let statusPill = "";
+      if (isLocked) {
+        statusPill = `<span class="data-pill bad" title="Akun terkunci hingga ${formatDateTime(new Date(u.locked_until).getTime(), true)}">🔒 Terkunci</span>`;
+      } else if (u.active) {
+        statusPill = `<span class="data-pill good">● Aktif</span>`;
+      } else {
+        statusPill = `<span class="data-pill warn">○ Nonaktif</span>`;
+      }
+
+      const roleBadgeClass = u.role_code === "ADMIN" ? "good" : (u.role_code === "WWTP" ? "neutral" : "primary");
+      const lastLoginText = u.last_login_at ? formatDateTime(new Date(u.last_login_at).getTime(), true) : "Belum pernah";
+
+      return `
+        <tr>
+          <td>
+            <div class="user-avatar-cell">
+              <div class="user-avatar-circle">${escapeHtml(initials)}</div>
+              <div class="user-cell-names">
+                <strong>${escapeHtml(u.display_name || u.username)}${isSelf ? ' <small style="color:var(--primary);font-weight:700;">(Anda)</small>' : ""}</strong>
+                <code>@${escapeHtml(u.username)}</code>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div>${u.email ? `<a href="mailto:${escapeHtml(u.email)}" style="color:inherit;text-decoration:underline;">${escapeHtml(u.email)}</a>` : '<span style="color:var(--muted);">-</span>'}</div>
+            <small style="color:var(--muted)">${escapeHtml(u.department || "-")}</small>
+          </td>
+          <td>
+            <span class="data-pill ${roleBadgeClass}" style="font-weight:700;">${escapeHtml(u.role_name || u.role_code)}</span>
+          </td>
+          <td>${statusPill}</td>
+          <td>
+            <div style="font-size:12px;">${lastLoginText}</div>
+            <small style="color:var(--muted);font-size:11px;">Dibuat: ${u.created_at ? new Date(u.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "-"}</small>
+          </td>
+          <td>
+            <div class="user-action-buttons">
+              <button type="button" class="button small secondary" data-edit-user="${escapeHtml(u.user_id)}">Edit</button>
+              ${isLocked ? `<button type="button" class="button small warning" data-unlock-user="${escapeHtml(u.user_id)}" data-username="${escapeHtml(u.username)}">Buka Kunci</button>` : ""}
+              ${!isSelf ? `<button type="button" class="button small danger" data-delete-user="${escapeHtml(u.user_id)}" data-username="${escapeHtml(u.username)}">Hapus</button>` : ""}
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function userManagementPage() {
+  const totalUsers = rbacState.users.length;
+  const activeUsers = rbacState.users.filter((u) => u.active).length;
+  const now = Date.now();
+  const lockedOrInactiveUsers = rbacState.users.filter(
+    (u) => !u.active || (u.locked_until && new Date(u.locked_until).getTime() > now)
+  ).length;
+  const totalRoles = rbacState.roles.length;
+
+  const roleFilterOptions = rbacState.roles
+    .map((r) => `<option value="${escapeHtml(r.role_code)}" ${userMgmtState.role === r.role_code ? "selected" : ""}>Role: ${escapeHtml(r.role_name)}</option>`)
+    .join("");
+
+  return `
+    <div class="user-mgmt-page">
+      <header class="user-mgmt-hero-header">
+        <div>
+          <span class="data-pill good">System Administration</span>
+          <h1 style="margin-top:6px;font-size:24px;font-weight:800;letter-spacing:-0.02em;">User Management</h1>
+          <p style="color:var(--muted);margin-top:4px;font-size:13px;max-width:700px;">
+            Kelola akun pengguna, hak akses role sistem, status keamanan, reset kredensial, dan aktivitas akun di seluruh ekosistem Digital Automation PT. SMM.
+          </p>
+        </div>
+        <div>
+          <button type="button" class="button primary" id="user-mgmt-open-create" style="display:flex;align-items:center;gap:6px;">
+            <span>+</span> Tambah Pengguna Baru
+          </button>
+        </div>
+      </header>
+
+      <section class="overview-kpis" style="grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;">
+        <div class="card kpi-card">
+          <span class="kpi-label">Total Pengguna</span>
+          <strong class="kpi-value" id="user-mgmt-stat-total">${totalUsers}</strong>
+          <small class="kpi-meta">Terdaftar dalam database</small>
+        </div>
+        <div class="card kpi-card">
+          <span class="kpi-label">Pengguna Aktif</span>
+          <strong class="kpi-value good" id="user-mgmt-stat-active">${activeUsers}</strong>
+          <small class="kpi-meta">Dapat mengakses dashboard</small>
+        </div>
+        <div class="card kpi-card">
+          <span class="kpi-label">Terkunci / Nonaktif</span>
+          <strong class="kpi-value ${lockedOrInactiveUsers > 0 ? "warn" : "neutral"}" id="user-mgmt-stat-locked">${lockedOrInactiveUsers}</strong>
+          <small class="kpi-meta">Perlu tindakan admin</small>
+        </div>
+        <div class="card kpi-card">
+          <span class="kpi-label">Total Role</span>
+          <strong class="kpi-value" id="user-mgmt-stat-roles">${totalRoles}</strong>
+          <small class="kpi-meta"><a href="#/roles" style="color:var(--primary);text-decoration:none;">Kelola Menu Permissions →</a></small>
+        </div>
+      </section>
+
+      <section class="card" style="padding:0;overflow:hidden;border:1px solid var(--border,#dce7e9);">
+        <div class="user-mgmt-toolbar">
+          <div class="user-mgmt-filters">
+            <input
+              type="search"
+              id="user-mgmt-search-input"
+              class="user-mgmt-search"
+              placeholder="Cari nama, username, email, departemen..."
+              value="${escapeHtml(userMgmtState.search)}"
+              aria-label="Cari pengguna"
+            />
+            <select id="user-mgmt-role-filter" class="user-mgmt-select" aria-label="Filter berdasarkan role">
+              <option value="all" ${userMgmtState.role === "all" ? "selected" : ""}>Semua Role</option>
+              ${roleFilterOptions}
+            </select>
+            <select id="user-mgmt-status-filter" class="user-mgmt-select" aria-label="Filter berdasarkan status">
+              <option value="all" ${userMgmtState.status === "all" ? "selected" : ""}>Semua Status</option>
+              <option value="active" ${userMgmtState.status === "active" ? "selected" : ""}>Aktif</option>
+              <option value="inactive" ${userMgmtState.status === "inactive" ? "selected" : ""}>Nonaktif</option>
+              <option value="locked" ${userMgmtState.status === "locked" ? "selected" : ""}>Terkunci (Brute-force)</option>
+            </select>
+          </div>
+          <div>
+            <button type="button" class="button secondary compact" id="user-mgmt-refresh-btn" title="Muat ulang data pengguna">
+              ↻ Refresh
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive" style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;margin:0;border:none;">
+            <thead>
+              <tr>
+                <th style="min-width:220px;">Pengguna</th>
+                <th style="min-width:200px;">Kontak & Departemen</th>
+                <th style="min-width:140px;">Role Akses</th>
+                <th style="min-width:120px;">Status</th>
+                <th style="min-width:160px;">Terakhir Login</th>
+                <th style="min-width:160px;text-align:right;">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="user-mgmt-tbody">
+              ${renderUserManagementRowsHtml()}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function openUserModal(userId = null) {
+  const modal = document.getElementById("user-modal");
+  const form = document.getElementById("user-modal-form");
+  if (!modal || !form) return;
+
+  const idInput = document.getElementById("user-form-id");
+  const usernameInput = document.getElementById("user-form-username");
+  const displayNameInput = document.getElementById("user-form-display-name");
+  const emailInput = document.getElementById("user-form-email");
+  const departmentInput = document.getElementById("user-form-department");
+  const roleSelect = document.getElementById("user-form-role");
+  const activeCheckbox = document.getElementById("user-form-active");
+  const passwordInput = document.getElementById("user-form-password");
+  const titleEl = document.getElementById("user-modal-title");
+  const badgeEl = document.getElementById("user-modal-badge");
+  const passLabel = document.getElementById("user-form-password-label");
+  const passStar = document.getElementById("user-form-password-star");
+  const passHint = document.getElementById("user-form-password-hint");
+  const submitBtn = document.getElementById("user-modal-submit");
+
+  // Populate roles in select
+  if (roleSelect) {
+    roleSelect.innerHTML = rbacState.roles
+      .map((r) => `<option value="${escapeHtml(r.role_code)}">${escapeHtml(r.role_name)} (${escapeHtml(r.role_code)})</option>`)
+      .join("");
+  }
+
+  if (userId) {
+    const user = rbacState.users.find((u) => String(u.user_id) === String(userId));
+    if (!user) {
+      showToast("User tidak ditemukan", "Data pengguna tidak ditemukan dalam memori.");
+      return;
+    }
+    if (idInput) idInput.value = user.user_id;
+    if (titleEl) titleEl.textContent = `Edit Pengguna: ${user.display_name || user.username}`;
+    if (badgeEl) badgeEl.textContent = "Edit Akun";
+    if (usernameInput) {
+      usernameInput.value = user.username;
+      usernameInput.disabled = true;
+    }
+    if (displayNameInput) displayNameInput.value = user.display_name || "";
+    if (emailInput) emailInput.value = user.email || "";
+    if (departmentInput) departmentInput.value = user.department || "";
+    if (roleSelect) roleSelect.value = user.role_code;
+    if (activeCheckbox) activeCheckbox.checked = Boolean(user.active);
+    if (passwordInput) {
+      passwordInput.value = "";
+      passwordInput.required = false;
+    }
+    if (passLabel) passLabel.textContent = "Ubah Password (Opsional)";
+    if (passStar) passStar.hidden = true;
+    if (passHint) passHint.textContent = "Biarkan kosong jika tidak ingin mengubah password. Minimal 12 karakter jika diisi.";
+    if (submitBtn) submitBtn.textContent = "Simpan Perubahan";
+  } else {
+    if (idInput) idInput.value = "";
+    if (titleEl) titleEl.textContent = "Tambah Pengguna Baru";
+    if (badgeEl) badgeEl.textContent = "User Administration";
+    if (usernameInput) {
+      usernameInput.value = "";
+      usernameInput.disabled = false;
+    }
+    if (displayNameInput) displayNameInput.value = "";
+    if (emailInput) emailInput.value = "";
+    if (departmentInput) departmentInput.value = "Digital Automation";
+    if (roleSelect && roleSelect.options.length) roleSelect.selectedIndex = 0;
+    if (activeCheckbox) activeCheckbox.checked = true;
+    if (passwordInput) {
+      passwordInput.value = "";
+      passwordInput.required = true;
+    }
+    if (passLabel) passLabel.textContent = "Password";
+    if (passStar) passStar.hidden = false;
+    if (passHint) passHint.textContent = "Minimal 12 karakter. Disarankan kombinasi huruf, angka, dan simbol.";
+    if (submitBtn) submitBtn.textContent = "Buat Pengguna";
+  }
+
+  modal.hidden = false;
+  window.requestAnimationFrame(() => {
+    (userId ? displayNameInput : usernameInput)?.focus();
+  });
+}
+
+function closeUserModal() {
+  const modal = document.getElementById("user-modal");
+  if (modal) modal.hidden = true;
+  const form = document.getElementById("user-modal-form");
+  if (form) form.reset();
+}
+
+async function handleUserFormSubmit(event) {
+  event.preventDefault();
+  const id = document.getElementById("user-form-id")?.value?.trim();
+  const username = document.getElementById("user-form-username")?.value?.trim().toLowerCase();
+  const displayName = document.getElementById("user-form-display-name")?.value?.trim();
+  const email = document.getElementById("user-form-email")?.value?.trim() || null;
+  const department = document.getElementById("user-form-department")?.value?.trim() || null;
+  const roleCode = document.getElementById("user-form-role")?.value?.trim();
+  const active = document.getElementById("user-form-active")?.checked;
+  const password = document.getElementById("user-form-password")?.value || "";
+
+  if (!displayName) {
+    showToast("Validasi Gagal", "Nama lengkap wajib diisi.");
+    return;
+  }
+
+  const submitBtn = document.getElementById("user-modal-submit");
+  if (submitBtn) submitBtn.disabled = true;
+
+  try {
+    if (!id) {
+      // Create user
+      if (!username) throw new Error("Username wajib diisi.");
+      if (!password) throw new Error("Password wajib diisi.");
+      if (password.length < 12) throw new Error("Password minimal harus 12 karakter.");
+
+      const res = await fetch("/api/v1/rbac/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          password,
+          display_name: displayName,
+          email,
+          department,
+          role_code: roleCode,
+          active,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Gagal membuat pengguna baru.");
+
+      showToast("Pengguna Dibuat", data.message || `Pengguna ${username} berhasil dibuat.`);
+      closeUserModal();
+      await loadRbacUsers();
+    } else {
+      // Update user
+      if (password && password.length < 12) {
+        throw new Error("Password baru minimal harus 12 karakter.");
+      }
+
+      const body = {
+        display_name: displayName,
+        email,
+        department,
+        role_code: roleCode,
+        active,
+      };
+      if (password) body.new_password = password;
+
+      const res = await fetch(`/api/v1/rbac/users/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Gagal memperbarui pengguna.");
+
+      showToast("Pengguna Diperbarui", data.message || "Data pengguna berhasil disimpan.");
+      closeUserModal();
+      await loadRbacUsers();
+
+      // If updating the currently logged-in admin user
+      if (authentication.user && String(authentication.user.userId) === String(id)) {
+        authentication.user.displayName = displayName;
+        authentication.user.department = department;
+        authentication.user.role = roleCode;
+        const currentRoleObj = rbacState.roles.find((r) => r.role_code === roleCode);
+        if (currentRoleObj) authentication.user.allowedMenus = currentRoleObj.menus;
+        applyAuthenticatedUser(authentication.user);
+      }
+    }
+  } catch (err) {
+    showToast("Gagal Menyimpan", err instanceof Error ? err.message : "Terjadi kesalahan.");
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+async function deleteUserAccount(userId, username) {
+  if (authentication.user && String(authentication.user.userId) === String(userId)) {
+    showToast("Aksi Ditolak", "Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif.");
+    return;
+  }
+  const confirmed = window.confirm(`Apakah Anda yakin ingin menghapus akun pengguna "${username}"?\nTindakan ini permanen dan tidak dapat dibatalkan.`);
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`/api/v1/rbac/users/${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "Gagal menghapus pengguna.");
+
+    showToast("Pengguna Dihapus", data.message || `Akun ${username} berhasil dihapus.`);
+    await loadRbacUsers();
+  } catch (err) {
+    showToast("Gagal Menghapus", err instanceof Error ? err.message : "Terjadi kesalahan.");
+  }
+}
+
+async function unlockUserAccount(userId, username) {
+  try {
+    const res = await fetch(`/api/v1/rbac/users/${encodeURIComponent(userId)}/unlock`, {
+      method: "POST",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || "Gagal membuka kunci akun.");
+
+    showToast("Kunci Dibuka", data.message || `Akun ${username} berhasil dibuka kuncinya.`);
+    await loadRbacUsers();
+  } catch (err) {
+    showToast("Gagal Membuka Kunci", err instanceof Error ? err.message : "Terjadi kesalahan.");
+  }
+}
+
+function bindUserManagementPageEvents() {
+  document.getElementById("user-mgmt-search-input")?.addEventListener("input", (e) => {
+    userMgmtState.search = e.target.value;
+    const tbody = document.getElementById("user-mgmt-tbody");
+    if (tbody) tbody.innerHTML = renderUserManagementRowsHtml();
+  });
+
+  document.getElementById("user-mgmt-role-filter")?.addEventListener("change", (e) => {
+    userMgmtState.role = e.target.value;
+    const tbody = document.getElementById("user-mgmt-tbody");
+    if (tbody) tbody.innerHTML = renderUserManagementRowsHtml();
+  });
+
+  document.getElementById("user-mgmt-status-filter")?.addEventListener("change", (e) => {
+    userMgmtState.status = e.target.value;
+    const tbody = document.getElementById("user-mgmt-tbody");
+    if (tbody) tbody.innerHTML = renderUserManagementRowsHtml();
+  });
+
+  document.getElementById("user-mgmt-open-create")?.addEventListener("click", () => {
+    openUserModal();
+  });
+
+  document.getElementById("user-mgmt-refresh-btn")?.addEventListener("click", () => {
+    void loadRbacUsers();
+    void loadRbacData();
+  });
+
+  document.getElementById("user-mgmt-tbody")?.addEventListener("click", (event) => {
+    const editBtn = event.target.closest("[data-edit-user]");
+    if (editBtn) {
+      openUserModal(editBtn.dataset.editUser);
+      return;
+    }
+    const unlockBtn = event.target.closest("[data-unlock-user]");
+    if (unlockBtn) {
+      void unlockUserAccount(unlockBtn.dataset.unlockUser, unlockBtn.dataset.username);
+      return;
+    }
+    const deleteBtn = event.target.closest("[data-delete-user]");
+    if (deleteBtn) {
+      void deleteUserAccount(deleteBtn.dataset.deleteUser, deleteBtn.dataset.username);
+      return;
+    }
+  });
+
+  if (!rbacState.roles.length) void loadRbacData();
+  if (!rbacState.users.length) void loadRbacUsers();
+}
+
+document.getElementById("admin-rbac-button")?.addEventListener("click", () => {
+  const sessionMenu = document.getElementById("user-session-menu");
+  if (sessionMenu) sessionMenu.hidden = true;
+  navigate("roles");
+});
+
+document.getElementById("admin-users-button")?.addEventListener("click", () => {
+  const sessionMenu = document.getElementById("user-session-menu");
+  if (sessionMenu) sessionMenu.hidden = true;
+  navigate("users");
+});
+
+document.getElementById("user-modal-close")?.addEventListener("click", closeUserModal);
+document.getElementById("user-modal-cancel")?.addEventListener("click", closeUserModal);
+document.getElementById("user-modal-form")?.addEventListener("submit", handleUserFormSubmit);
+document.getElementById("user-modal")?.addEventListener("click", (event) => {
+  if (event.target === document.getElementById("user-modal")) {
+    closeUserModal();
+  }
+});
+
+window.addEventListener("hashchange", () => {
+  const page = getPageFromUrl();
+  if (page && page !== state.page) {
+    navigate(page, { replaceState: true });
+  }
 });
 
 void initializeAuthentication();

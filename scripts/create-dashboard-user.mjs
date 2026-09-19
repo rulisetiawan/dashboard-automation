@@ -11,7 +11,7 @@ const role = String(args.role || "ADMIN").trim().toUpperCase();
 const password = String(process.env.DASHBOARD_USER_PASSWORD || "");
 if (!/^[a-z0-9._-]{3,80}$/.test(username)) throw new Error("Username harus 3–80 karakter: huruf kecil, angka, titik, underscore, atau dash.");
 if (!displayName || displayName.length > 160) throw new Error("Display name wajib dan maksimal 160 karakter.");
-if (!["ADMIN", "ENGINEER", "SUPERVISOR", "OPERATOR", "VIEWER"].includes(role)) throw new Error("Role tidak valid.");
+if (!["ADMIN", "ENGINEER", "SUPERVISOR", "PRODUCTION", "OPERATOR", "WWTP", "VIEWER"].includes(role)) throw new Error("Role tidak valid.");
 if (password.length < 12 || password.length > 128) throw new Error("DASHBOARD_USER_PASSWORD harus 12–128 karakter.");
 
 const salt = randomBytes(32);
