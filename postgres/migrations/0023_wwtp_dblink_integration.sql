@@ -59,27 +59,32 @@ EXCEPTION
     RAISE NOTICE 'Import foreign schema notice: %', SQLERRM;
 END $$;
 
--- Buat view pembantu di schema public untuk query yang lebih praktis
-CREATE OR REPLACE VIEW wwtp_sensor_realtime_values AS
-SELECT * FROM wwtp.sensor_realtime_values;
-
-CREATE OR REPLACE VIEW wwtp_asset_sensor_master AS
-SELECT * FROM wwtp.asset_sensor_master;
-
-CREATE OR REPLACE VIEW wwtp_manual_control_logs AS
-SELECT * FROM wwtp.manual_control_logs;
-
-CREATE OR REPLACE VIEW wwtp_equipment_master AS
-SELECT * FROM wwtp.equipment_master;
-
-CREATE OR REPLACE VIEW wwtp_equipment_control_state AS
-SELECT * FROM wwtp.equipment_control_state;
-
-CREATE OR REPLACE VIEW wwtp_sensor_daily_summary AS
-SELECT * FROM wwtp.sensor_daily_summary;
-
-CREATE OR REPLACE VIEW wwtp_sensor_history_minute AS
-SELECT * FROM wwtp.sensor_history_minute;
-
-CREATE OR REPLACE VIEW wwtp_sensor_readings AS
-SELECT * FROM wwtp.ipal_sensor_readings;
+-- Buat view pembantu hanya ketika foreign table sumber berhasil di-import.
+-- Database IPAL boleh belum tersedia tanpa menghalangi migration dashboard lain.
+DO $$
+DECLARE
+  mapping RECORD;
+BEGIN
+  FOR mapping IN
+    SELECT * FROM (VALUES
+      ('sensor_realtime_values', 'wwtp_sensor_realtime_values'),
+      ('asset_sensor_master', 'wwtp_asset_sensor_master'),
+      ('manual_control_logs', 'wwtp_manual_control_logs'),
+      ('equipment_master', 'wwtp_equipment_master'),
+      ('equipment_control_state', 'wwtp_equipment_control_state'),
+      ('sensor_daily_summary', 'wwtp_sensor_daily_summary'),
+      ('sensor_history_minute', 'wwtp_sensor_history_minute'),
+      ('ipal_sensor_readings', 'wwtp_sensor_readings')
+    ) AS entries(source_name, view_name)
+  LOOP
+    IF to_regclass(format('wwtp.%I', mapping.source_name)) IS NOT NULL THEN
+      EXECUTE format(
+        'CREATE OR REPLACE VIEW public.%I AS SELECT * FROM wwtp.%I',
+        mapping.view_name,
+        mapping.source_name
+      );
+    ELSE
+      RAISE NOTICE 'WWTP source %.% belum tersedia; view % belum dibuat.', 'wwtp', mapping.source_name, mapping.view_name;
+    END IF;
+  END LOOP;
+END $$;

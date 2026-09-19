@@ -5,7 +5,8 @@ type ShiftCode = "A" | "B" | "C";
 
 const jakartaOffsetMs = 7 * 60 * 60 * 1000;
 const shiftHours: Record<ShiftCode, number> = { A: 7, B: 15, C: 23 };
-const validProcesses = new Set(["jetflow", "calator", "dryer", "kalender"]);
+const productionProcesses = ["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam"];
+const validProcesses = new Set(productionProcesses);
 
 function jakartaParts(date: Date) {
   const local = new Date(date.getTime() + jakartaOffsetMs);
@@ -60,7 +61,7 @@ export class ProductionOutputController {
     @Query("process_type") rawProcessType = "kalender",
   ) {
     const processType = rawProcessType.toLowerCase();
-    if (!validProcesses.has(processType)) throw new BadRequestException("process_type harus jetflow, calator, dryer, atau kalender.");
+    if (!validProcesses.has(processType)) throw new BadRequestException(`process_type harus salah satu dari: ${productionProcesses.join(", ")}.`);
     const range = productionShiftRange(new Date(), productionDate, shiftCode);
     const result = await this.database.query(`
       WITH ranked_runs AS (
@@ -71,7 +72,7 @@ export class ProductionOutputController {
             ORDER BY r.source_updated_at DESC NULLS LAST, r.updated_at DESC, r.started_at DESC NULLS LAST
           ) AS latest_rank
         FROM batch_process_run r
-        WHERE LOWER(r.process_type) IN ('jetflow', 'calator', 'dryer', 'kalender')
+        WHERE LOWER(r.process_type) = ANY($3::text[])
       ), scoped_runs AS (
         SELECT
           r.process_run_id,
@@ -171,7 +172,7 @@ export class ProductionOutputController {
         ON speed.process_run_id = run.process_run_id
        AND speed.candidate_rank = 1
       ORDER BY run.process_type, run.started_at DESC, run.batch_no
-    `, [range.from, range.to]);
+    `, [range.from, range.to, productionProcesses]);
 
     const grouped = new Map<string, any>();
     for (const row of result.rows) {
@@ -226,7 +227,7 @@ export class ProductionOutputController {
       assets: [...batch.assets],
     })).sort((left, right) => Number(right.effective_value || 0) - Number(left.effective_value || 0));
     const batches = allBatches.filter((batch) => batch.process_type === processType);
-    const processTotals = ["jetflow", "calator", "dryer", "kalender"].map((type) => {
+    const processTotals = productionProcesses.map((type) => {
       const processBatches = allBatches.filter((batch) => batch.process_type === type);
       return {
         process_type: type,

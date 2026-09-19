@@ -4,6 +4,19 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 
 ---
 
+## Dashboard V2.32 / Finishing Line V1.0 — 19 September 2026
+
+**Status:** Continuous, Inspecting, Finishing, dan Setting Dongnam implemented
+
+- Empat menu Operations baru untuk 21 mesin: Continuous 4, Inspecting 12, Finishing 1, dan Setting Dongnam 4.
+- Migration `0024_finishing_machine_registry.sql` mendaftarkan asset, snapshot offline/no-data, heartbeat, dan canonical commissioning tags.
+- Continuous memprioritaskan chemical consumption, temperature Zone 01–04, dan pressure Roll Padder 01–03.
+- Inspecting memantau speed, runtime, output, defect, quality grade, dan kesiapan integrasi kamera.
+- Finishing memantau speed, runtime, output, temperature, dan process pressure.
+- Setting Dongnam memantau speed, runtime, output, temperature Zone 01–04, fabric width, dan overfeed.
+- Production Output by Batch mendukung keempat proses baru.
+- Total master asset menjadi 160, terdiri dari 155 mesin proses dan 5 dispensing Calator.
+
 ## Dashboard V2.31 / Solar Fueling V1.4 — 2 September 2026
 
 **Status:** QR status summary and cursor-driven consumption trend

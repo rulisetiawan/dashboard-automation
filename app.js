@@ -27,6 +27,10 @@ const state = {
     calator: "CL-DPN-01",
     dryer: "DR-DPN-01",
     kalender: "KL-DPN-01",
+    continuous: "CT-FIN-01",
+    inspecting: "INSP-FIN-01",
+    finishing: "FIN-FIN-01",
+    setting_dongnam: "SD-FIN-01",
     chemical: "DSP-DPN-01",
   },
   drill: {
@@ -34,6 +38,10 @@ const state = {
     calator: { area: null, machine: null },
     dryer: { area: null, machine: null },
     kalender: { area: null, machine: null },
+    continuous: { area: null, machine: null },
+    inspecting: { area: null, machine: null },
+    finishing: { area: null, machine: null },
+    setting_dongnam: { area: null, machine: null },
     chemical: { area: null, machine: null },
   },
   range: "8H",
@@ -50,6 +58,10 @@ const state = {
       calator: "water",
       dryer: "energy",
       kalender: "steam",
+      continuous: "chemical",
+      inspecting: "output",
+      finishing: "output",
+      setting_dongnam: "output",
       chemical: "chemical",
     },
     area: {
@@ -57,6 +69,10 @@ const state = {
       calator: null,
       dryer: null,
       kalender: null,
+      continuous: null,
+      inspecting: null,
+      finishing: null,
+      setting_dongnam: null,
       chemical: null,
     },
   },
@@ -74,6 +90,10 @@ const state = {
       calator: ["overfeed_out", "dancing_roller", "feeding_speed"],
       dryer: ["line_speed", "chamber_1", "chamber_5"],
       kalender: ["temp_upper", "temp_lower", "overfeed"],
+      continuous: ["line_speed_pv", "chemical_consumption_kg", "temperature_zone_01_pv", "padder_01_pressure_pv"],
+      inspecting: ["line_speed_pv", "output_total_m", "defect_count", "camera_connected"],
+      finishing: ["line_speed_pv", "output_total_m", "temperature_zone_01_pv", "process_pressure_pv"],
+      setting_dongnam: ["line_speed_pv", "output_total_m", "temperature_zone_01_pv", "fabric_width_pv"],
       chemical: ["transfer_flow", "target_weight", "line_pressure"],
     },
   },
@@ -139,6 +159,10 @@ const state = {
     calator: { machineId: null, batch: null },
     dryer: { machineId: null, batch: null },
     kalender: { machineId: null, batch: null },
+    continuous: { machineId: null, batch: null },
+    inspecting: { machineId: null, batch: null },
+    finishing: { machineId: null, batch: null },
+    setting_dongnam: { machineId: null, batch: null },
     chemical: { machineId: null, batch: null },
   },
   alarms: {
@@ -176,8 +200,8 @@ const state = {
 };
 
 const navigationStorageKey = "pt-smm.dashboard.navigation.v2";
-const navigationPages = new Set(["overview", "jetflow", "calator", "dryer", "kalender", "utilities", "chemical", "solar", "wwtp", "alarms", "trends", "health", "roles", "users"]);
-const processNavigationPages = ["jetflow", "calator", "dryer", "kalender", "chemical"];
+const navigationPages = new Set(["overview", "jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "utilities", "chemical", "solar", "wwtp", "alarms", "trends", "health", "roles", "users"]);
+const processNavigationPages = ["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "chemical"];
 
 function getPageFromUrl() {
   const hash = String(window.location.hash || "").replace(/^#\/?/, "").split("?")[0].trim().toLowerCase();
@@ -219,7 +243,7 @@ function restoreDashboardNavigation() {
     if (/^\d{4}-\d{2}-\d{2}$/.test(saved.machineSummaryProductionDate || "")) state.machineSummary.productionDate = saved.machineSummaryProductionDate;
     if (["A", "B", "C"].includes(saved.machineSummaryShiftCode)) state.machineSummary.shiftCode = saved.machineSummaryShiftCode;
     if (["effective", "actual", "estimated"].includes(saved.productionOutput?.mode)) state.productionOutput.mode = saved.productionOutput.mode;
-    if (["jetflow", "calator", "dryer", "kalender"].includes(saved.productionOutput?.process)) state.productionOutput.process = saved.productionOutput.process;
+    if (["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam"].includes(saved.productionOutput?.process)) state.productionOutput.process = saved.productionOutput.process;
     if (/^\d{4}-\d{2}-\d{2}$/.test(saved.productionOutput?.productionDate || "")) state.productionOutput.productionDate = saved.productionOutput.productionDate;
     if (["A", "B", "C"].includes(saved.productionOutput?.shiftCode)) state.productionOutput.shiftCode = saved.productionOutput.shiftCode;
     if (typeof saved.pidPanel?.kalender === "boolean") state.pidPanel.kalender = saved.pidPanel.kalender;
@@ -345,6 +369,10 @@ const pageMeta = {
   calator: ["Calator", "Washing Process", "Multi-speed, Overfeed Out, dancing roller, chemical, dan output."],
   dryer: ["Dryer", "Drying Process", "Speed, multi-chamber temperature, thermal oil, dan output."],
   kalender: ["Kalender", "Finishing Process", "Upper-lower balance, overfeed, width, motor, dan quality context."],
+  continuous: ["Continuous", "Continuous Finishing", "Konsumsi chemical, temperature zone, pressure roll padder, speed, runtime, dan output."],
+  inspecting: ["Inspecting", "Fabric Inspection", "Speed, runtime, output, kualitas kain, defect, dan kesiapan integrasi kamera."],
+  finishing: ["Finishing", "Finishing Process", "Speed, runtime, output, temperature, dan process pressure mesin Finishing."],
+  setting_dongnam: ["Setting Dongnam", "Fabric Setting", "Speed, output, temperature zone, width, overfeed, dan runtime."],
   utilities: ["Plant Utilities", "Resource Monitoring", "Electrical, water, steam, dan thermal oil supply-to-consumer."],
   chemical: ["Chemical Processing", "Dispensing Consumption", "Konsumsi per chemical, transaksi Automatic/Manual/Emergency, dan analisis per unit."],
   solar: ["Solar Fueling", "Fuel Operations", "Distribusi solar, validasi flow meter dan totalizer, serta kesesuaian stok aktual."],
@@ -365,6 +393,10 @@ const processAreas = {
   calator: [{ code: "DPN", label: "Depan", count: 3 }, { code: "BLK", label: "Belakang", count: 9 }, { code: "TMR", label: "Timur", count: 7 }],
   dryer: [{ code: "DPN", label: "Depan", count: 1 }, { code: "BLK", label: "Belakang", count: 2 }, { code: "TMR", label: "Timur", count: 3 }],
   kalender: [{ code: "DPN", label: "Depan", count: 7 }, { code: "BLK", label: "Belakang", count: 7 }, { code: "TMR", label: "Timur", count: 7 }],
+  continuous: [{ code: "FIN", label: "Finishing", count: 4 }],
+  inspecting: [{ code: "FIN", label: "Finishing", count: 12 }],
+  finishing: [{ code: "FIN", label: "Finishing", count: 1 }],
+  setting_dongnam: [{ code: "FIN", label: "Finishing", count: 4 }],
   chemical: [{ code: "DPN", label: "Depan", count: 1 }, { code: "BLK", label: "Belakang", count: 2 }, { code: "TMR", label: "Timur", count: 2 }],
 };
 
@@ -373,6 +405,10 @@ const processConfig = {
   calator: { code: "CL", singular: "Calator", plural: "Calator", process: "Pencucian", areas: "3 areas" },
   dryer: { code: "DR", singular: "Dryer", plural: "Dryer", process: "Pengeringan", areas: "3 areas" },
   kalender: { code: "KL", singular: "Kalender", plural: "Kalender", process: "Finishing", areas: "3 areas" },
+  continuous: { code: "CT", singular: "Continuous", plural: "Continuous", process: "Continuous finishing", areas: "1 area" },
+  inspecting: { code: "INSP", singular: "Inspecting", plural: "Inspecting", process: "Fabric inspection", areas: "1 area" },
+  finishing: { code: "FIN", singular: "Finishing", plural: "Finishing", process: "Final finishing", areas: "1 area" },
+  setting_dongnam: { code: "SD", singular: "Setting Dongnam", plural: "Setting Dongnam", process: "Fabric setting", areas: "1 area" },
   chemical: { code: "DSP", singular: "Dispensing", plural: "Dispensing Calator", process: "Chemical transfer", areas: "3 areas" },
 };
 
@@ -484,6 +520,10 @@ const jetflows = [];
 const calators = [];
 const dryers = [];
 const kalenders = [];
+const continuousMachines = [];
+const inspectingMachines = [];
+const finishingMachines = [];
+const settingDongnamMachines = [];
 const dispensers = [];
 const alarms = [];
 const downtimeRecords = [];
@@ -812,7 +852,7 @@ function hydrateChemicalTransactions(rows) {
   })));
 }
 
-const backendProcesses = ["jetflow", "calator", "dryer", "kalender", "chemical"];
+const backendProcesses = ["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "chemical"];
 
 async function fetchJson(url, label) {
   const response = await fetch(url, { cache: "no-store" });
@@ -1075,7 +1115,17 @@ async function refreshAssetFleets() {
     process,
     await fetchJson(`/api/v1/assets?process=${process}`, `Asset API ${process}`),
   ]));
-  const targetFleet = { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers };
+  const targetFleet = {
+    jetflow: jetflows,
+    calator: calators,
+    dryer: dryers,
+    kalender: kalenders,
+    continuous: continuousMachines,
+    inspecting: inspectingMachines,
+    finishing: finishingMachines,
+    setting_dongnam: settingDongnamMachines,
+    chemical: dispensers,
+  };
   payloads.forEach(([process, payload]) => targetFleet[process].splice(0, targetFleet[process].length, ...(payload.assets || [])));
 }
 
@@ -1215,7 +1265,7 @@ function realtimeSourcesAffectCurrentPage(sources, refreshAll = false) {
     telemetry: new Set(["telemetry_sample"]),
   };
   const matches = (...groups) => groups.some((group) => [...sourceGroups[group]].some((source) => sources.has(source)));
-  if (["jetflow", "calator", "dryer", "kalender"].includes(state.page)) return matches("asset", "batch", "alarm", "equipment");
+  if (["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam"].includes(state.page)) return matches("asset", "batch", "alarm", "equipment");
   if (state.page === "chemical") return matches("asset", "chemical", "alarm");
   if (state.page === "solar") return matches("solar");
   if (state.page === "utilities") return matches("utility", "asset");
@@ -1953,7 +2003,7 @@ function batchAbnormalLog(type, machine) {
 function sensorTrendSeries(type, sensor, batch) {
   const count = { "1H": 36, "8H": 48, "24H": 60 }[state.sensorTrend.range] || 36;
   const span = { "1H": 60, "8H": 8 * 60, "24H": 24 * 60 }[state.sensorTrend.range] * 60 * 1000;
-  const typePhase = ["jetflow", "calator", "dryer", "kalender", "chemical"].indexOf(type) * 0.43;
+  const typePhase = ["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "chemical"].indexOf(type) * 0.43;
   const seed = batchSeed(batch);
   const keyPhase = sensor.key.length * 0.17 + seed % 19 * 0.07;
   const batchEnd = new Date("2026-08-14T14:00:00+07:00").getTime() - seed % 96 * 30 * 60 * 1000;
@@ -2237,7 +2287,17 @@ function alarmRow(a) {
 }
 
 function fleetFor(type) {
-  return { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers }[type] || [];
+  return {
+    jetflow: jetflows,
+    calator: calators,
+    dryer: dryers,
+    kalender: kalenders,
+    continuous: continuousMachines,
+    inspecting: inspectingMachines,
+    finishing: finishingMachines,
+    setting_dongnam: settingDongnamMachines,
+    chemical: dispensers,
+  }[type] || [];
 }
 
 function processBreadcrumb(type, machine = null) {
@@ -2288,6 +2348,40 @@ const managementConfig = {
     metrics: {
       steam: { label: "Steam Consumption", short: "Steam", unit: "ton", rate: 0.16 },
       energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 21 },
+    },
+  },
+  continuous: {
+    currentUtility: { label: "Chemical Consumption Now", value: 0, unit: "kg" },
+    output: { label: "Fabric Output", unit: "m", rate: 300 },
+    metrics: {
+      chemical: { label: "Chemical Consumption", short: "Chemical", unit: "kg", rate: 12 },
+      output: { label: "Production Output", short: "Output", unit: "m", rate: 300 },
+      energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 24 },
+    },
+  },
+  inspecting: {
+    currentUtility: { label: "Inspection Speed Now", value: 0, unit: "m/min" },
+    output: { label: "Inspected Fabric", unit: "m", rate: 380 },
+    metrics: {
+      output: { label: "Inspected Output", short: "Output", unit: "m", rate: 380 },
+      defect: { label: "Detected Defects", short: "Defect", unit: "count", rate: 0.5 },
+      energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 8 },
+    },
+  },
+  finishing: {
+    currentUtility: { label: "Line Speed Now", value: 0, unit: "m/min" },
+    output: { label: "Fabric Output", unit: "m", rate: 300 },
+    metrics: {
+      output: { label: "Production Output", short: "Output", unit: "m", rate: 300 },
+      energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 18 },
+    },
+  },
+  setting_dongnam: {
+    currentUtility: { label: "Line Speed Now", value: 0, unit: "m/min" },
+    output: { label: "Fabric Output", unit: "m", rate: 320 },
+    metrics: {
+      output: { label: "Production Output", short: "Output", unit: "m", rate: 320 },
+      energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 28 },
     },
   },
   chemical: {
@@ -3702,7 +3796,17 @@ function actualUtilityKpi(utilities) {
 }
 
 function actualFleet() {
-  return [...jetflows, ...calators, ...dryers, ...kalenders, ...dispensers];
+  return [
+    ...jetflows,
+    ...calators,
+    ...dryers,
+    ...kalenders,
+    ...continuousMachines,
+    ...inspectingMachines,
+    ...finishingMachines,
+    ...settingDongnamMachines,
+    ...dispensers,
+  ];
 }
 
 function actualEmpty(label = "Belum ada data aktual") {
@@ -4168,7 +4272,7 @@ function actualOverviewPage() {
 }
 
 function actualProcessPage(type) {
-  const assets = { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers }[type] || [];
+  const assets = fleetFor(type);
   return `${pageHead(type, `<span class="range-badge">LIVE DATA</span>`)}
     ${panel(`${processConfig[type].plural} registered`, "Current machine status", actualAssetTable(assets))}
     ${panel("Live sensor measurements", "Latest validated measurements", actualSensorValues(assets))}
@@ -5662,7 +5766,16 @@ function productionOutputDonutMarkup(items, unit) {
 
 function productionOutputControls() {
   const config = state.productionOutput;
-  const processOptions = [["kalender", "Kalender · Final"], ["dryer", "Dryer"], ["calator", "Calator"], ["jetflow", "Jetflow"]];
+  const processOptions = [
+    ["kalender", "Kalender"],
+    ["continuous", "Continuous"],
+    ["inspecting", "Inspecting"],
+    ["finishing", "Finishing"],
+    ["setting_dongnam", "Setting Dongnam · Final"],
+    ["dryer", "Dryer"],
+    ["calator", "Calator"],
+    ["jetflow", "Jetflow"],
+  ];
   const shiftOptions = [["A", "A · 07–15"], ["B", "B · 15–23"], ["C", "C · 23–07"]];
   return `<div class="production-output-toolbar">
     <div class="segmented production-output-modes" aria-label="Production output source mode">
@@ -5734,6 +5847,10 @@ const actualProcessMetricConfig = {
   calator: { label: "Production Output", unit: "m", keys: ["output_total_m"] },
   dryer: { label: "Production Output", unit: "m", keys: ["output_total_m"] },
   kalender: { label: "Production Output", unit: "m", keys: ["output_total_m"] },
+  continuous: { label: "Chemical Consumption", unit: "kg", keys: ["chemical_consumption_kg", "chemical_consumption_total_kg"] },
+  inspecting: { label: "Inspected Output", unit: "m", keys: ["output_total_m"] },
+  finishing: { label: "Production Output", unit: "m", keys: ["output_total_m"] },
+  setting_dongnam: { label: "Production Output", unit: "m", keys: ["output_total_m"] },
   chemical: { label: "Chemical Delivered", unit: "kg", keys: [] },
 };
 
@@ -5768,6 +5885,42 @@ function actualProcessResourcePanels(type) {
   return `<section class="management-analysis-grid">${breakdown}${rankingPanel}</section>`;
 }
 
+const finishingMonitoringScopes = {
+  continuous: [
+    ["CH", "Chemical consumption", "Total dan konsumsi Chemical 01–04 dalam kg"],
+    ["TP", "Temperature zones", "Monitoring temperatur Zone 01–04"],
+    ["PR", "Roll padder pressure", "Pressure Padder 01–03 dalam bar"],
+    ["OP", "Production", "Speed, runtime, dan output kain"],
+  ],
+  inspecting: [
+    ["SP", "Inspection speed", "Kecepatan buka dan inspeksi kain"],
+    ["RT", "Runtime & output", "Waktu operasi dan panjang kain diperiksa"],
+    ["QC", "Fabric quality", "Jumlah, panjang, tipe, dan posisi defect"],
+    ["AI", "Camera readiness", "Status kamera dan inspeksi otomatis terencana"],
+  ],
+  finishing: [
+    ["SP", "Line speed", "Kecepatan proses aktual"],
+    ["RT", "Runtime", "Akumulasi waktu operasi mesin"],
+    ["OUT", "Production output", "Total panjang kain hasil proses"],
+    ["TP", "Process condition", "Temperature zone dan pressure proses"],
+  ],
+  setting_dongnam: [
+    ["SP", "Line speed", "Kecepatan setting kain"],
+    ["OUT", "Production output", "Total hasil kain dalam meter"],
+    ["TP", "Temperature zones", "Monitoring temperatur Zone 01–04"],
+    ["FB", "Fabric condition", "Lebar kain dan overfeed aktual"],
+  ],
+};
+
+function finishingMonitoringScope(type) {
+  const items = finishingMonitoringScopes[type];
+  if (!items) return "";
+  return `<section class="card finishing-monitoring-scope">
+    <div class="finishing-monitoring-head"><div><span class="eyebrow">Monitoring scope</span><h2>Parameter Utama</h2><p>Tag sudah didaftarkan dan akan menampilkan nilai aktual setelah mapping PLC, meter, atau kamera selesai.</p></div><span class="data-pill neutral">PENDING MAPPING</span></div>
+    <div class="finishing-monitoring-grid">${items.map(([icon, title, detail]) => `<article><span>${actualText(icon)}</span><div><strong>${actualText(title)}</strong><small>${actualText(detail)}</small></div></article>`).join("")}</div>
+  </section>`;
+}
+
 function databaseOverviewPage() {
   const assets = actualFleet();
   const running = assets.filter((asset) => asset.state === "running").length;
@@ -5783,7 +5936,7 @@ function databaseOverviewPage() {
     { key: "fault", label: "Fault", value: assets.filter((asset) => asset.state === "fault").length },
     { key: "offline", label: "Offline", value: assets.filter((asset) => asset.state === "offline").length },
   ].filter((item) => item.value > 0);
-  const processFlow = ["jetflow", "calator", "dryer", "kalender"].map((type) => {
+  const processFlow = ["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam"].map((type) => {
     const fleet = fleetFor(type);
     return processNode(processConfig[type].plural, `${fleet.length} asset terdaftar`, type, statusCount(fleet, "running"), statusCount(fleet, "warning"), statusCount(fleet, "fault"));
   }).join("");
@@ -5832,6 +5985,7 @@ function databaseFleetPage(type) {
   return `
     ${pageHead(type)}
     <section class="fleet-summary card"><div><span class="eyebrow">${actualText(processConfig[type].process)}</span><h2>${actualText(processConfig[type].plural)} Fleet Overview</h2><p>Pilih area untuk membuka asset dan detail sensor/motor aktual.</p></div><div class="fleet-total"><strong>${fleet.length}</strong><span>Total assets</span></div></section>
+    ${finishingMonitoringScope(type)}
     <section class="management-kpi-grid live-grid">
       ${actualMetric("Machines running", statusCount(fleet, "running"), "asset", "Operating now")}
       ${actualMetric("Warnings", statusCount(fleet, "warning"), "asset", "Review required")}
@@ -6081,7 +6235,7 @@ function databaseDashboardPage() {
   if (state.page === "chemical") return actualChemicalPage();
   if (state.page === "solar") return actualSolarPage();
   if (state.page === "wwtp") return actualWwtpPage();
-  if (["jetflow", "calator", "dryer", "kalender"].includes(state.page)) return databaseProcessPage(state.page);
+  if (["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam"].includes(state.page)) return databaseProcessPage(state.page);
   if (state.page === "utilities") return actualUtilitiesPage();
   if (state.page === "alarms") return actualAlarmsPage();
   if (state.page === "trends") return actualTrendsPage();
@@ -6094,7 +6248,7 @@ function actualDataPage() {
   if (state.page === "roles") return rolePermissionPage();
   if (state.page === "users") return userManagementPage();
   if (state.page === "overview") return actualOverviewPage();
-  if (["jetflow", "calator", "dryer", "kalender"].includes(state.page)) return actualProcessPage(state.page);
+  if (["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam"].includes(state.page)) return actualProcessPage(state.page);
   if (state.page === "utilities") return actualUtilitiesPage();
   if (state.page === "chemical") return actualChemicalPage();
   if (state.page === "solar") return actualSolarPage();
@@ -6106,7 +6260,17 @@ function actualDataPage() {
 }
 
 function updateNavigationCounts() {
-  const fleets = { jetflow: jetflows, calator: calators, dryer: dryers, kalender: kalenders, chemical: dispensers };
+  const fleets = {
+    jetflow: jetflows,
+    calator: calators,
+    dryer: dryers,
+    kalender: kalenders,
+    continuous: continuousMachines,
+    inspecting: inspectingMachines,
+    finishing: finishingMachines,
+    setting_dongnam: settingDongnamMachines,
+    chemical: dispensers,
+  };
   Object.entries(fleets).forEach(([page, fleet]) => {
     const count = document.querySelector(`.nav-item[data-page="${page}"] .nav-count`);
     if (count) count.textContent = fleet.length;
