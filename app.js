@@ -992,6 +992,20 @@ function renderWwtpView({ preserveScroll = true } = {}) {
   } else {
     container.innerHTML = wwtpSummaryView(data);
   }
+
+  // Synchronize toolbar label and active button state
+  const range = wwtpRange();
+  const rangeLabel = state.wwtp.range === "TODAY"
+    ? `Hari ini · 00:00 — ${actualTime(range.to)}`
+    : state.wwtp.range === "CUSTOM"
+      ? `${actualTime(range.from)} — ${actualTime(range.to)}`
+      : `${state.wwtp.range} rolling window (${actualTime(range.from)} — ${actualTime(range.to)})`;
+  const labelEl = document.querySelector("[data-wwtp-range-label]");
+  if (labelEl) labelEl.textContent = rangeLabel;
+
+  document.querySelectorAll("[data-wwtp-range]").forEach((btn) => {
+    btn.className = `button small ${state.wwtp.range === btn.dataset.wwtpRange ? "primary" : "ghost"}`;
+  });
 }
 
 function updateWwtpBackground() {
@@ -1007,6 +1021,7 @@ function invalidateWwtp() {
   wwtpData.key = null;
   wwtpData.requestId += 1;
   wwtpData.loading = false;
+  wwtpData.data = null;
 }
 
 function productionOutputRequestKey() {
@@ -4406,9 +4421,14 @@ function wwtpRangeToolbar() {
   const buttons = [["TODAY","Hari ini"],["7D","7 Hari"],["30D","30 Hari"],["CUSTOM","Custom"]].map(([value,label]) =>
     `<button class="button small ${state.wwtp.range === value ? "primary" : "ghost"}" data-wwtp-range="${value}">${label}</button>`
   ).join("");
-  const rangeLabel = state.wwtp.range === "TODAY" ? `Hari ini · 00:00 — ${actualTime(wwtpRange().to)}` : state.wwtp.range === "CUSTOM" ? `${actualTime(wwtpRange().from)} — ${actualTime(wwtpRange().to)}` : `${state.wwtp.range} rolling window`;
+  const range = wwtpRange();
+  const rangeLabel = state.wwtp.range === "TODAY"
+    ? `Hari ini · 00:00 — ${actualTime(range.to)}`
+    : state.wwtp.range === "CUSTOM"
+      ? `${actualTime(range.from)} — ${actualTime(range.to)}`
+      : `${state.wwtp.range} rolling window (${actualTime(range.from)} — ${actualTime(range.to)})`;
   return `<section class="card wwtp-toolbar">
-    <div><span class="eyebrow">RENTANG ANALISIS IPAL</span><strong>${actualText(rangeLabel)}</strong></div>
+    <div><span class="eyebrow">RENTANG ANALISIS IPAL</span><strong data-wwtp-range-label>${actualText(rangeLabel)}</strong></div>
     <div class="wwtp-range-actions">${buttons}</div>
     ${state.wwtp.range === "CUSTOM" ? `
       <div class="wwtp-custom-range">
@@ -6309,17 +6329,34 @@ function bindPageEvents() {
     state.solar.range = button.dataset.solarRange;
     state.solar.page = 1;
     invalidateSolarFueling();
-    if (state.solar.range === "CUSTOM") renderPage({ preserveScroll: true });
-    else void loadSolarFueling({ force: true });
+    renderPage({ preserveScroll: true });
+    if (state.solar.range !== "CUSTOM") {
+      void loadSolarFueling({ force: true });
+    }
   }));
-  document.querySelectorAll("[data-solar-date]").forEach((input) => input.addEventListener("change", () => {
-    const timestamp = new Date(input.value).getTime();
-    if (Number.isFinite(timestamp)) state.solar[input.dataset.solarDate === "from" ? "customFrom" : "customTo"] = timestamp;
-  }));
-  document.querySelector("[data-solar-apply-range]")?.addEventListener("click", () => {
-    if (state.solar.customFrom > state.solar.customTo) [state.solar.customFrom,state.solar.customTo] = [state.solar.customTo,state.solar.customFrom];
-    state.solar.page = 1; invalidateSolarFueling(); void loadSolarFueling({ force: true });
+  document.querySelectorAll("[data-solar-date]").forEach((input) => {
+    const syncTime = () => {
+      const timestamp = new Date(input.value).getTime();
+      if (Number.isFinite(timestamp)) state.solar[input.dataset.solarDate === "from" ? "customFrom" : "customTo"] = timestamp;
+    };
+    input.addEventListener("input", syncTime);
+    input.addEventListener("change", syncTime);
+    input.addEventListener("blur", syncTime);
   });
+  document.querySelectorAll("[data-solar-apply-range]").forEach((button) => button.addEventListener("click", () => {
+    const fromInput = document.querySelector('[data-solar-date="from"]');
+    const toInput = document.querySelector('[data-solar-date="to"]');
+    const fromTime = fromInput && fromInput.value ? new Date(fromInput.value).getTime() : state.solar.customFrom;
+    const toTime = toInput && toInput.value ? new Date(toInput.value).getTime() : state.solar.customTo;
+    if (Number.isFinite(fromTime) && Number.isFinite(toTime)) {
+      state.solar.customFrom = Math.min(fromTime, toTime);
+      state.solar.customTo = Math.max(fromTime, toTime);
+    }
+    state.solar.page = 1;
+    invalidateSolarFueling();
+    renderPage({ preserveScroll: true });
+    void loadSolarFueling({ force: true });
+  }));
   document.querySelector("[data-solar-search-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -6359,18 +6396,41 @@ function bindPageEvents() {
   document.querySelectorAll("[data-wwtp-range]").forEach((button) => button.addEventListener("click", () => {
     state.wwtp.range = button.dataset.wwtpRange;
     invalidateWwtp();
-    if (state.wwtp.range === "CUSTOM") renderPage({ preserveScroll: true });
-    else void loadWwtpData({ force: true });
+    renderPage({ preserveScroll: true });
+    if (state.wwtp.range !== "CUSTOM") {
+      void loadWwtpData({ force: true });
+    }
   }));
-  document.querySelectorAll("[data-wwtp-date]").forEach((input) => input.addEventListener("change", () => {
-    const timestamp = new Date(input.value).getTime();
-    if (Number.isFinite(timestamp)) state.wwtp[input.dataset.wwtpDate === "from" ? "customFrom" : "customTo"] = timestamp;
-  }));
-  document.querySelector("[data-wwtp-apply-range]")?.addEventListener("click", () => {
-    if (state.wwtp.customFrom > state.wwtp.customTo) [state.wwtp.customFrom, state.wwtp.customTo] = [state.wwtp.customTo, state.wwtp.customFrom];
-    invalidateWwtp();
-    void loadWwtpData({ force: true });
+  document.querySelectorAll("[data-wwtp-date]").forEach((input) => {
+    const syncTime = () => {
+      const timestamp = new Date(input.value).getTime();
+      if (Number.isFinite(timestamp)) state.wwtp[input.dataset.wwtpDate === "from" ? "customFrom" : "customTo"] = timestamp;
+    };
+    input.addEventListener("input", syncTime);
+    input.addEventListener("change", syncTime);
+    input.addEventListener("blur", syncTime);
   });
+  document.querySelectorAll("[data-wwtp-apply-range]").forEach((button) => button.addEventListener("click", () => {
+    const fromInput = document.querySelector('[data-wwtp-date="from"]');
+    const toInput = document.querySelector('[data-wwtp-date="to"]');
+    const fromTime = fromInput && fromInput.value ? new Date(fromInput.value).getTime() : state.wwtp.customFrom;
+    const toTime = toInput && toInput.value ? new Date(toInput.value).getTime() : state.wwtp.customTo;
+
+    if (!Number.isFinite(fromTime) || !Number.isFinite(toTime)) {
+      showToast("Rentang waktu belum lengkap", "Pilih tanggal dari dan sampai terlebih dahulu.");
+      return;
+    }
+    if (fromTime >= toTime) {
+      showToast("Rentang waktu tidak valid", "Tanggal 'Sampai' harus lebih besar dari tanggal 'Dari'.");
+      return;
+    }
+    state.wwtp.range = "CUSTOM";
+    state.wwtp.customFrom = fromTime;
+    state.wwtp.customTo = toTime;
+    invalidateWwtp();
+    renderPage({ preserveScroll: true });
+    void loadWwtpData({ force: true });
+  }));
   document.querySelector("[data-pf-reload]")?.addEventListener("click", () => {
     const iframe = document.querySelector("iframe[data-pf-iframe]");
     if (iframe) iframe.src = iframe.src;
@@ -6441,17 +6501,27 @@ function bindPageEvents() {
     });
   });
   document.querySelectorAll("[data-chemical-analytics-date]").forEach((input) => {
-    input.addEventListener("change", () => {
+    const syncTime = () => {
       const value = new Date(input.value).getTime();
       if (Number.isFinite(value)) state.chemicalLog[input.dataset.chemicalAnalyticsDate === "start" ? "customStart" : "customEnd"] = value;
-    });
+    };
+    input.addEventListener("input", syncTime);
+    input.addEventListener("change", syncTime);
+    input.addEventListener("blur", syncTime);
   });
-  document.querySelector("[data-chemical-analytics-apply]")?.addEventListener("click", () => {
-    if (state.chemicalLog.customEnd < state.chemicalLog.customStart) [state.chemicalLog.customStart, state.chemicalLog.customEnd] = [state.chemicalLog.customEnd, state.chemicalLog.customStart];
+  document.querySelectorAll("[data-chemical-analytics-apply]").forEach((button) => button.addEventListener("click", () => {
+    const startInput = document.querySelector('[data-chemical-analytics-date="start"]');
+    const endInput = document.querySelector('[data-chemical-analytics-date="end"]');
+    const startVal = startInput && startInput.value ? new Date(startInput.value).getTime() : state.chemicalLog.customStart;
+    const endVal = endInput && endInput.value ? new Date(endInput.value).getTime() : state.chemicalLog.customEnd;
+    if (Number.isFinite(startVal) && Number.isFinite(endVal)) {
+      state.chemicalLog.customStart = Math.min(startVal, endVal);
+      state.chemicalLog.customEnd = Math.max(startVal, endVal);
+    }
     state.chemicalLog.page = 1;
     invalidateChemicalAnalytics();
     renderPage({ preserveScroll: true });
-  });
+  }));
   document.querySelectorAll("[data-chemical-chart-code]").forEach((checkbox) => {
     checkbox.addEventListener("change", () => {
       const code = checkbox.dataset.chemicalChartCode;
@@ -6552,7 +6622,7 @@ function bindPageEvents() {
     input.addEventListener("change", rememberDateValue);
     input.addEventListener("blur", rememberDateValue);
   });
-  document.querySelector("[data-actual-history-apply]")?.addEventListener("click", (event) => {
+  document.querySelectorAll("[data-actual-history-apply]").forEach((button) => button.addEventListener("click", (event) => {
     const start = new Date(document.querySelector('[data-actual-history-date="start"]')?.value || "").getTime();
     const end = new Date(document.querySelector('[data-actual-history-date="end"]')?.value || "").getTime();
     if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) {
@@ -6565,7 +6635,7 @@ function bindPageEvents() {
     actualHistorian.viewFraction = 1;
     actualHistorian.cache.delete(actualHistorianKey(event.currentTarget.dataset.actualHistoryApply || actualHistorian.explorerAssetId));
     renderPage({ preserveScroll: true });
-  });
+  }));
   document.querySelectorAll("[data-actual-history-shift]").forEach((button) => button.addEventListener("click", () => shiftActualHistoryView(button.dataset.actualHistoryShift === "back" ? -0.12 : 0.12)));
   document.querySelectorAll("[data-actual-history-zoom]").forEach((button) => button.addEventListener("click", () => zoomActualHistoryView(button.dataset.actualHistoryZoom === "in" ? 0.62 : 1.5)));
   document.querySelector("[data-actual-history-fit]")?.addEventListener("click", () => {
@@ -6965,15 +7035,23 @@ function bindPageEvents() {
     });
   });
   document.querySelectorAll("[data-chemical-custom-date]").forEach((input) => {
-    input.addEventListener("change", () => {
+    const syncTime = () => {
       const value = new Date(input.value).getTime();
       if (Number.isFinite(value)) state.chemicalLog[input.dataset.chemicalCustomDate === "start" ? "customStart" : "customEnd"] = value;
-    });
+    };
+    input.addEventListener("input", syncTime);
+    input.addEventListener("change", syncTime);
+    input.addEventListener("blur", syncTime);
   });
   document.querySelectorAll("[data-chemical-custom-apply]").forEach((button) => {
     button.addEventListener("click", () => {
-      if (state.chemicalLog.customEnd < state.chemicalLog.customStart) {
-        [state.chemicalLog.customStart, state.chemicalLog.customEnd] = [state.chemicalLog.customEnd, state.chemicalLog.customStart];
+      const startInput = document.querySelector('[data-chemical-custom-date="start"]');
+      const endInput = document.querySelector('[data-chemical-custom-date="end"]');
+      const startVal = startInput && startInput.value ? new Date(startInput.value).getTime() : state.chemicalLog.customStart;
+      const endVal = endInput && endInput.value ? new Date(endInput.value).getTime() : state.chemicalLog.customEnd;
+      if (Number.isFinite(startVal) && Number.isFinite(endVal)) {
+        state.chemicalLog.customStart = Math.min(startVal, endVal);
+        state.chemicalLog.customEnd = Math.max(startVal, endVal);
       }
       renderPage({ preserveScroll: true });
     });
@@ -7250,8 +7328,7 @@ function filterFleetMachines() {
 function selectHistoryRange(range) {
   if (range === "CUSTOM") {
     state.history.preset = "CUSTOM";
-    document.querySelectorAll("[data-history-range]").forEach((button) => button.classList.toggle("active", button.dataset.historyRange === "CUSTOM"));
-    document.getElementById("custom-range-row")?.classList.remove("hidden");
+    renderPage({ preserveScroll: true });
     document.getElementById("history-start")?.focus();
     return;
   }
@@ -9356,7 +9433,7 @@ function userManagementPage() {
         </div>
       </header>
 
-      <section class="overview-kpis" style="grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;">
+      <section class="user-mgmt-kpis">
         <div class="card kpi-card">
           <span class="kpi-label">Total Pengguna</span>
           <strong class="kpi-value" id="user-mgmt-stat-total">${totalUsers}</strong>
