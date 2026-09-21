@@ -1287,7 +1287,7 @@ async function connectNonJetflowBackend() {
     const role = String(user?.role || "").toUpperCase();
     const isAdmin = role === "ADMIN" || role === "ADMINISTRATOR";
     const allowed = Array.isArray(user?.allowedMenus) ? user.allowedMenus : [];
-    const prodMenus = ["overview", "jetflow", "calator", "dryer", "kalender", "utilities", "trends", "health"];
+    const prodMenus = ["overview", "jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "utilities", "trends", "health"];
     const canAccessProd = isAdmin || prodMenus.some((m) => allowed.includes(m));
     const canAccessChemical = isAdmin || allowed.includes("chemical");
     const canAccessAlarms = isAdmin || allowed.includes("alarms");

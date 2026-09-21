@@ -15,6 +15,7 @@ Dokumen ini mencatat perubahan seluruh dokumentasi konsep project. Versi lama te
 - API asset menerima empat `process_type` baru.
 - Nilai numerik live sensor dibulatkan maksimal dua angka di belakang koma agar tidak menampilkan artefak floating-point.
 - Seluruh data ditandai `FINISHING-DEMO` dan tidak diposisikan sebagai data produksi.
+- Integrasi RBAC terbaru memasukkan Continuous, Inspecting, Finishing, dan Setting Dongnam ke katalog menu serta permission role operasional.
 
 ## Dashboard V2.32 / Finishing Line V1.0 — 19 September 2026
 
