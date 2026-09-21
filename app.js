@@ -1228,33 +1228,57 @@ function realtimeSourcesAffectCurrentPage(sources, refreshAll = false) {
 async function connectNonJetflowBackend() {
   try {
     const status = await fetchJson("/api/v1/integration/status", "Backend status");
-    const fetchMode = state.historyTable.fetchMode || "per_asset";
-    const telemetryUrl = fetchMode === "per_asset"
-      ? "/api/v1/telemetry/recent?per_asset=true&limit=2000"
-      : "/api/v1/telemetry/recent?limit=500";
-    const [, chemicalPayload, utilityPayload, telemetryPayload, alarmPayload, equipmentPayload, processRunPayload] = await Promise.all([
-      refreshAssetFleets(),
-      fetchJson("/api/v1/dispensing/transactions", "Chemical transaction API"),
-      fetchJson("/api/v1/utilities/snapshot", "Utility API"),
-      fetchJson(telemetryUrl, "Telemetry API"),
-      fetchJson("/api/v1/alarms/recent?limit=100", "Alarm API"),
-      fetchJson("/api/v1/equipment", "Equipment API"),
-      fetchJson("/api/v1/batch/process-runs", "Batch process API"),
-    ]);
-    hydrateChemicalTransactions(chemicalPayload.transactions || []);
-    backendUtilities = utilityPayload.utilities || [];
-    backendTelemetry = telemetryPayload.samples || [];
-    backendAlarmEvents = alarmPayload.alarms || [];
-    backendActiveAlarmEvents = alarmPayload.active_alarms || backendAlarmEvents.filter((item) => item.event_state !== "CLEARED");
-    backendEquipment = equipmentPayload.equipment || [];
-    backendProcessRuns = processRunPayload.runs || [];
     backendConnection.status = "connected";
     backendConnection.storage = status.storage;
     backendConnection.dataMode = status.data_mode;
     backendConnection.lastSync = status.server_time;
-    void loadProductionOutputByBatch();
-    updateNavigationCounts();
-    syncActiveAlarmPopups();
+
+    const user = authentication.user;
+    const role = String(user?.role || "").toUpperCase();
+    const isAdmin = role === "ADMIN" || role === "ADMINISTRATOR";
+    const allowed = Array.isArray(user?.allowedMenus) ? user.allowedMenus : [];
+    const prodMenus = ["overview", "jetflow", "calator", "dryer", "kalender", "utilities", "trends", "health"];
+    const canAccessProd = isAdmin || prodMenus.some((m) => allowed.includes(m));
+    const canAccessChemical = isAdmin || allowed.includes("chemical");
+    const canAccessAlarms = isAdmin || allowed.includes("alarms");
+
+    if (canAccessProd || canAccessChemical || canAccessAlarms) {
+      const fetchMode = state.historyTable.fetchMode || "per_asset";
+      const telemetryUrl = fetchMode === "per_asset"
+        ? "/api/v1/telemetry/recent?per_asset=true&limit=2000"
+        : "/api/v1/telemetry/recent?limit=500";
+      const [, chemicalPayload, utilityPayload, telemetryPayload, alarmPayload, equipmentPayload, processRunPayload] = await Promise.allSettled([
+        canAccessProd || canAccessChemical ? refreshAssetFleets() : Promise.resolve(),
+        canAccessChemical ? fetchJson("/api/v1/dispensing/transactions", "Chemical transaction API") : Promise.resolve({ transactions: [] }),
+        canAccessProd ? fetchJson("/api/v1/utilities/snapshot", "Utility API") : Promise.resolve({ utilities: [] }),
+        canAccessProd ? fetchJson(telemetryUrl, "Telemetry API") : Promise.resolve({ samples: [] }),
+        canAccessAlarms ? fetchJson("/api/v1/alarms/recent?limit=100", "Alarm API") : Promise.resolve({ alarms: [], active_alarms: [] }),
+        canAccessProd ? fetchJson("/api/v1/equipment", "Equipment API") : Promise.resolve({ equipment: [] }),
+        canAccessProd ? fetchJson("/api/v1/batch/process-runs", "Batch process API") : Promise.resolve({ runs: [] }),
+      ]);
+      if (chemicalPayload.status === "fulfilled" && chemicalPayload.value?.transactions) {
+        hydrateChemicalTransactions(chemicalPayload.value.transactions);
+      }
+      if (utilityPayload.status === "fulfilled" && utilityPayload.value?.utilities) {
+        backendUtilities = utilityPayload.value.utilities;
+      }
+      if (telemetryPayload.status === "fulfilled" && telemetryPayload.value?.samples) {
+        backendTelemetry = telemetryPayload.value.samples;
+      }
+      if (alarmPayload.status === "fulfilled") {
+        backendAlarmEvents = alarmPayload.value?.alarms || [];
+        backendActiveAlarmEvents = alarmPayload.value?.active_alarms || backendAlarmEvents.filter((item) => item.event_state !== "CLEARED");
+      }
+      if (equipmentPayload.status === "fulfilled" && equipmentPayload.value?.equipment) {
+        backendEquipment = equipmentPayload.value.equipment;
+      }
+      if (processRunPayload.status === "fulfilled" && processRunPayload.value?.runs) {
+        backendProcessRuns = processRunPayload.value.runs;
+      }
+      if (canAccessProd) void loadProductionOutputByBatch();
+      updateNavigationCounts();
+      syncActiveAlarmPopups();
+    }
   } catch {
     backendConnection.status = "fallback";
   }
@@ -6144,8 +6168,13 @@ function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
     pageContentHtml = rolePermissionPage();
   } else if (state.page === "users") {
     pageContentHtml = userManagementPage();
+  } else if (state.page === "wwtp") {
+    pageContentHtml = actualWwtpPage();
+  } else if (state.page === "solar") {
+    pageContentHtml = actualSolarPage();
   } else {
-    pageContentHtml = (backendConnection.status !== "connected" || !hasActualAssets)
+    const isFleetPage = ["overview", "jetflow", "calator", "dryer", "kalender"].includes(state.page);
+    pageContentHtml = (isFleetPage && (backendConnection.status !== "connected" || !hasActualAssets))
       ? databaseIntegrationPage()
       : databaseDashboardPage();
   }
@@ -7273,7 +7302,7 @@ function bindPageEvents() {
 function isPageAllowed(page) {
   if (!authentication.user) return true;
   const role = String(authentication.user.role || "").toUpperCase();
-  if (role === "ADMIN") return true;
+  if (role === "ADMIN" || role === "ADMINISTRATOR") return true;
   if (page === "roles" || page === "users") return false;
   const allowed = Array.isArray(authentication.user.allowedMenus) ? authentication.user.allowedMenus : [];
   return allowed.includes(page);
@@ -7294,6 +7323,7 @@ function navigate(page, { replaceState = false } = {}) {
   renderPage();
   if (targetPage === "solar") void loadSolarFueling();
   if (targetPage === "roles") void loadRbacData();
+  if (targetPage === "wwtp") void loadWwtpData();
   if (targetPage === "users") {
     void loadRbacUsers();
     void loadRbacData();
@@ -8648,11 +8678,15 @@ function applyMenuPermissions(user) {
     });
   }
 
-  // Jika page saat ini tidak diizinkan dan bukan berasal dari URL hash yang diketik:
+  // Pastikan page yang dipilih diizinkan untuk role ini
   const urlPage = getPageFromUrl();
-  if (!urlPage && !isAdmin && !allowed.includes(state.page)) {
+  const isUrlAllowed = urlPage && (isAdmin || allowed.includes(urlPage));
+  if (isUrlAllowed) {
+    state.page = urlPage;
+  } else if (!isAdmin && !allowed.includes(state.page)) {
     const firstAllowed = allowed.find((p) => p !== "roles" && p !== "users") || "overview";
     state.page = firstAllowed;
+    window.location.hash = `#/${firstAllowed}`;
   }
 }
 
