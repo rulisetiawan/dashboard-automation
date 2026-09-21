@@ -217,7 +217,7 @@ export class WwtpController {
         FROM wwtp.manual_control_logs
         ORDER BY created_at DESC
         LIMIT 10
-      `),
+      `).catch(() => ({ rows: [] })),
       this.database.query<{
         id: number;
         equipment_name: string;
@@ -226,7 +226,7 @@ export class WwtpController {
       }>(`
         SELECT id, equipment_name, process, status
         FROM wwtp.equipment_master
-      `),
+      `).catch(() => ({ rows: [] })),
     ]);
 
     // Live status of pumps 1..4
@@ -663,49 +663,57 @@ export class WwtpController {
 
   @Get("api/v1/wwtp/pid/values")
   async pidValues() {
-    const result = await this.database.query<{
-      sensor_tag: string;
-      sensor_name: string;
-      process: string;
-      unit: string;
-      value: number | null;
-      value_text: string | null;
-      status: string | null;
-      captured_at: string;
-    }>(`
-      SELECT sensor_tag, sensor_name, process, unit, value, value_text, status, captured_at
-      FROM wwtp.sensor_realtime_values
-    `);
+    try {
+      const result = await this.database.query<{
+        sensor_tag: string;
+        sensor_name: string;
+        process: string;
+        unit: string;
+        value: number | null;
+        value_text: string | null;
+        status: string | null;
+        captured_at: string;
+      }>(`
+        SELECT sensor_tag, sensor_name, process, unit, value, value_text, status, captured_at
+        FROM wwtp.sensor_realtime_values
+      `);
 
-    const values: Record<string, any> = {};
-    for (const r of result.rows) {
-      values[r.sensor_tag] = {
-        value: r.value,
-        value_text: r.value_text,
-        unit: r.unit,
-        health: r.status,
-        captured_at: r.captured_at,
-      };
-      // alias with underscores
-      values[r.sensor_tag.replace(/-/g, "_")] = values[r.sensor_tag];
+      const values: Record<string, any> = {};
+      for (const r of result.rows) {
+        values[r.sensor_tag] = {
+          value: r.value,
+          value_text: r.value_text,
+          unit: r.unit,
+          health: r.status,
+          captured_at: r.captured_at,
+        };
+        // alias with underscores
+        values[r.sensor_tag.replace(/-/g, "_")] = values[r.sensor_tag];
+      }
+
+      return { ok: true, source: "postgresql_wwtp", count: result.rows.length, values };
+    } catch {
+      return { ok: true, source: "postgresql_wwtp", count: 0, values: {} };
     }
-
-    return { ok: true, source: "postgresql_wwtp", count: result.rows.length, values };
   }
 
   @Get("api/v1/wwtp/pid/control-logs")
   async pidControlLogs(@Query("limit") limitRaw?: string) {
-    const limit = Math.min(100, Math.max(5, Number(limitRaw) || 20));
-    const result = await this.database.query(`
-      SELECT id, trigger_name AS equipment_name, trigger_name AS equipment_code,
-             page_key AS process, action_name, user_name AS initiated_by,
-             role_name, 'Success' AS status, payload, created_at AS executed_at, created_at
-      FROM wwtp.manual_control_logs
-      ORDER BY created_at DESC
-      LIMIT $1
-    `, [limit]);
+    try {
+      const limit = Math.min(100, Math.max(5, Number(limitRaw) || 20));
+      const result = await this.database.query(`
+        SELECT id, trigger_name AS equipment_name, trigger_name AS equipment_code,
+               page_key AS process, action_name, user_name AS initiated_by,
+               role_name, 'Success' AS status, payload, created_at AS executed_at, created_at
+        FROM wwtp.manual_control_logs
+        ORDER BY created_at DESC
+        LIMIT $1
+      `, [limit]);
 
-    return { ok: true, logs: result.rows };
+      return { ok: true, logs: result.rows };
+    } catch {
+      return { ok: true, logs: [] };
+    }
   }
 
   // Compatible endpoints for embedded iframe simulasi-full-process.html
