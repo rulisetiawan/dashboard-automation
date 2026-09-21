@@ -10,6 +10,8 @@ const lockDurationMinutes = 15;
 
 export const ALL_CANONICAL_MENUS = [
   "overview",
+  "asset_status",
+  "asset_matrix",
   "jetflow",
   "calator",
   "dryer",
@@ -136,9 +138,9 @@ export class AuthService {
     if (role === "WWTP") return ["wwtp"];
     if (role === "PRODUCTION") return ALL_CANONICAL_MENUS.filter((m) => m !== "wwtp");
     if (role === "ENGINEER") return [...ALL_CANONICAL_MENUS];
-    if (role === "SUPERVISOR") return ["overview", "jetflow", "calator", "dryer", "kalender", "utilities", "chemical", "solar", "wwtp", "alarms", "trends"];
-    if (role === "OPERATOR") return ["overview", "jetflow", "calator", "dryer", "kalender", "solar"];
-    return ["overview", "trends"];
+    if (role === "SUPERVISOR") return ["overview", "asset_status", "asset_matrix", "jetflow", "calator", "dryer", "kalender", "utilities", "chemical", "solar", "wwtp", "alarms", "trends"];
+    if (role === "OPERATOR") return ["overview", "asset_status", "asset_matrix", "jetflow", "calator", "dryer", "kalender", "solar"];
+    return ["overview", "asset_status", "asset_matrix", "trends"];
   }
 
   private userPayload(row: Record<string, any>, expiresAt: string, allowedMenus: string[]): DashboardUserSession {
