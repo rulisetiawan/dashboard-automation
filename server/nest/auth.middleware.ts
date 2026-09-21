@@ -4,6 +4,8 @@ import { AuthService, DashboardUserSession } from "./auth.service.js";
 
 const PRODUCTION_MENUS = [
   "overview",
+  "asset_status",
+  "asset_matrix",
   "jetflow",
   "calator",
   "dryer",
