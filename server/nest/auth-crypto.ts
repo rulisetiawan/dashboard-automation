@@ -14,7 +14,7 @@ function pbkdf2(password: string, salt: Buffer, iterations = passwordIterations)
 }
 
 export function validateDashboardPassword(password: string) {
-  if (password.length < 12) throw new Error("Password minimal 12 karakter.");
+  if (password.length < 6) throw new Error("Password minimal 6 karakter.");
   if (password.length > 128) throw new Error("Password maksimal 128 karakter.");
 }
 

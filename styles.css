@@ -8628,29 +8628,33 @@ select:focus-visible {
   position: fixed;
   right: 18px;
   bottom: 18px;
-  z-index: 100;
+  z-index: 9999;
   display: flex;
-  width: min(340px, calc(100vw - 36px));
+  width: min(380px, calc(100vw - 36px));
   flex-direction: column;
   gap: 8px;
+  pointer-events: none;
 }
 
 .toast {
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: var(--shadow-pop);
-  color: var(--ink-2);
-  font-size: 0.61rem;
+  padding: 12px 16px;
+  border: 1px solid var(--border, #cedce0);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--surface, #fff);
+  box-shadow: 0 10px 30px rgba(12, 38, 48, 0.22);
+  color: var(--ink, #11252c);
+  font-size: 13px;
+  line-height: 1.4;
   animation: toast-in 180ms ease-out;
+  pointer-events: auto;
 }
 
 .toast strong {
   display: block;
   margin-bottom: 3px;
-  color: var(--ink);
-  font-size: 0.65rem;
+  color: var(--ink, #11252c);
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .alarm-popup {
@@ -12257,6 +12261,43 @@ select:focus-visible {
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
+}
+
+.user-modal-error-banner {
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--danger-soft, #fdf0f0);
+  border: 1px solid var(--danger, #d9383a);
+  color: var(--danger, #d9383a);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.user-modal-form .input-control,
+.user-modal-form .select-control {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #cedce0);
+  background: #fff;
+  color: var(--ink, #11252c);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.user-modal-form .input-control:focus,
+.user-modal-form .select-control:focus {
+  border-color: var(--primary, #078eaa);
+  box-shadow: 0 0 0 3px rgba(7, 142, 170, 0.15);
+}
+
+.user-modal-form .input-control:disabled {
+  background: var(--surface-2, #f3f7f8);
+  color: var(--muted, #778990);
+  cursor: not-allowed;
 }
 
 .user-form-group {

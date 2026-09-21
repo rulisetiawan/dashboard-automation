@@ -29,7 +29,8 @@ export class RbacController {
       (request as Request & { dashboardUser?: DashboardUserSession }).dashboardUser ||
       (await this.auth.sessionFromRequest(request));
     if (!user) throw new UnauthorizedException("Session tidak aktif.");
-    if (String(user.role).toUpperCase() !== "ADMIN") {
+    const role = String(user.role).toUpperCase();
+    if (role !== "ADMIN" && role !== "ADMINISTRATOR") {
       throw new ForbiddenException("Hanya Administrator yang memiliki akses ke konfigurasi Role & Permission.");
     }
     return user;
@@ -329,8 +330,8 @@ export class RbacController {
       const roleCheck = await this.database.query("SELECT role_code FROM dashboard_role WHERE role_code = $1", [newRole]);
       if (!roleCheck.rows[0]) throw new NotFoundException(`Role ${newRole} tidak valid.`);
 
-      if (targetUser.user_id === admin.userId && newRole !== "ADMIN") {
-        const adminCount = await this.database.query("SELECT COUNT(*)::int AS count FROM dashboard_user WHERE role_code = 'ADMIN' AND active = TRUE");
+      if (targetUser.user_id === admin.userId && newRole !== "ADMIN" && newRole !== "ADMINISTRATOR") {
+        const adminCount = await this.database.query("SELECT COUNT(*)::int AS count FROM dashboard_user WHERE role_code IN ('ADMIN', 'ADMINISTRATOR') AND active = TRUE");
         if (Number(adminCount.rows[0]?.count || 0) <= 1) {
           throw new BadRequestException("Anda tidak dapat mengubah role akun Anda sendiri karena Anda adalah satu-satunya Administrator.");
         }
@@ -393,8 +394,8 @@ export class RbacController {
       throw new BadRequestException("Anda tidak dapat menghapus akun Anda sendiri.");
     }
 
-    if (userCheck.rows[0].role_code === "ADMIN") {
-      const adminCount = await this.database.query("SELECT COUNT(*)::int AS count FROM dashboard_user WHERE role_code = 'ADMIN' AND active = TRUE");
+    if (userCheck.rows[0].role_code === "ADMIN" || userCheck.rows[0].role_code === "ADMINISTRATOR") {
+      const adminCount = await this.database.query("SELECT COUNT(*)::int AS count FROM dashboard_user WHERE role_code IN ('ADMIN', 'ADMINISTRATOR') AND active = TRUE");
       if (Number(adminCount.rows[0]?.count || 0) <= 1) {
         throw new BadRequestException("Pengguna ini adalah satu-satunya Administrator dan tidak dapat dihapus.");
       }
@@ -438,8 +439,8 @@ export class RbacController {
     if (!userCheck.rows[0]) throw new NotFoundException("Pengguna tidak ditemukan.");
 
     // Prevent removing ADMIN from self if sole admin
-    if (userCheck.rows[0].user_id === admin.userId && newRole !== "ADMIN") {
-      const adminCount = await this.database.query("SELECT COUNT(*)::int AS count FROM dashboard_user WHERE role_code = 'ADMIN' AND active = TRUE");
+    if (userCheck.rows[0].user_id === admin.userId && newRole !== "ADMIN" && newRole !== "ADMINISTRATOR") {
+      const adminCount = await this.database.query("SELECT COUNT(*)::int AS count FROM dashboard_user WHERE role_code IN ('ADMIN', 'ADMINISTRATOR') AND active = TRUE");
       if (Number(adminCount.rows[0]?.count || 0) <= 1) {
         throw new BadRequestException("Anda tidak dapat mengubah role akun Anda sendiri karena Anda adalah satu-satunya Administrator.");
       }

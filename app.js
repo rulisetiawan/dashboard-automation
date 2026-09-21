@@ -8959,8 +8959,8 @@ const rbacState = {
 async function loadRbacData() {
   try {
     const [rolesRes, menusRes] = await Promise.all([
-      fetch("/api/v1/rbac/roles", { cache: "no-store" }),
-      fetch("/api/v1/rbac/menus", { cache: "no-store" }),
+      fetch("/api/v1/rbac/roles", { cache: "no-store", credentials: "same-origin" }),
+      fetch("/api/v1/rbac/menus", { cache: "no-store", credentials: "same-origin" }),
     ]);
     if (!rolesRes.ok || !menusRes.ok) throw new Error("Gagal memuat data role dan menu.");
     const rolesJson = await rolesRes.json();
@@ -8980,7 +8980,7 @@ async function loadRbacData() {
 
 async function loadRbacUsers() {
   try {
-    const usersRes = await fetch("/api/v1/rbac/users", { cache: "no-store" });
+    const usersRes = await fetch("/api/v1/rbac/users", { cache: "no-store", credentials: "same-origin" });
     if (!usersRes.ok) throw new Error("Gagal memuat data pengguna.");
     const usersJson = await usersRes.json();
     rbacState.users = usersJson.users || [];
@@ -8989,6 +8989,13 @@ async function loadRbacUsers() {
     const userMgmtTbody = document.getElementById("user-mgmt-tbody");
     if (userMgmtTbody) userMgmtTbody.innerHTML = renderUserManagementRowsHtml();
     updateUserManagementStats();
+
+    const roleFilterEl = document.getElementById("user-mgmt-role-filter");
+    if (roleFilterEl && rbacState.roles.length && roleFilterEl.options.length <= 1) {
+      const currentVal = userMgmtState.role || "all";
+      roleFilterEl.innerHTML = `<option value="all" ${currentVal === "all" ? "selected" : ""}>Semua Role</option>` +
+        rbacState.roles.map((r) => `<option value="${escapeHtml(r.role_code)}" ${currentVal === r.role_code ? "selected" : ""}>Role: ${escapeHtml(r.role_name)}</option>`).join("");
+    }
   } catch (err) {
     showToast("RBAC Error", err instanceof Error ? err.message : "Gagal memuat daftar pengguna.");
   }
@@ -9231,6 +9238,7 @@ async function saveRbacPermissions() {
 
     const res = await fetch(`/api/v1/rbac/roles/${encodeURIComponent(roleCode)}/menus`, {
       method: "PUT",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ menus: selectedMenus }),
     });
@@ -9263,6 +9271,7 @@ async function saveSingleUserRole(userId) {
   try {
     const res = await fetch(`/api/v1/rbac/users/${encodeURIComponent(userId)}/role`, {
       method: "PUT",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role_code: newRole }),
     });
@@ -9512,6 +9521,12 @@ function openUserModal(userId = null) {
   const form = document.getElementById("user-modal-form");
   if (!modal || !form) return;
 
+  const errorEl = document.getElementById("user-modal-error");
+  if (errorEl) {
+    errorEl.textContent = "";
+    errorEl.hidden = true;
+  }
+
   const idInput = document.getElementById("user-form-id");
   const usernameInput = document.getElementById("user-form-username");
   const displayNameInput = document.getElementById("user-form-display-name");
@@ -9527,9 +9542,19 @@ function openUserModal(userId = null) {
   const passHint = document.getElementById("user-form-password-hint");
   const submitBtn = document.getElementById("user-modal-submit");
 
-  // Populate roles in select
+  // Populate roles in select (with resilient fallback if not yet fetched)
+  const defaultRoles = [
+    { role_code: "ADMIN", role_name: "Administrator" },
+    { role_code: "ENGINEER", role_name: "Process Engineer" },
+    { role_code: "SUPERVISOR", role_name: "Production Supervisor" },
+    { role_code: "PRODUCTION", role_name: "Production Team" },
+    { role_code: "OPERATOR", role_name: "Machine Operator" },
+    { role_code: "WWTP", role_name: "WWTP Operator" },
+    { role_code: "VIEWER", role_name: "General Viewer" },
+  ];
+  const availableRoles = (rbacState.roles && rbacState.roles.length) ? rbacState.roles : defaultRoles;
   if (roleSelect) {
-    roleSelect.innerHTML = rbacState.roles
+    roleSelect.innerHTML = availableRoles
       .map((r) => `<option value="${escapeHtml(r.role_code)}">${escapeHtml(r.role_name)} (${escapeHtml(r.role_code)})</option>`)
       .join("");
   }
@@ -9558,7 +9583,7 @@ function openUserModal(userId = null) {
     }
     if (passLabel) passLabel.textContent = "Ubah Password (Opsional)";
     if (passStar) passStar.hidden = true;
-    if (passHint) passHint.textContent = "Biarkan kosong jika tidak ingin mengubah password. Minimal 12 karakter jika diisi.";
+    if (passHint) passHint.textContent = "Biarkan kosong jika tidak ingin mengubah password. Minimal 6 karakter jika diisi.";
     if (submitBtn) submitBtn.textContent = "Simpan Perubahan";
   } else {
     if (idInput) idInput.value = "";
@@ -9579,7 +9604,7 @@ function openUserModal(userId = null) {
     }
     if (passLabel) passLabel.textContent = "Password";
     if (passStar) passStar.hidden = false;
-    if (passHint) passHint.textContent = "Minimal 12 karakter. Disarankan kombinasi huruf, angka, dan simbol.";
+    if (passHint) passHint.textContent = "Minimal 6 karakter. Disarankan kombinasi huruf, angka, dan simbol.";
     if (submitBtn) submitBtn.textContent = "Buat Pengguna";
   }
 
@@ -9594,21 +9619,41 @@ function closeUserModal() {
   if (modal) modal.hidden = true;
   const form = document.getElementById("user-modal-form");
   if (form) form.reset();
+  const idInput = document.getElementById("user-form-id");
+  if (idInput) idInput.value = "";
+  const errorEl = document.getElementById("user-modal-error");
+  if (errorEl) {
+    errorEl.textContent = "";
+    errorEl.hidden = true;
+  }
 }
 
 async function handleUserFormSubmit(event) {
   event.preventDefault();
+  const errorEl = document.getElementById("user-modal-error");
+  const reportError = (msg) => {
+    if (errorEl) {
+      errorEl.textContent = msg;
+      errorEl.hidden = false;
+    }
+    showToast("Validasi Gagal", msg);
+  };
+  if (errorEl) {
+    errorEl.textContent = "";
+    errorEl.hidden = true;
+  }
+
   const id = document.getElementById("user-form-id")?.value?.trim();
   const username = document.getElementById("user-form-username")?.value?.trim().toLowerCase();
   const displayName = document.getElementById("user-form-display-name")?.value?.trim();
   const email = document.getElementById("user-form-email")?.value?.trim() || null;
   const department = document.getElementById("user-form-department")?.value?.trim() || null;
-  const roleCode = document.getElementById("user-form-role")?.value?.trim();
-  const active = document.getElementById("user-form-active")?.checked;
+  const roleCode = document.getElementById("user-form-role")?.value?.trim() || "VIEWER";
+  const active = document.getElementById("user-form-active")?.checked !== false;
   const password = document.getElementById("user-form-password")?.value || "";
 
   if (!displayName) {
-    showToast("Validasi Gagal", "Nama lengkap wajib diisi.");
+    reportError("Nama lengkap wajib diisi.");
     return;
   }
 
@@ -9618,12 +9663,15 @@ async function handleUserFormSubmit(event) {
   try {
     if (!id) {
       // Create user
-      if (!username) throw new Error("Username wajib diisi.");
-      if (!password) throw new Error("Password wajib diisi.");
-      if (password.length < 12) throw new Error("Password minimal harus 12 karakter.");
+      if (!username) { reportError("Username wajib diisi."); return; }
+      if (username.length < 3) { reportError("Username minimal 3 karakter."); return; }
+      if (!/^[a-z0-9_.-]+$/.test(username)) { reportError("Username hanya boleh berisi huruf kecil, angka, titik, strip, atau underscore."); return; }
+      if (!password) { reportError("Password wajib diisi."); return; }
+      if (password.length < 6) { reportError("Password minimal harus 6 karakter."); return; }
 
       const res = await fetch("/api/v1/rbac/users", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username,
@@ -9636,15 +9684,19 @@ async function handleUserFormSubmit(event) {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || "Gagal membuat pengguna baru.");
+      if (!res.ok) {
+        const msg = Array.isArray(data.message) ? data.message.join(", ") : (data.message || data.error || "Gagal membuat pengguna baru.");
+        throw new Error(msg);
+      }
 
       showToast("Pengguna Dibuat", data.message || `Pengguna ${username} berhasil dibuat.`);
       closeUserModal();
       await loadRbacUsers();
     } else {
       // Update user
-      if (password && password.length < 12) {
-        throw new Error("Password baru minimal harus 12 karakter.");
+      if (password && password.length < 6) {
+        reportError("Password baru minimal harus 6 karakter.");
+        return;
       }
 
       const body = {
@@ -9658,11 +9710,15 @@ async function handleUserFormSubmit(event) {
 
       const res = await fetch(`/api/v1/rbac/users/${encodeURIComponent(id)}`, {
         method: "PUT",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || "Gagal memperbarui pengguna.");
+      if (!res.ok) {
+        const msg = Array.isArray(data.message) ? data.message.join(", ") : (data.message || data.error || "Gagal memperbarui pengguna.");
+        throw new Error(msg);
+      }
 
       showToast("Pengguna Diperbarui", data.message || "Data pengguna berhasil disimpan.");
       closeUserModal();
@@ -9679,7 +9735,12 @@ async function handleUserFormSubmit(event) {
       }
     }
   } catch (err) {
-    showToast("Gagal Menyimpan", err instanceof Error ? err.message : "Terjadi kesalahan.");
+    const errorMsg = err instanceof Error ? err.message : "Terjadi kesalahan.";
+    if (errorEl) {
+      errorEl.textContent = errorMsg;
+      errorEl.hidden = false;
+    }
+    showToast("Gagal Menyimpan", errorMsg);
   } finally {
     if (submitBtn) submitBtn.disabled = false;
   }
@@ -9696,9 +9757,13 @@ async function deleteUserAccount(userId, username) {
   try {
     const res = await fetch(`/api/v1/rbac/users/${encodeURIComponent(userId)}`, {
       method: "DELETE",
+      credentials: "same-origin",
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.message || "Gagal menghapus pengguna.");
+    if (!res.ok) {
+      const msg = Array.isArray(data.message) ? data.message.join(", ") : (data.message || data.error || "Gagal menghapus pengguna.");
+      throw new Error(msg);
+    }
 
     showToast("Pengguna Dihapus", data.message || `Akun ${username} berhasil dihapus.`);
     await loadRbacUsers();
@@ -9711,9 +9776,13 @@ async function unlockUserAccount(userId, username) {
   try {
     const res = await fetch(`/api/v1/rbac/users/${encodeURIComponent(userId)}/unlock`, {
       method: "POST",
+      credentials: "same-origin",
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.message || "Gagal membuka kunci akun.");
+    if (!res.ok) {
+      const msg = Array.isArray(data.message) ? data.message.join(", ") : (data.message || data.error || "Gagal membuka kunci akun.");
+      throw new Error(msg);
+    }
 
     showToast("Kunci Dibuka", data.message || `Akun ${username} berhasil dibuka kuncinya.`);
     await loadRbacUsers();
