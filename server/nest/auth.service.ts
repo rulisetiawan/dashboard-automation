@@ -117,7 +117,7 @@ export class AuthService {
 
   async getRoleMenus(roleCode: string): Promise<string[]> {
     const role = String(roleCode || "VIEWER").trim().toUpperCase();
-    if (role === "ADMIN") return [...ALL_CANONICAL_MENUS];
+    if (role === "ADMIN" || role === "ADMINISTRATOR") return [...ALL_CANONICAL_MENUS];
     try {
       const result = await this.database.query(`
         SELECT menu_code FROM dashboard_role_menu

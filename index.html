@@ -182,6 +182,7 @@
 
         <form id="user-modal-form" class="user-modal-form">
           <input type="hidden" id="user-form-id" value="" />
+          <div id="user-modal-error" class="user-modal-error-banner" hidden></div>
           
           <div class="user-form-group">
             <label for="user-form-username"><strong>Username</strong> <span class="required-star" style="color:var(--danger)">*</span></label>
@@ -223,8 +224,8 @@
 
           <div class="user-form-group" id="user-form-password-group">
             <label for="user-form-password"><strong id="user-form-password-label">Password</strong> <span id="user-form-password-star" class="required-star" style="color:var(--danger)">*</span></label>
-            <input type="password" id="user-form-password" class="input-control" placeholder="Minimal 12 karakter" autocomplete="new-password" />
-            <small class="user-form-hint" id="user-form-password-hint">Minimal 12 karakter. Disarankan kombinasi huruf, angka, dan simbol.</small>
+            <input type="password" id="user-form-password" class="input-control" placeholder="Minimal 6 karakter" autocomplete="new-password" />
+            <small class="user-form-hint" id="user-form-password-hint">Minimal 6 karakter. Disarankan kombinasi huruf, angka, dan simbol.</small>
           </div>
 
           <div class="user-modal-footer">

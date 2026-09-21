@@ -33,7 +33,7 @@ export class DashboardAuthMiddleware implements NestMiddleware {
     const allowedMenus = Array.isArray(user.allowedMenus) ? user.allowedMenus : [];
 
     // Administrator memiliki akses penuh ke seluruh modul dan endpoint
-    if (userRole === "ADMIN") {
+    if (userRole === "ADMIN" || userRole === "ADMINISTRATOR") {
       return next();
     }
 
