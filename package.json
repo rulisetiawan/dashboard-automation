@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs",
+    "build": "node scripts/bundle-frontend.mjs && node build.mjs",
+    "build:frontend": "node scripts/bundle-frontend.mjs",
+    "watch:frontend": "node scripts/bundle-frontend.mjs --watch",
     "build:backend": "node node_modules/typescript/bin/tsc -p tsconfig.backend.json",
     "start": "node dist-backend/server/nest/main.js",
     "dev:postgres": "npm run build:backend && npm run start:postgres",
@@ -16,7 +18,10 @@
     "seed:finishing-demo": "node --env-file=.env scripts/seed-finishing-demo.mjs",
     "demo:finishing:follow": "node --env-file=.env scripts/seed-finishing-demo.mjs --follow",
     "migrate:solar-mysql": "node --env-file=.env scripts/migrate-solar-mysql-to-postgres.mjs --full",
-    "sync:solar-mysql": "node --env-file=.env scripts/migrate-solar-mysql-to-postgres.mjs --follow"
+    "sync:solar-mysql": "node --env-file=.env scripts/migrate-solar-mysql-to-postgres.mjs --follow",
+    "worker:solar": "go run ./services/solar-sync-worker/cmd/worker",
+    "worker:solar:follow": "go run ./services/solar-sync-worker/cmd/worker --follow",
+    "worker:solar:full": "go run ./services/solar-sync-worker/cmd/worker --full"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.1",
@@ -36,6 +41,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^26.2.0",
     "@types/pg": "^8.23.1",
+    "esbuild": "^0.28.2",
     "socket.io-client": "^4.8.3",
     "typescript": "^7.0.2"
   }

@@ -11,6 +11,8 @@ RUN npm ci
 
 # Copy source code and build assets
 COPY server ./server
+COPY src ./src
+COPY scripts ./scripts
 COPY build.mjs ./
 COPY index.html styles.css app.js backend-worker.js ai-assistant.css ai-assistant.js simulasi-full-process.html ./
 COPY assets ./assets
@@ -35,7 +37,8 @@ COPY --from=builder /app/dist-backend ./dist-backend
 COPY --from=builder /app/dist ./dist
 
 # Copy static assets, migration scripts, and maintenance scripts
-COPY index.html styles.css app.js backend-worker.js ai-assistant.css ai-assistant.js simulasi-full-process.html VERSION ./
+COPY index.html styles.css backend-worker.js ai-assistant.css ai-assistant.js simulasi-full-process.html VERSION ./
+COPY --from=builder /app/app.js ./app.js
 COPY assets ./assets
 COPY postgres ./postgres
 COPY scripts ./scripts
