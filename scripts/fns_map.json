@@ -1,0 +1,1478 @@
+[
+  {
+    "name": "jakartaShiftSelection",
+    "line": 1
+  },
+  {
+    "name": "getPageFromUrl",
+    "line": 217
+  },
+  {
+    "name": "restoreDashboardNavigation",
+    "line": 226
+  },
+  {
+    "name": "persistDashboardNavigation",
+    "line": 266
+  },
+  {
+    "name": "loadHistorianParameterPreferences",
+    "line": 345
+  },
+  {
+    "name": "rememberActualParameter",
+    "line": 366
+  },
+  {
+    "name": "jetflowProgramSchedule",
+    "line": 476
+  },
+  {
+    "name": "jetflowProgramForSensor",
+    "line": 486
+  },
+  {
+    "name": "chemicalRangeWindow",
+    "line": 586
+  },
+  {
+    "name": "chemicalAnalyticsQuery",
+    "line": 598
+  },
+  {
+    "name": "requestChemicalAnalytics",
+    "line": 613
+  },
+  {
+    "name": "invalidateChemicalAnalytics",
+    "line": 641
+  },
+  {
+    "name": "backendTimeLabel",
+    "line": 646
+  },
+  {
+    "name": "updateBackendIndicator",
+    "line": 650
+  },
+  {
+    "name": "connectRealtimeChannel",
+    "line": 665
+  },
+  {
+    "name": "activePidAssetId",
+    "line": 724
+  },
+  {
+    "name": "cachePidInstrumentStates",
+    "line": 730
+  },
+  {
+    "name": "pidStatePriority",
+    "line": 740
+  },
+  {
+    "name": "pidVisualState",
+    "line": 752
+  },
+  {
+    "name": "pidLiveDisplayValue",
+    "line": 762
+  },
+  {
+    "name": "applyPidInstrumentStates",
+    "line": 772
+  },
+  {
+    "name": "subscribeActivePidAsset",
+    "line": 831
+  },
+  {
+    "name": "utilityValue",
+    "line": 857
+  },
+  {
+    "name": "hydrateChemicalTransactions",
+    "line": 861
+  },
+  {
+    "name": "solarRange",
+    "line": 889
+  },
+  {
+    "name": "solarRequestKey",
+    "line": 902
+  },
+  {
+    "name": "invalidateSolarFueling",
+    "line": 937
+  },
+  {
+    "name": "wwtpRange",
+    "line": 952
+  },
+  {
+    "name": "wwtpRequestKey",
+    "line": 965
+  },
+  {
+    "name": "updateWwtpPidLogsInPlace",
+    "line": 1005
+  },
+  {
+    "name": "renderWwtpView",
+    "line": 1038
+  },
+  {
+    "name": "updateWwtpBackground",
+    "line": 1076
+  },
+  {
+    "name": "invalidateWwtp",
+    "line": 1085
+  },
+  {
+    "name": "productionOutputRequestKey",
+    "line": 1092
+  },
+  {
+    "name": "productionOutputRequestUrl",
+    "line": 1097
+  },
+  {
+    "name": "invalidateProductionOutputByBatch",
+    "line": 1107
+  },
+  {
+    "name": "realtimeRenderBlocked",
+    "line": 1157
+  },
+  {
+    "name": "scheduleSafeRealtimeRender",
+    "line": 1167
+  },
+  {
+    "name": "markRealtimeInteraction",
+    "line": 1184
+  },
+  {
+    "name": "queueRealtimeBackendRefresh",
+    "line": 1188
+  },
+  {
+    "name": "realtimeSourcesAffectCurrentPage",
+    "line": 1279
+  },
+  {
+    "name": "statusPill",
+    "line": 1365
+  },
+  {
+    "name": "heartbeatAgeLabel",
+    "line": 1370
+  },
+  {
+    "name": "machineConnectionSnapshot",
+    "line": 1377
+  },
+  {
+    "name": "machineConnectionBadge",
+    "line": 1405
+  },
+  {
+    "name": "updateMachineConnectionIndicators",
+    "line": 1413
+  },
+  {
+    "name": "machineControlModeSnapshot",
+    "line": 1432
+  },
+  {
+    "name": "machineControlModeBadge",
+    "line": 1447
+  },
+  {
+    "name": "updateChemicalControlModeIndicators",
+    "line": 1452
+  },
+  {
+    "name": "liveValue",
+    "line": 1470
+  },
+  {
+    "name": "pageHead",
+    "line": 1477
+  },
+  {
+    "name": "panel",
+    "line": 1491
+  },
+  {
+    "name": "kpi",
+    "line": 1503
+  },
+  {
+    "name": "activeAlarmsForAsset",
+    "line": 1513
+  },
+  {
+    "name": "machineAlarmNote",
+    "line": 1523
+  },
+  {
+    "name": "machineHero",
+    "line": 1549
+  },
+  {
+    "name": "chemicalDispensingPidPanel",
+    "line": 1570
+  },
+  {
+    "name": "kalenderPidPanelLegacy",
+    "line": 1706
+  },
+  {
+    "name": "kalenderPidPanel",
+    "line": 1826
+  },
+  {
+    "name": "selectedBatchFor",
+    "line": 1971
+  },
+  {
+    "name": "batchSeed",
+    "line": 1976
+  },
+  {
+    "name": "recentBatchHistory",
+    "line": 1980
+  },
+  {
+    "name": "batchInvestigationPanel",
+    "line": 1996
+  },
+  {
+    "name": "batchTrendWorkspace",
+    "line": 2019
+  },
+  {
+    "name": "batchAbnormalLog",
+    "line": 2025
+  },
+  {
+    "name": "sensorTrendSeries",
+    "line": 2029
+  },
+  {
+    "name": "programTimeLabel",
+    "line": 2057
+  },
+  {
+    "name": "jetflowTrendProgramOverlay",
+    "line": 2061
+  },
+  {
+    "name": "sensorTrendPanel",
+    "line": 2076
+  },
+  {
+    "name": "selector",
+    "line": 2104
+  },
+  {
+    "name": "productionOutputDataset",
+    "line": 2113
+  },
+  {
+    "name": "formatProductionOutput",
+    "line": 2170
+  },
+  {
+    "name": "overviewMachineRecords",
+    "line": 2174
+  },
+  {
+    "name": "overviewConditionPill",
+    "line": 2185
+  },
+  {
+    "name": "overviewMachineStatusTable",
+    "line": 2191
+  },
+  {
+    "name": "plantManagementSummary",
+    "line": 2196
+  },
+  {
+    "name": "overviewPage",
+    "line": 2222
+  },
+  {
+    "name": "processNode",
+    "line": 2277
+  },
+  {
+    "name": "metricTile",
+    "line": 2290
+  },
+  {
+    "name": "activeRunsTable",
+    "line": 2294
+  },
+  {
+    "name": "alarmRow",
+    "line": 2306
+  },
+  {
+    "name": "fleetFor",
+    "line": 2315
+  },
+  {
+    "name": "processBreadcrumb",
+    "line": 2329
+  },
+  {
+    "name": "statusCount",
+    "line": 2340
+  },
+  {
+    "name": "selectedRangeHours",
+    "line": 2425
+  },
+  {
+    "name": "historicalStateFactor",
+    "line": 2429
+  },
+  {
+    "name": "machineMetricValue",
+    "line": 2433
+  },
+  {
+    "name": "machineRuntime",
+    "line": 2441
+  },
+  {
+    "name": "machineDowntime",
+    "line": 2446
+  },
+  {
+    "name": "formatManagementValue",
+    "line": 2452
+  },
+  {
+    "name": "managementKpi",
+    "line": 2457
+  },
+  {
+    "name": "managementTimeFilter",
+    "line": 2469
+  },
+  {
+    "name": "metricTotal",
+    "line": 2484
+  },
+  {
+    "name": "resourceBreakdown",
+    "line": 2488
+  },
+  {
+    "name": "consumptionRanking",
+    "line": 2523
+  },
+  {
+    "name": "downtimePareto",
+    "line": 2535
+  },
+  {
+    "name": "areaStateSummary",
+    "line": 2546
+  },
+  {
+    "name": "processFleetPage",
+    "line": 2556
+  },
+  {
+    "name": "machineSnapshot",
+    "line": 2609
+  },
+  {
+    "name": "processAreaPage",
+    "line": 2620
+  },
+  {
+    "name": "processPage",
+    "line": 2642
+  },
+  {
+    "name": "jetflowPage",
+    "line": 2649
+  },
+  {
+    "name": "calatorPage",
+    "line": 2650
+  },
+  {
+    "name": "dryerPage",
+    "line": 2651
+  },
+  {
+    "name": "kalenderPage",
+    "line": 2652
+  },
+  {
+    "name": "chemicalPage",
+    "line": 2653
+  },
+  {
+    "name": "jetflowDetailPage",
+    "line": 2655
+  },
+  {
+    "name": "equipmentGrid",
+    "line": 2721
+  },
+  {
+    "name": "eventTable",
+    "line": 2725
+  },
+  {
+    "name": "historicalBatchFor",
+    "line": 2772
+  },
+  {
+    "name": "abnormalProcessLog",
+    "line": 2778
+  },
+  {
+    "name": "rangeButtons",
+    "line": 2797
+  },
+  {
+    "name": "historyRangeButtons",
+    "line": 2801
+  },
+  {
+    "name": "toDateTimeLocal",
+    "line": 2805
+  },
+  {
+    "name": "formatDateTime",
+    "line": 2811
+  },
+  {
+    "name": "calatorDetailPage",
+    "line": 2817
+  },
+  {
+    "name": "speedCard",
+    "line": 2874
+  },
+  {
+    "name": "parameterConfigurationRows",
+    "line": 2884
+  },
+  {
+    "name": "kalenderMotorAssets",
+    "line": 2888
+  },
+  {
+    "name": "processMotorAssets",
+    "line": 2898
+  },
+  {
+    "name": "selectedMotorDriveAsset",
+    "line": 2923
+  },
+  {
+    "name": "motorDrillableCard",
+    "line": 2930
+  },
+  {
+    "name": "motorEquipmentPanel",
+    "line": 2934
+  },
+  {
+    "name": "motorDriveData",
+    "line": 2938
+  },
+  {
+    "name": "motorThreePhaseReadings",
+    "line": 2958
+  },
+  {
+    "name": "motorThreePhaseHistoricalData",
+    "line": 2972
+  },
+  {
+    "name": "motorHistoricalLogData",
+    "line": 3014
+  },
+  {
+    "name": "motorHistoricalLogPanel",
+    "line": 3034
+  },
+  {
+    "name": "exportMotorHistoricalLog",
+    "line": 3043
+  },
+  {
+    "name": "motorPhaseTroubleshootingPanel",
+    "line": 3062
+  },
+  {
+    "name": "motorDriveDetailPanel",
+    "line": 3084
+  },
+  {
+    "name": "dryerDetailPage",
+    "line": 3131
+  },
+  {
+    "name": "kalenderDetailPage",
+    "line": 3175
+  },
+  {
+    "name": "createElectricalAsset",
+    "line": 3231
+  },
+  {
+    "name": "electricalDistributionPanel",
+    "line": 3280
+  },
+  {
+    "name": "machinePowerRangeHours",
+    "line": 3322
+  },
+  {
+    "name": "machinePowerMeters",
+    "line": 3326
+  },
+  {
+    "name": "machinePowerAreaSummary",
+    "line": 3345
+  },
+  {
+    "name": "powerEnergyDisplay",
+    "line": 3358
+  },
+  {
+    "name": "machinePowerMeterPanel",
+    "line": 3364
+  },
+  {
+    "name": "utilitiesPage",
+    "line": 3412
+  },
+  {
+    "name": "energyTable",
+    "line": 3451
+  },
+  {
+    "name": "dispensingSupportedCalators",
+    "line": 3461
+  },
+  {
+    "name": "dispenserForCalator",
+    "line": 3469
+  },
+  {
+    "name": "calatorChemicalUsage",
+    "line": 3477
+  },
+  {
+    "name": "chemicalUsageByCalatorPanel",
+    "line": 3484
+  },
+  {
+    "name": "calatorChemicalRankingPanel",
+    "line": 3494
+  },
+  {
+    "name": "chemicalDispensingLogPanel",
+    "line": 3502
+  },
+  {
+    "name": "chemicalVariantSummaryTable",
+    "line": 3533
+  },
+  {
+    "name": "chemicalDetailPage",
+    "line": 3540
+  },
+  {
+    "name": "alarmsPage",
+    "line": 3563
+  },
+  {
+    "name": "formatDowntime",
+    "line": 3599
+  },
+  {
+    "name": "alarmDowntimeAreas",
+    "line": 3605
+  },
+  {
+    "name": "alarmDowntimeAreaPanel",
+    "line": 3617
+  },
+  {
+    "name": "alarmDowntimeMachinePanel",
+    "line": 3627
+  },
+  {
+    "name": "trendsPage",
+    "line": 3634
+  },
+  {
+    "name": "healthPage",
+    "line": 3690
+  },
+  {
+    "name": "databaseIntegrationPage",
+    "line": 3732
+  },
+  {
+    "name": "actualText",
+    "line": 3752
+  },
+  {
+    "name": "actualLabel",
+    "line": 3756
+  },
+  {
+    "name": "actualTime",
+    "line": 3760
+  },
+  {
+    "name": "actualMetric",
+    "line": 3764
+  },
+  {
+    "name": "actualUtilityKind",
+    "line": 3768
+  },
+  {
+    "name": "actualUtilityQuality",
+    "line": 3777
+  },
+  {
+    "name": "actualUtilityKpi",
+    "line": 3785
+  },
+  {
+    "name": "actualFleet",
+    "line": 3824
+  },
+  {
+    "name": "actualEmpty",
+    "line": 3838
+  },
+  {
+    "name": "actualAssetTable",
+    "line": 3842
+  },
+  {
+    "name": "actualSensorValues",
+    "line": 4017
+  },
+  {
+    "name": "actualMeasuredValue",
+    "line": 4033
+  },
+  {
+    "name": "actualHistorianRange",
+    "line": 4041
+  },
+  {
+    "name": "actualHistorianKey",
+    "line": 4053
+  },
+  {
+    "name": "actualSignalLabel",
+    "line": 4057
+  },
+  {
+    "name": "actualTagSeriesKind",
+    "line": 4061
+  },
+  {
+    "name": "actualTagParameterKey",
+    "line": 4066
+  },
+  {
+    "name": "actualSensorParameters",
+    "line": 4076
+  },
+  {
+    "name": "actualParameterSeries",
+    "line": 4086
+  },
+  {
+    "name": "actualBatchSetpointSeries",
+    "line": 4099
+  },
+  {
+    "name": "selectedActualParameter",
+    "line": 4124
+  },
+  {
+    "name": "actualHistorianDisplayValue",
+    "line": 4138
+  },
+  {
+    "name": "requestHistorianRender",
+    "line": 4144
+  },
+  {
+    "name": "databaseActualHistorianPanel",
+    "line": 4203
+  },
+  {
+    "name": "alignedActualParameterTrend",
+    "line": 4245
+  },
+  {
+    "name": "drawActualMachineHistorian",
+    "line": 4272
+  },
+  {
+    "name": "assetEffectiveState",
+    "line": 4287
+  },
+  {
+    "name": "scheduleMatrixSearchRender",
+    "line": 4307
+  },
+  {
+    "name": "stopMatrixCarouselTimer",
+    "line": 4368
+  },
+  {
+    "name": "startMatrixCarouselTimer",
+    "line": 4375
+  },
+  {
+    "name": "updateMatrixCarouselUI",
+    "line": 4402
+  },
+  {
+    "name": "assetMatrixTile",
+    "line": 4414
+  },
+  {
+    "name": "actualAssetMatrixPage",
+    "line": 4454
+  },
+  {
+    "name": "actualOverviewPage",
+    "line": 4756
+  },
+  {
+    "name": "actualProcessPage",
+    "line": 4777
+  },
+  {
+    "name": "actualUtilitiesPage",
+    "line": 4785
+  },
+  {
+    "name": "chemicalNumber",
+    "line": 4813
+  },
+  {
+    "name": "chemicalDuration",
+    "line": 4818
+  },
+  {
+    "name": "chemicalRangeLabel",
+    "line": 4825
+  },
+  {
+    "name": "chemicalColorFor",
+    "line": 4830
+  },
+  {
+    "name": "chemicalFilterPanel",
+    "line": 4835
+  },
+  {
+    "name": "chemicalUnitOverview",
+    "line": 4850
+  },
+  {
+    "name": "chemicalVariantSummaryPanel",
+    "line": 4866
+  },
+  {
+    "name": "chemicalConsumptionChartPanel",
+    "line": 4878
+  },
+  {
+    "name": "chemicalModeSummary",
+    "line": 4886
+  },
+  {
+    "name": "chemicalTransactionPanel",
+    "line": 4892
+  },
+  {
+    "name": "chemicalUnitHeader",
+    "line": 4907
+  },
+  {
+    "name": "actualChemicalPage",
+    "line": 4912
+  },
+  {
+    "name": "solarNumber",
+    "line": 4936
+  },
+  {
+    "name": "solarStatusPill",
+    "line": 4940
+  },
+  {
+    "name": "solarRangeToolbar",
+    "line": 4946
+  },
+  {
+    "name": "solarTransactionTable",
+    "line": 4952
+  },
+  {
+    "name": "solarNiceMaximum",
+    "line": 4962
+  },
+  {
+    "name": "solarBucketLabel",
+    "line": 4967
+  },
+  {
+    "name": "solarComparisonCard",
+    "line": 4973
+  },
+  {
+    "name": "solarQrStatusCard",
+    "line": 4982
+  },
+  {
+    "name": "solarOverview",
+    "line": 4986
+  },
+  {
+    "name": "solarTransactions",
+    "line": 5023
+  },
+  {
+    "name": "solarMovements",
+    "line": 5028
+  },
+  {
+    "name": "solarOpnames",
+    "line": 5033
+  },
+  {
+    "name": "actualSolarPage",
+    "line": 5038
+  },
+  {
+    "name": "wwtpRangeToolbar",
+    "line": 5051
+  },
+  {
+    "name": "wwtpSummaryView",
+    "line": 5073
+  },
+  {
+    "name": "wwtpInletView",
+    "line": 5177
+  },
+  {
+    "name": "wwtpPidView",
+    "line": 5301
+  },
+  {
+    "name": "bindWwtpPidActions",
+    "line": 5349
+  },
+  {
+    "name": "actualWwtpPage",
+    "line": 5366
+  },
+  {
+    "name": "alarmRuleOperator",
+    "line": 5430
+  },
+  {
+    "name": "captureAlarmRuleDraft",
+    "line": 5434
+  },
+  {
+    "name": "alarmDecimal",
+    "line": 5455
+  },
+  {
+    "name": "alarmRuleConfigPanel",
+    "line": 5460
+  },
+  {
+    "name": "captureDeviationRuleDraft",
+    "line": 5563
+  },
+  {
+    "name": "processDeviationRuleConfigPanel",
+    "line": 5600
+  },
+  {
+    "name": "actualAlarmTable",
+    "line": 5740
+  },
+  {
+    "name": "actualAlarmsPage",
+    "line": 5750
+  },
+  {
+    "name": "actualHistoricalExplorer",
+    "line": 5777
+  },
+  {
+    "name": "drawActualHistoryExplorer",
+    "line": 5810
+  },
+  {
+    "name": "shiftActualHistoryView",
+    "line": 5835
+  },
+  {
+    "name": "zoomActualHistoryView",
+    "line": 5840
+  },
+  {
+    "name": "bindActualHistoryExplorerPan",
+    "line": 5846
+  },
+  {
+    "name": "actualTrendsPage",
+    "line": 5881
+  },
+  {
+    "name": "actualHealthPage",
+    "line": 6077
+  },
+  {
+    "name": "databaseSnapshotMetrics",
+    "line": 6082
+  },
+  {
+    "name": "actualMachineSummaryRun",
+    "line": 6093
+  },
+  {
+    "name": "actualMachineSummaryKey",
+    "line": 6099
+  },
+  {
+    "name": "actualDuration",
+    "line": 6140
+  },
+  {
+    "name": "actualSummaryNumber",
+    "line": 6147
+  },
+  {
+    "name": "actualPeakLabel",
+    "line": 6152
+  },
+  {
+    "name": "machinePerformanceSummary",
+    "line": 6156
+  },
+  {
+    "name": "databaseMachineReading",
+    "line": 6193
+  },
+  {
+    "name": "latestActualProcessRuns",
+    "line": 6198
+  },
+  {
+    "name": "actualDonutMarkup",
+    "line": 6210
+  },
+  {
+    "name": "productionOutputValue",
+    "line": 6225
+  },
+  {
+    "name": "productionOutputSource",
+    "line": 6231
+  },
+  {
+    "name": "productionOutputChartItems",
+    "line": 6237
+  },
+  {
+    "name": "productionOutputDonutMarkup",
+    "line": 6253
+  },
+  {
+    "name": "productionOutputControls",
+    "line": 6270
+  },
+  {
+    "name": "actualProductionOutputPanel",
+    "line": 6295
+  },
+  {
+    "name": "productionOutputMetric",
+    "line": 6312
+  },
+  {
+    "name": "productionProcessOutputValue",
+    "line": 6323
+  },
+  {
+    "name": "actualProductionOutputProcessPanel",
+    "line": 6329
+  },
+  {
+    "name": "actualMachineProcessMetric",
+    "line": 6360
+  },
+  {
+    "name": "actualProcessResourcePanels",
+    "line": 6372
+  },
+  {
+    "name": "finishingMonitoringScope",
+    "line": 6418
+  },
+  {
+    "name": "databaseOverviewPage",
+    "line": 6427
+  },
+  {
+    "name": "databaseFleetPage",
+    "line": 6470
+  },
+  {
+    "name": "databaseAreaPage",
+    "line": 6503
+  },
+  {
+    "name": "databaseEquipmentPanel",
+    "line": 6522
+  },
+  {
+    "name": "actualBatchRunFor",
+    "line": 6534
+  },
+  {
+    "name": "actualBatchLookupPanel",
+    "line": 6542
+  },
+  {
+    "name": "actualBatchSettingMeta",
+    "line": 6586
+  },
+  {
+    "name": "actualBatchJsonSummary",
+    "line": 6592
+  },
+  {
+    "name": "actualBatchContextPanel",
+    "line": 6608
+  },
+  {
+    "name": "actualBatchParameterPanel",
+    "line": 6620
+  },
+  {
+    "name": "actualBatchProcessPanel",
+    "line": 6629
+  },
+  {
+    "name": "actualBatchTargetPanel",
+    "line": 6634
+  },
+  {
+    "name": "actualBatchSetpointChangePanel",
+    "line": 6655
+  },
+  {
+    "name": "actualBatchAlarmPanel",
+    "line": 6670
+  },
+  {
+    "name": "actualBatchWorkspace",
+    "line": 6694
+  },
+  {
+    "name": "databaseMachineDetailPage",
+    "line": 6706
+  },
+  {
+    "name": "databaseProcessPage",
+    "line": 6726
+  },
+  {
+    "name": "databaseDashboardPage",
+    "line": 6733
+  },
+  {
+    "name": "actualDataPage",
+    "line": 6750
+  },
+  {
+    "name": "updateNavigationCounts",
+    "line": 6767
+  },
+  {
+    "name": "setActiveAlarmCount",
+    "line": 6788
+  },
+  {
+    "name": "upsertActiveAlarm",
+    "line": 6797
+  },
+  {
+    "name": "removeActiveAlarm",
+    "line": 6804
+  },
+  {
+    "name": "openActiveAlarmPage",
+    "line": 6810
+  },
+  {
+    "name": "renderPage",
+    "line": 6816
+  },
+  {
+    "name": "loadChemicalTransactionPage",
+    "line": 6877
+  },
+  {
+    "name": "normalizeBatchNumber",
+    "line": 6886
+  },
+  {
+    "name": "loadBatchInvestigation",
+    "line": 6890
+  },
+  {
+    "name": "trackDatabaseProcessRun",
+    "line": 6933
+  },
+  {
+    "name": "bindSolarTrendTooltips",
+    "line": 6996
+  },
+  {
+    "name": "bindPageEvents",
+    "line": 7029
+  },
+  {
+    "name": "isPageAllowed",
+    "line": 8084
+  },
+  {
+    "name": "navigate",
+    "line": 8094
+  },
+  {
+    "name": "openMachineDetail",
+    "line": 8117
+  },
+  {
+    "name": "filterFleetMachines",
+    "line": 8127
+  },
+  {
+    "name": "selectHistoryRange",
+    "line": 8141
+  },
+  {
+    "name": "applyCustomHistoryRange",
+    "line": 8157
+  },
+  {
+    "name": "resetHistoricalViewport",
+    "line": 8177
+  },
+  {
+    "name": "fitHistoricalTrend",
+    "line": 8182
+  },
+  {
+    "name": "zoomHistoricalTrend",
+    "line": 8188
+  },
+  {
+    "name": "acknowledgeAlarm",
+    "line": 8197
+  },
+  {
+    "name": "acknowledgeAll",
+    "line": 8206
+  },
+  {
+    "name": "filterAlarms",
+    "line": 8213
+  },
+  {
+    "name": "updateAlarmCounts",
+    "line": 8229
+  },
+  {
+    "name": "showToast",
+    "line": 8238
+  },
+  {
+    "name": "alarmPopupId",
+    "line": 8247
+  },
+  {
+    "name": "activeAlarmCarouselItems",
+    "line": 8251
+  },
+  {
+    "name": "openAlarmMachineDetail",
+    "line": 8262
+  },
+  {
+    "name": "shiftActiveAlarmCarousel",
+    "line": 8272
+  },
+  {
+    "name": "renderActiveAlarmCarousel",
+    "line": 8281
+  },
+  {
+    "name": "syncActiveAlarmPopups",
+    "line": 8321
+  },
+  {
+    "name": "showAlarmPopup",
+    "line": 8325
+  },
+  {
+    "name": "initPageCharts",
+    "line": 8329
+  },
+  {
+    "name": "drawSensorComparisonTrends",
+    "line": 8401
+  },
+  {
+    "name": "drawMotorDriveTrend",
+    "line": 8436
+  },
+  {
+    "name": "shiftMotorDriveTrend",
+    "line": 8466
+  },
+  {
+    "name": "bindMotorDrivePan",
+    "line": 8471
+  },
+  {
+    "name": "wave",
+    "line": 8544
+  },
+  {
+    "name": "trendTooltipTimeLabel",
+    "line": 8548
+  },
+  {
+    "name": "readChartTooltipState",
+    "line": 8572
+  },
+  {
+    "name": "rememberChartTooltipState",
+    "line": 8581
+  },
+  {
+    "name": "clearChartTooltipState",
+    "line": 8589
+  },
+  {
+    "name": "restoredChartTooltipIndex",
+    "line": 8597
+  },
+  {
+    "name": "bindLineChartTooltip",
+    "line": 8608
+  },
+  {
+    "name": "drawLineChart",
+    "line": 8676
+  },
+  {
+    "name": "drawChemicalConsumptionTrend",
+    "line": 8792
+  },
+  {
+    "name": "bindBarChartTooltip",
+    "line": 8887
+  },
+  {
+    "name": "drawBarChart",
+    "line": 8955
+  },
+  {
+    "name": "drawElectricalDistributionChart",
+    "line": 9031
+  },
+  {
+    "name": "drawMachinePowerAreaChart",
+    "line": 9087
+  },
+  {
+    "name": "roundedRect",
+    "line": 9145
+  },
+  {
+    "name": "formatAxis",
+    "line": 9156
+  },
+  {
+    "name": "timeLabel",
+    "line": 9163
+  },
+  {
+    "name": "clamp",
+    "line": 9169
+  },
+  {
+    "name": "historicalDataset",
+    "line": 9173
+  },
+  {
+    "name": "drawHistoricalTrend",
+    "line": 9190
+  },
+  {
+    "name": "historicalAxisLabel",
+    "line": 9210
+  },
+  {
+    "name": "updateHistoricalViewportUI",
+    "line": 9221
+  },
+  {
+    "name": "shiftHistoricalTrend",
+    "line": 9239
+  },
+  {
+    "name": "handleHistoricalKey",
+    "line": 9244
+  },
+  {
+    "name": "bindHistoricalPan",
+    "line": 9251
+  },
+  {
+    "name": "updateLiveNumbers",
+    "line": 9320
+  },
+  {
+    "name": "updateClock",
+    "line": 9330
+  },
+  {
+    "name": "isMobileScreen",
+    "line": 9352
+  },
+  {
+    "name": "isSidebarOpen",
+    "line": 9356
+  },
+  {
+    "name": "updateSidebarToggleAttributes",
+    "line": 9365
+  },
+  {
+    "name": "openSidebar",
+    "line": 9379
+  },
+  {
+    "name": "closeSidebar",
+    "line": 9391
+  },
+  {
+    "name": "toggleSidebar",
+    "line": 9403
+  },
+  {
+    "name": "initializeSidebarState",
+    "line": 9411
+  },
+  {
+    "name": "authenticationInitials",
+    "line": 9422
+  },
+  {
+    "name": "applyMenuPermissions",
+    "line": 9427
+  },
+  {
+    "name": "applyAuthenticatedUser",
+    "line": 9478
+  },
+  {
+    "name": "showAuthenticationScreen",
+    "line": 9496
+  },
+  {
+    "name": "showAuthenticatedDashboard",
+    "line": 9517
+  },
+  {
+    "name": "escapeHtml",
+    "line": 9707
+  },
+  {
+    "name": "accessDeniedPage",
+    "line": 9719
+  },
+  {
+    "name": "renderRbacMenuGridHtml",
+    "line": 9823
+  },
+  {
+    "name": "renderRbacUsersRowsHtml",
+    "line": 9858
+  },
+  {
+    "name": "rolePermissionPage",
+    "line": 9899
+  },
+  {
+    "name": "bindRolePermissionPageEvents",
+    "line": 10001
+  },
+  {
+    "name": "updateUserManagementStats",
+    "line": 10123
+  },
+  {
+    "name": "renderUserManagementRowsHtml",
+    "line": 10143
+  },
+  {
+    "name": "userManagementPage",
+    "line": 10234
+  },
+  {
+    "name": "openUserModal",
+    "line": 10338
+  },
+  {
+    "name": "closeUserModal",
+    "line": 10436
+  },
+  {
+    "name": "bindUserManagementPageEvents",
+    "line": 10613
+  }
+]

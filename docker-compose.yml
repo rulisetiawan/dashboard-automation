@@ -75,6 +75,35 @@ services:
       postgres:
         condition: service_healthy
 
+  solar-sync-worker:
+    build:
+      context: ./services/solar-sync-worker
+      dockerfile: Dockerfile
+    container_name: pt_smm_solar_sync_worker
+    restart: unless-stopped
+    environment:
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-pt_smm_scada}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      SMM_MYSQL_HOST: ${SMM_MYSQL_HOST:-192.168.100.82}
+      SMM_MYSQL_PORT: ${SMM_MYSQL_PORT:-3306}
+      SMM_MYSQL_USER: ${SMM_MYSQL_USER:-root}
+      SMM_MYSQL_PASSWORD: ${SMM_MYSQL_PASSWORD:-}
+      SMM_MYSQL_DATABASE: ${SMM_MYSQL_DATABASE:-qr_code_db}
+      SOLAR_SYNC_INTERVAL_MS: ${SOLAR_SYNC_INTERVAL_MS:-15000}
+    env_file:
+      - path: .env
+        required: false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "host.orb.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   nginx:
     image: nginx:alpine
     container_name: pt_smm_nginx
