@@ -146,6 +146,9 @@ const state = {
     search: "",
     page: 1,
     pageSize: 25,
+    equipmentStage: "all",
+    equipmentStatus: "all",
+    equipmentViewMode: "grid",
   },
   motorDrive: {
     selected: null,
@@ -986,6 +989,8 @@ async function loadWwtpData({ force = false, preserveScroll = true, background =
       result = await fetchJson(`/api/v1/wwtp/summary?${common}`, "WWTP summary API");
     } else if (state.wwtp.tab === "inlet") {
       result = await fetchJson(`/api/v1/wwtp/inlet?${common}`, "WWTP inlet API");
+    } else if (state.wwtp.tab === "equipment") {
+      result = await fetchJson(`/api/v1/wwtp/equipment`, "WWTP equipment API");
     } else if (state.wwtp.tab === "pid") {
       const [values, logs] = await Promise.all([
         fetchJson(`/api/v1/wwtp/pid/values`, "WWTP PID values API"),
@@ -1058,6 +1063,9 @@ function renderWwtpView({ preserveScroll = true } = {}) {
   }
   if (state.wwtp.tab === "inlet") {
     container.innerHTML = wwtpInletView(data);
+  } else if (state.wwtp.tab === "equipment") {
+    container.innerHTML = wwtpEquipmentView(data);
+    bindWwtpEquipmentActions();
   } else {
     container.innerHTML = wwtpSummaryView(data);
   }
