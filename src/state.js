@@ -59,6 +59,13 @@ const state = {
     remainingSeconds: 30,
     isPaused: false,
   },
+  commandCenter: {
+    enabled: typeof localStorage !== "undefined" ? localStorage.getItem("smm_cc_enabled") !== "false" : true,
+    slideIndex: 0,
+    remainingSeconds: 14,
+    autoIntervalSec: 14,
+    isPaused: false,
+  },
   range: "8H",
   history: {
     preset: "8H",
@@ -218,7 +225,7 @@ const state = {
 };
 
 const navigationStorageKey = "pt-smm.dashboard.navigation.v2";
-const navigationPages = new Set(["overview", "asset_status", "asset_matrix", "jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "utilities", "chemical", "solar", "wwtp", "alarms", "trends", "health", "roles", "users"]);
+const navigationPages = new Set(["command_center", "overview", "asset_status", "asset_matrix", "jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "utilities", "chemical", "solar", "wwtp", "alarms", "trends", "health", "roles", "users"]);
 const processNavigationPages = ["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "chemical"];
 
 function getPageFromUrl() {
@@ -382,6 +389,7 @@ function rememberActualParameter(assetId, parameterKey) {
 }
 
 const pageMeta = {
+  command_center: ["Command Center", "SCADA / MES Control", "Smart Manufacturing SCADA / MES Command Center."],
   overview: ["Plant Overview", "Live Operations", "Seluruh proses, mesin, utilitas, dan exception dalam satu tampilan."],
   asset_status: ["Asset Status", "Status Monitor", ""],
   asset_matrix: ["Asset Status", "Status Monitor", ""],

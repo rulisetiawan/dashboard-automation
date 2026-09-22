@@ -215,9 +215,10 @@ func (r *Repository) GetSolarOverview(ctx context.Context, since time.Time) (*So
 		       COALESCE(
 		         (SELECT transaction.calculated_stock_liters
 		          FROM solar_fueling_transaction transaction
-		          WHERE transaction.calculated_stock_liters IS NOT NULL
-		            AND COALESCE(transaction.fueling_completed_at, transaction.source_updated_at, transaction.qr_created_at) <= NOW()
-		          ORDER BY COALESCE(transaction.fueling_completed_at, transaction.source_updated_at, transaction.qr_created_at) DESC, transaction.source_id DESC LIMIT 1),
+		          WHERE transaction.transaction_status = 'COMPLETED'
+		            AND transaction.calculated_stock_liters IS NOT NULL
+		            AND transaction.fueling_completed_at <= NOW()
+		          ORDER BY transaction.fueling_completed_at DESC NULLS LAST, transaction.source_id DESC LIMIT 1),
 		         config.opening_stock_liters
 		         + COALESCE((SELECT SUM(CASE WHEN movement.direction = 'IN' THEN movement.quantity_liters ELSE -movement.quantity_liters END)
 		                     FROM solar_stock_movement movement WHERE movement.tank_id = config.tank_id AND movement.occurred_at >= config.opening_at), 0)

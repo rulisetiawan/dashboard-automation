@@ -1331,7 +1331,7 @@ function applyMenuPermissions(user) {
       const page = btn.dataset.page;
       const canAccess = (page === "roles" || page === "users")
         ? isAdmin
-        : (isAdmin || page === "asset_status" || page === "asset_matrix" || allowed.includes(page));
+        : (isAdmin || page === "command_center" || page === "asset_status" || page === "asset_matrix" || allowed.includes(page));
       btn.classList.toggle("hidden", !canAccess);
     });
 
