@@ -792,11 +792,271 @@ export class WwtpController {
     return { ok: true };
   }
 
+  private async getLiveEquipmentTelemetry(): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    try {
+      const remoteQuery = `SELECT DISTINCT ON (sensor_tag) sensor_tag, value::float as val
+        FROM ipal_sensor_readings
+        WHERE captured_at >= NOW() - INTERVAL '15 minutes'
+          AND (
+            sensor_tag LIKE 'POMPA_INLET%'
+            OR sensor_tag LIKE 'BLOWER_CT%'
+          )
+        ORDER BY sensor_tag, captured_at DESC`;
+      const res = await this.database.query<{ sensor_tag: string; val: number }>(
+        `SELECT * FROM dblink('ipal_db_server', $1) AS t(sensor_tag text, val float)`,
+        [remoteQuery]
+      );
+      for (const r of res.rows) {
+        map.set(r.sensor_tag, Number(r.val || 0));
+      }
+    } catch {
+      try {
+        const local = await this.database.query<{ sensor_tag: string; value: number }>(`
+          SELECT sensor_tag, value FROM wwtp.sensor_realtime_values
+          WHERE sensor_tag LIKE 'POMPA_INLET%' OR sensor_tag LIKE 'BLOWER_CT%'
+        `);
+        for (const r of local.rows) {
+          map.set(r.sensor_tag, Number(r.value || 0));
+        }
+      } catch {}
+    }
+    return map;
+  }
+
+  @Get("api/v1/wwtp/equipment")
+  async getWwtpEquipmentMonitoring() {
+    try {
+      const [masterRes, runtimeRes, controlRes, scheduleRes, telemetryMap] = await Promise.all([
+        this.database.query<any>(`SELECT * FROM wwtp.equipment_master`).catch(() => ({ rows: [] })),
+        this.database.query<any>(`SELECT * FROM wwtp.equipment_runtime_totals`).catch(() => ({ rows: [] })),
+        this.database.query<any>(`SELECT * FROM wwtp.equipment_control_state WHERE equipment_id NOT LIKE 'control-%'`).catch(() => ({ rows: [] })),
+        this.database.query<any>(`SELECT * FROM wwtp.maintenance_schedules ORDER BY schedule_date ASC`).catch(() => ({ rows: [] })),
+        this.getLiveEquipmentTelemetry(),
+      ]);
+
+      const runtimeMap = new Map<string, any>();
+      for (const r of runtimeRes.rows) {
+        runtimeMap.set(r.equipment_id, r);
+      }
+
+      const controlMap = new Map<string, any>();
+      for (const c of controlRes.rows) {
+        controlMap.set(c.equipment_id, c);
+      }
+
+      const scheduleMap = new Map<string, any>();
+      for (const s of scheduleRes.rows) {
+        const assetKey = String(s.asset_id || s.equipment_name || "").toUpperCase();
+        if (!scheduleMap.has(assetKey)) {
+          scheduleMap.set(assetKey, s);
+        }
+      }
+
+      const processStages = [
+        { key: "inlet_ct", name: "Inlet & Cooling Tower", stageNumber: 1, description: "Pemompaan air limbah awal dan pendinginan temperatur di cooling tower" },
+        { key: "equalization", name: "Bak Equalisasi", stageNumber: 2, description: "Penyeragaman debit, kualitas air limbah, dan transfer ke tahap pengolahan" },
+        { key: "coagulation", name: "Koagulasi & Flokulasi", stageNumber: 3, description: "Injeksi koagulan/polimer, pengadukan cepat & resirkulasi lumpur" },
+        { key: "aeration", name: "Bak Aerasi", stageNumber: 4, description: "Suplai oksigen terlarut (DO) untuk mikroorganisme biologi aerobik" },
+        { key: "ph_control", name: "Netralisasi & pH Control", stageNumber: 5, description: "Dosing asam (acid) dan basa (alkali) untuk menjaga kestabilan pH target" },
+        { key: "sludge", name: "Pengolahan Lumpur & Sludge", stageNumber: 6, description: "Flotasi DAF, pengentalan thickener, dewatering filter press & resirkulasi" },
+      ];
+
+      const catalog = [
+        // Tahap 1 · Inlet & Cooling Tower
+        { id: "p-101", code: "P-101", name: "Pompa Inlet 1", type: "Pompa", stageKey: "inlet_ct", meterAssetId: "POMPA_INLET_1", kwTag: "POMPA_INLET_1_ACTIVE_POWER", currentR: "POMPA_INLET_1_CURRENT_R", currentS: "POMPA_INLET_1_CURRENT_S", currentT: "POMPA_INLET_1_CURRENT_T", voltageR: "POMPA_INLET_1_VOLTAGE_R", voltageS: "POMPA_INLET_1_VOLTAGE_S", voltageT: "POMPA_INLET_1_VOLTAGE_T", energyTag: "POMPA_INLET_1_ENERGY", ratedKw: 45, maintenanceTarget: 500 },
+        { id: "p-102", code: "P-102", name: "Pompa Inlet 2", type: "Pompa", stageKey: "inlet_ct", meterAssetId: "POMPA_INLET_2", kwTag: "POMPA_INLET_2_ACTIVE_POWER", currentR: "POMPA_INLET_2_CURRENT_R", currentS: "POMPA_INLET_2_CURRENT_S", currentT: "POMPA_INLET_2_CURRENT_T", voltageR: "POMPA_INLET_2_VOLTAGE_R", voltageS: "POMPA_INLET_2_VOLTAGE_S", voltageT: "POMPA_INLET_2_VOLTAGE_T", energyTag: "POMPA_INLET_2_ENERGY", ratedKw: 45, maintenanceTarget: 500 },
+        { id: "p-103", code: "P-103", name: "Pompa Inlet 3", type: "Pompa", stageKey: "inlet_ct", meterAssetId: "POMPA_INLET_3", kwTag: "POMPA_INLET_3_ACTIVE_POWER", currentR: "POMPA_INLET_3_CURRENT_R", currentS: "POMPA_INLET_3_CURRENT_S", currentT: "POMPA_INLET_3_CURRENT_T", voltageR: "POMPA_INLET_3_VOLTAGE_R", voltageS: "POMPA_INLET_3_VOLTAGE_S", voltageT: "POMPA_INLET_3_VOLTAGE_T", energyTag: "POMPA_INLET_3_ENERGY", ratedKw: 45, maintenanceTarget: 500 },
+        { id: "p-104", code: "P-104", name: "Pompa Inlet 4", type: "Pompa", stageKey: "inlet_ct", meterAssetId: "POMPA_INLET_4", kwTag: "POMPA_INLET_4_ACTIVE_POWER", currentR: "POMPA_INLET_4_CURRENT_R", currentS: "POMPA_INLET_4_CURRENT_S", currentT: "POMPA_INLET_4_CURRENT_T", voltageR: "POMPA_INLET_4_VOLTAGE_R", voltageS: "POMPA_INLET_4_VOLTAGE_S", voltageT: "POMPA_INLET_4_VOLTAGE_T", energyTag: "POMPA_INLET_4_ENERGY", ratedKw: 45, maintenanceTarget: 500 },
+        { id: "p-105", code: "P-105", name: "Pompa Inlet 5", type: "Pompa", stageKey: "inlet_ct", ratedKw: 45, maintenanceTarget: 500 },
+        { id: "blower-ct1", code: "BLW-CT1", name: "Blower CT 1", type: "Blower", stageKey: "inlet_ct", meterAssetId: "BLOWER_CT_1", kwTag: "BLOWER_CT_1_ACTIVE_POWER", currentR: "BLOWER_CT_1_CURRENT_R", currentS: "BLOWER_CT_1_CURRENT_S", currentT: "BLOWER_CT_1_CURRENT_T", voltageR: "BLOWER_CT_1_VOLTAGE_R", voltageS: "BLOWER_CT_1_VOLTAGE_S", voltageT: "BLOWER_CT_1_VOLTAGE_T", energyTag: "BLOWER_CT_1_ENERGY", ratedKw: 15, maintenanceTarget: 500 },
+        { id: "blower-ct2", code: "BLW-CT2", name: "Blower CT 2", type: "Blower", stageKey: "inlet_ct", meterAssetId: "BLOWER_CT_2", kwTag: "BLOWER_CT_2_ACTIVE_POWER", currentR: "BLOWER_CT_2_CURRENT_R", currentS: "BLOWER_CT_2_CURRENT_S", currentT: "BLOWER_CT_2_CURRENT_T", voltageR: "BLOWER_CT_2_VOLTAGE_R", voltageS: "BLOWER_CT_2_VOLTAGE_S", voltageT: "BLOWER_CT_2_VOLTAGE_T", energyTag: "BLOWER_CT_2_ENERGY", ratedKw: 15, maintenanceTarget: 500 },
+        { id: "blower-ct3", code: "BLW-CT3", name: "Blower CT 3", type: "Blower", stageKey: "inlet_ct", meterAssetId: "BLOWER_CT_3", kwTag: "BLOWER_CT_3_ACTIVE_POWER", currentR: "BLOWER_CT_3_CURRENT_R", currentS: "BLOWER_CT_3_CURRENT_S", currentT: "BLOWER_CT_3_CURRENT_T", voltageR: "BLOWER_CT_3_VOLTAGE_R", voltageS: "BLOWER_CT_3_VOLTAGE_S", voltageT: "BLOWER_CT_3_VOLTAGE_T", energyTag: "BLOWER_CT_3_ENERGY", ratedKw: 15, maintenanceTarget: 500 },
+        { id: "blower-ct4", code: "BLW-CT4", name: "Blower CT 4", type: "Blower", stageKey: "inlet_ct", meterAssetId: "BLOWER_CT_4", kwTag: "BLOWER_CT_4_ACTIVE_POWER", currentR: "BLOWER_CT_4_CURRENT_R", currentS: "BLOWER_CT_4_CURRENT_S", currentT: "BLOWER_CT_4_CURRENT_T", voltageR: "BLOWER_CT_4_VOLTAGE_R", voltageS: "BLOWER_CT_4_VOLTAGE_S", voltageT: "BLOWER_CT_4_VOLTAGE_T", energyTag: "BLOWER_CT_4_ENERGY", ratedKw: 15, maintenanceTarget: 500 },
+
+        // Tahap 2 · Bak Equalisasi
+        { id: "p-201", code: "P-201", name: "Pompa Transfer Equalisasi 1", type: "Pompa", stageKey: "equalization", ratedKw: 18.5, maintenanceTarget: 500 },
+        { id: "p-202", code: "P-202", name: "Pompa Transfer Equalisasi 2", type: "Pompa", stageKey: "equalization", ratedKw: 18.5, maintenanceTarget: 500 },
+
+        // Tahap 3 · Koagulasi & Flokulasi
+        { id: "coagulation-mixer", code: "MX-101", name: "Coagulation Rapid Mixer", type: "Mixer", stageKey: "coagulation", ratedKw: 5.5, maintenanceTarget: 500 },
+        { id: "coagulation-pac-pump", code: "DP-101", name: "PAC Dosing Pump", type: "Dosing Pump", stageKey: "coagulation", ratedKw: 1.5, maintenanceTarget: 500 },
+        { id: "coagulation-polymer-pump", code: "DP-102", name: "Polymer Dosing Pump", type: "Dosing Pump", stageKey: "coagulation", ratedKw: 1.5, maintenanceTarget: 500 },
+        { id: "p-402", code: "P-402", name: "Pompa Resirkulasi Koagulasi 1", type: "Pompa", stageKey: "coagulation", ratedKw: 7.5, maintenanceTarget: 500 },
+        { id: "p-403", code: "P-403", name: "Pompa Resirkulasi Koagulasi 2", type: "Pompa", stageKey: "coagulation", ratedKw: 7.5, maintenanceTarget: 500 },
+
+        // Tahap 4 · Bak Aerasi
+        { id: "blw-301", code: "BLW-301", name: "Blower Aerasi 1 (AER-1)", type: "Blower", stageKey: "aeration", ratedKw: 37, maintenanceTarget: 500 },
+        { id: "blw-302", code: "BLW-302", name: "Blower Aerasi 2 (AER-2)", type: "Blower", stageKey: "aeration", ratedKw: 37, maintenanceTarget: 500 },
+        { id: "blw-303", code: "BLW-303", name: "Blower Aerasi 3 (AER-3)", type: "Blower", stageKey: "aeration", ratedKw: 37, maintenanceTarget: 500 },
+        { id: "blw-304", code: "BLW-304", name: "Blower Aerasi 4 (AER-4)", type: "Blower", stageKey: "aeration", ratedKw: 37, maintenanceTarget: 500 },
+
+        // Tahap 5 · Netralisasi & pH Control
+        { id: "ph-acid-dosing-pump", code: "DP-201", name: "Acid Dosing Pump (H2SO4)", type: "Dosing Pump", stageKey: "ph_control", ratedKw: 1.5, maintenanceTarget: 500 },
+        { id: "ph-alkali-dosing-pump", code: "DP-202", name: "Alkali Dosing Pump (NaOH)", type: "Dosing Pump", stageKey: "ph_control", ratedKw: 1.5, maintenanceTarget: 500 },
+        { id: "ph-dosing-system", code: "SYS-PH", name: "Auto pH Neutralizer System", type: "Dosing System", stageKey: "ph_control", ratedKw: 3.0, maintenanceTarget: 500 },
+
+        // Tahap 6 · Pengolahan Lumpur & Sludge
+        { id: "p-401", code: "P-401", name: "Pompa Transfer Intermediate", type: "Pompa", stageKey: "sludge", ratedKw: 11, maintenanceTarget: 500 },
+        { id: "p-501", code: "P-501", name: "Pompa Sludge DAF", type: "Pompa", stageKey: "sludge", ratedKw: 15, maintenanceTarget: 500 },
+        { id: "p-502", code: "P-502", name: "Pompa Lumpur Thickener", type: "Pompa", stageKey: "sludge", ratedKw: 11, maintenanceTarget: 500 },
+        { id: "p-503", code: "P-503", name: "Pompa Feed Filter Press", type: "Pompa", stageKey: "sludge", ratedKw: 15, maintenanceTarget: 500 },
+        { id: "p-504", code: "P-504", name: "Pompa Recirc Sludge Return", type: "Pompa", stageKey: "sludge", ratedKw: 11, maintenanceTarget: 500 },
+      ];
+
+      const stageLookup = new Map(processStages.map((s) => [s.key, s]));
+
+      let runningCount = 0;
+      let standbyCount = 0;
+      let maintenanceDueCount = 0;
+      let totalPowerKw = 0;
+      let totalEnergyKwh = 0;
+
+      const equipmentList = catalog.map((item) => {
+        const rt = runtimeMap.get(item.id) || {};
+        const ctrl = controlMap.get(item.id) || {};
+        const sched =
+          (item.meterAssetId && scheduleMap.get(item.meterAssetId.toUpperCase())) ||
+          scheduleMap.get(item.id.toUpperCase()) ||
+          null;
+
+        // Electrical readings
+        const powerKw = item.kwTag && telemetryMap.has(item.kwTag)
+          ? Math.round((telemetryMap.get(item.kwTag) || 0) * 10) / 10
+          : null;
+        const curR = item.currentR ? (telemetryMap.get(item.currentR) || 0) : null;
+        const curS = item.currentS ? (telemetryMap.get(item.currentS) || 0) : null;
+        const curT = item.currentT ? (telemetryMap.get(item.currentT) || 0) : null;
+        const curAvg = curR !== null && curS !== null && curT !== null
+          ? Math.round(((curR + curS + curT) / 3) * 10) / 10
+          : null;
+
+        const vR = item.voltageR ? (telemetryMap.get(item.voltageR) || 0) : null;
+        const vS = item.voltageS ? (telemetryMap.get(item.voltageS) || 0) : null;
+        const vT = item.voltageT ? (telemetryMap.get(item.voltageT) || 0) : null;
+        const vAvg = vR !== null && vS !== null && vT !== null
+          ? Math.round(((vR + vS + vT) / 3) * 10) / 10
+          : null;
+
+        const energy = item.energyTag && telemetryMap.has(item.energyTag)
+          ? Math.round((telemetryMap.get(item.energyTag) || 0) * 10) / 10
+          : null;
+
+        // Runtime hours
+        const rawSec = Number(rt.total_runtime_seconds || 0);
+        const runtimeHours = Math.round((rawSec / 3600) * 10) / 10;
+        const targetHours = item.maintenanceTarget || 500;
+        const runtimeProgressPct = Math.min(100, Math.round((runtimeHours / targetHours) * 100));
+        const isServiceDue = runtimeHours >= targetHours || (sched && String(sched.status).toLowerCase() === "planned");
+        const serviceDueRemainingHours = Math.max(0, Math.round((targetHours - runtimeHours) * 10) / 10);
+
+        // Operational Status
+        let isRunning = false;
+        if (powerKw !== null) {
+          isRunning = powerKw > 0.5;
+        } else if (ctrl.motor_status) {
+          isRunning = String(ctrl.motor_status).toUpperCase() === "ON";
+        }
+
+        if (isRunning) {
+          runningCount += 1;
+          if (powerKw) totalPowerKw += powerKw;
+        } else {
+          standbyCount += 1;
+        }
+
+        if (isServiceDue) {
+          maintenanceDueCount += 1;
+        }
+
+        if (energy) {
+          totalEnergyKwh += energy;
+        }
+
+        const stageInfo = stageLookup.get(item.stageKey) || {
+          key: "general",
+          name: "General",
+          stageNumber: 99,
+          description: "Peralatan umum",
+        };
+
+        return {
+          id: item.id,
+          code: item.code,
+          name: item.name,
+          type: item.type,
+          stageKey: item.stageKey,
+          stageName: stageInfo.name,
+          stageNumber: stageInfo.stageNumber,
+          status: isRunning ? "RUNNING" : "STANDBY",
+          statusLabel: isRunning ? "Beroperasi" : "Siaga (Standby)",
+          motorStatus: isRunning ? "ON" : "OFF",
+          controlMode: ctrl.control_mode ? String(ctrl.control_mode).toUpperCase() : "AUTO",
+          powerKw,
+          currentA: curAvg,
+          voltageV: vAvg,
+          currentPhases: curR !== null ? { r: curR, s: curS, t: curT } : null,
+          voltagePhases: vR !== null ? { r: vR, s: vS, t: vT } : null,
+          energyKwh: energy,
+          runtimeHours,
+          runtimeTargetHours: targetHours,
+          runtimeProgressPct,
+          isServiceDue,
+          serviceDueRemainingHours,
+          maintenance: sched
+            ? {
+                id: sched.id,
+                issue: sched.issue,
+                actionPlan: sched.action_plan,
+                scheduleDate: sched.schedule_date,
+                pic: sched.pic,
+                status: sched.status,
+              }
+            : null,
+        };
+      });
+
+      const totalCount = equipmentList.length;
+      const availabilityPercent = totalCount > 0 ? Math.round(((totalCount - (maintenanceDueCount > 2 ? 1 : 0)) / totalCount) * 1000) / 10 : 100;
+
+      return {
+        ok: true,
+        summary: {
+          totalEquipment: totalCount,
+          runningCount,
+          standbyCount,
+          maintenanceDueCount,
+          totalPowerKw: Math.round(totalPowerKw * 10) / 10,
+          totalEnergyKwh: Math.round(totalEnergyKwh * 10) / 10,
+          availabilityPercent,
+        },
+        processStages,
+        equipment: equipmentList,
+      };
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: err?.message || "Gagal memuat data equipment",
+        summary: {
+          totalEquipment: 0,
+          runningCount: 0,
+          standbyCount: 0,
+          maintenanceDueCount: 0,
+          totalPowerKw: 0,
+          totalEnergyKwh: 0,
+          availabilityPercent: 0,
+        },
+        processStages: [],
+        equipment: [],
+      };
+    }
+  }
+
   @Get("api/equipment-control")
   async getEquipmentControl() {
     try {
       const result = await this.database.query(`
-        SELECT equipment_id, equipment_name, equipment_type, motor_status, auto_mode, updated_at
+        SELECT equipment_id, equipment_name, equipment_type, motor_status, COALESCE(control_mode, 'manual') as auto_mode, updated_at
         FROM wwtp.equipment_control_state
       `);
       return { ok: true, controls: result.rows };

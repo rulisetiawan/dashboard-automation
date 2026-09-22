@@ -147,6 +147,9 @@ const state = {
     search: "",
     page: 1,
     pageSize: 25,
+    equipmentStage: "all",
+    equipmentStatus: "all",
+    equipmentViewMode: "grid",
   },
   motorDrive: {
     selected: null,
@@ -987,6 +990,8 @@ async function loadWwtpData({ force = false, preserveScroll = true, background =
       result = await fetchJson(`/api/v1/wwtp/summary?${common}`, "WWTP summary API");
     } else if (state.wwtp.tab === "inlet") {
       result = await fetchJson(`/api/v1/wwtp/inlet?${common}`, "WWTP inlet API");
+    } else if (state.wwtp.tab === "equipment") {
+      result = await fetchJson(`/api/v1/wwtp/equipment`, "WWTP equipment API");
     } else if (state.wwtp.tab === "pid") {
       const [values, logs] = await Promise.all([
         fetchJson(`/api/v1/wwtp/pid/values`, "WWTP PID values API"),
@@ -1059,6 +1064,9 @@ function renderWwtpView({ preserveScroll = true } = {}) {
   }
   if (state.wwtp.tab === "inlet") {
     container.innerHTML = wwtpInletView(data);
+  } else if (state.wwtp.tab === "equipment") {
+    container.innerHTML = wwtpEquipmentView(data);
+    bindWwtpEquipmentActions();
   } else {
     container.innerHTML = wwtpSummaryView(data);
   }
@@ -6154,10 +6162,12 @@ function actualWwtpPage() {
   const tabs = [
     ["summary", "Summary IPAL"],
     ["inlet", "Inlet Monitoring"],
+    ["equipment", "Equipment Monitoring"],
     ["pid", "P&ID Overview"],
   ].map(([val, label]) => `<button class="${state.wwtp.tab === val ? "active" : ""}" data-wwtp-tab="${val}">${label}</button>`).join("");
 
-  const header = `${pageHead("wwtp", `<span class="range-badge">POSTGRES DB LINK</span>`)}<nav class="wwtp-tabs">${tabs}</nav>${state.wwtp.tab !== "pid" ? wwtpRangeToolbar() : ""}`;
+  const showRangeToolbar = state.wwtp.tab === "summary" || state.wwtp.tab === "inlet";
+  const header = `${pageHead("wwtp")}<nav class="wwtp-tabs">${tabs}</nav>${showRangeToolbar ? wwtpRangeToolbar() : ""}`;
 
   let bodyHtml = "";
   if (wwtpData.loading && !wwtpData.data) {
@@ -6167,11 +6177,314 @@ function actualWwtpPage() {
   } else {
     const data = wwtpData.data || {};
     if (state.wwtp.tab === "inlet") bodyHtml = wwtpInletView(data);
+    else if (state.wwtp.tab === "equipment") bodyHtml = wwtpEquipmentView(data);
     else if (state.wwtp.tab === "pid") bodyHtml = wwtpPidView(data);
     else bodyHtml = wwtpSummaryView(data);
   }
 
   return `<div id="wwtp-page-container">${header}<div id="wwtp-tab-body">${bodyHtml}</div></div>`;
+}
+
+function wwtpEquipmentView(data) {
+  const summary = data.summary || {
+    totalEquipment: 0,
+    runningCount: 0,
+    standbyCount: 0,
+    maintenanceDueCount: 0,
+    totalPowerKw: 0,
+    totalEnergyKwh: 0,
+    availabilityPercent: 100,
+  };
+  const rawList = Array.isArray(data.equipment) ? data.equipment : [];
+  const stages = Array.isArray(data.processStages) ? data.processStages : [];
+
+  // Filter stage
+  const currentStage = state.wwtp.equipmentStage || "all";
+  const currentStatus = state.wwtp.equipmentStatus || "all";
+  const searchKeyword = (state.wwtp.search || "").trim().toLowerCase();
+  const viewMode = state.wwtp.equipmentViewMode || "grid";
+
+  // Filter list
+  const filtered = rawList.filter((item) => {
+    if (currentStage !== "all" && item.stageKey !== currentStage) return false;
+    if (currentStatus === "running" && item.status !== "RUNNING") return false;
+    if (currentStatus === "standby" && item.status !== "STANDBY") return false;
+    if (currentStatus === "due" && !item.isServiceDue) return false;
+    if (searchKeyword) {
+      const matchName = String(item.name || "").toLowerCase().includes(searchKeyword);
+      const matchCode = String(item.code || "").toLowerCase().includes(searchKeyword);
+      const matchType = String(item.type || "").toLowerCase().includes(searchKeyword);
+      const matchStage = String(item.stageName || "").toLowerCase().includes(searchKeyword);
+      if (!matchName && !matchCode && !matchType && !matchStage) return false;
+    }
+    return true;
+  });
+
+  // KPI Overview Cards
+  const kpiSection = `
+    <section class="wwtp-kpi-grid wwtp-equip-kpi-grid">
+      <article class="card kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label"><i class="equip-kpi-dot running"></i> Unit Beroperasi</span>
+          <span class="quality-pill good">LIVE</span>
+        </div>
+        <div class="kpi-value text-good">${summary.runningCount}<small>Unit</small></div>
+        <div class="kpi-foot">Aktif menjalankan proses limbah</div>
+      </article>
+
+      <article class="card kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label"><i class="equip-kpi-dot standby"></i> Unit Siaga (Standby)</span>
+          <span class="quality-pill unknown">READY</span>
+        </div>
+        <div class="kpi-value">${summary.standbyCount}<small>Unit</small></div>
+        <div class="kpi-foot">Siap switchover / auto trigger</div>
+      </article>
+
+      <article class="card kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label"><i class="equip-kpi-dot due"></i> Jatuh Tempo Servis</span>
+          <span class="quality-pill ${summary.maintenanceDueCount > 0 ? "stale" : "good"}">${summary.maintenanceDueCount > 0 ? "ATTN" : "NORMAL"}</span>
+        </div>
+        <div class="kpi-value ${summary.maintenanceDueCount > 0 ? "text-warning" : ""}">${summary.maintenanceDueCount}<small>Unit</small></div>
+        <div class="kpi-foot">Runtime ≥ 500 jam / terjadwal</div>
+      </article>
+
+      <article class="card kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Beban Daya Aktif</span>
+          <span class="quality-pill good">METERED</span>
+        </div>
+        <div class="kpi-value text-accent">${Number(summary.totalPowerKw || 0).toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}<small>kW</small></div>
+        <div class="kpi-foot">Total daya aktif motor terukur</div>
+      </article>
+
+      <article class="card kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Kumulatif Energi Listrik</span>
+          <span class="quality-pill good">TOTAL</span>
+        </div>
+        <div class="kpi-value">${Number(summary.totalEnergyKwh || 0).toLocaleString("id-ID", { maximumFractionDigits: 0 })}<small>kWh</small></div>
+        <div class="kpi-foot">Konsumsi daya terakumulasi</div>
+      </article>
+
+      <article class="card kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Availability Peralatan</span>
+          <span class="quality-pill good">STATUS</span>
+        </div>
+        <div class="kpi-value text-good">${Number(summary.availabilityPercent || 100).toFixed(1)}<small>%</small></div>
+        <div class="kpi-foot">Tingkat kesiapan operasional</div>
+      </article>
+    </section>
+  `;
+
+  // Process Stage Pills / Tabs
+  const stageButtons = [
+    { key: "all", name: `Semua (${rawList.length})` },
+    ...stages.map((st) => {
+      const count = rawList.filter((e) => e.stageKey === st.key).length;
+      return { key: st.key, name: `Tahap ${st.stageNumber} · ${st.name} (${count})` };
+    }),
+  ].map((st) => `
+    <button class="button small ${currentStage === st.key ? "primary" : "ghost"}" data-equip-filter-stage="${st.key}">
+      ${st.name}
+    </button>
+  `).join("");
+
+  // Toolbar & Filters
+  const toolbar = `
+    <section class="card wwtp-equip-filter-card">
+      <div class="wwtp-equip-toolbar-top">
+        <div class="wwtp-equip-search-box">
+          <input 
+            type="search" 
+            class="search-control" 
+            placeholder="Cari nama peralatan, kode unit, atau area proses..." 
+            value="${escapeHtml(state.wwtp.search || "")}" 
+            data-equip-search-input
+          />
+        </div>
+        <div class="wwtp-equip-status-filters">
+          <select class="select-control" data-equip-filter-status>
+            <option value="all" ${currentStatus === "all" ? "selected" : ""}>Semua Status (${rawList.length})</option>
+            <option value="running" ${currentStatus === "running" ? "selected" : ""}>Beroperasi (${summary.runningCount})</option>
+            <option value="standby" ${currentStatus === "standby" ? "selected" : ""}>Siaga / Standby (${summary.standbyCount})</option>
+            <option value="due" ${currentStatus === "due" ? "selected" : ""}>Jatuh Tempo Servis (${summary.maintenanceDueCount})</option>
+          </select>
+          <button class="button small ghost" data-equip-refresh-btn title="Refresh Data Equipment">
+            Refresh
+          </button>
+        </div>
+      </div>
+      <div class="wwtp-equip-stage-scroll">
+        ${stageButtons}
+      </div>
+    </section>
+  `;
+
+  // Render Equipment Cards (Grid View)
+  const renderCard = (item) => {
+    const isRunning = item.status === "RUNNING";
+    const statusClass = isRunning ? "status-running" : "status-standby";
+    const statusText = isRunning ? "BEROPERASI" : "STANDBY";
+
+    // Progress bar calculations
+    const pct = Math.min(100, Math.max(0, item.runtimeProgressPct || 0));
+    let progressColor = "var(--accent-teal, #0d9488)";
+    if (item.isServiceDue || pct >= 100) progressColor = "var(--warn-base, #ea580c)";
+    else if (pct >= 80) progressColor = "var(--warn-surface, #f59e0b)";
+
+    // Electrical Metrics or Specs
+    let metricsHtml = "";
+    if (item.powerKw !== null) {
+      metricsHtml = `
+        <div class="wwtp-card-metrics">
+          <div class="wwtp-metric-item">
+            <span class="metric-k">Daya Aktif</span>
+            <strong class="metric-v ${isRunning ? "text-accent" : ""}">${item.powerKw.toFixed(1)} <small>kW</small></strong>
+          </div>
+          <div class="wwtp-metric-item" title="Arus R: ${item.currentPhases?.r || 0}A | S: ${item.currentPhases?.s || 0}A | T: ${item.currentPhases?.t || 0}A">
+            <span class="metric-k">Arus (Avg)</span>
+            <strong class="metric-v">${item.currentA !== null ? `${item.currentA.toFixed(1)} <small>A</small>` : "--"}</strong>
+          </div>
+          <div class="wwtp-metric-item">
+            <span class="metric-k">Tegangan</span>
+            <strong class="metric-v">${item.voltageV !== null ? `${item.voltageV.toFixed(0)} <small>V</small>` : "--"}</strong>
+          </div>
+          <div class="wwtp-metric-item">
+            <span class="metric-k">Total Energi</span>
+            <strong class="metric-v">${item.energyKwh !== null ? `${Number(item.energyKwh).toLocaleString("id-ID", { maximumFractionDigits: 0 })} <small>kWh</small>` : "--"}</strong>
+          </div>
+        </div>
+      `;
+    } else {
+      metricsHtml = `
+        <div class="wwtp-card-metrics">
+          <div class="wwtp-metric-item">
+            <span class="metric-k">Tipe Unit</span>
+            <strong class="metric-v">${escapeHtml(item.type || "Peralatan")}</strong>
+          </div>
+          <div class="wwtp-metric-item">
+            <span class="metric-k">Daya Terpasang</span>
+            <strong class="metric-v">${item.ratedKw || "--"} <small>kW</small></strong>
+          </div>
+          <div class="wwtp-metric-item">
+            <span class="metric-k">Mode Kontrol</span>
+            <strong class="metric-v">${escapeHtml(item.controlMode || "AUTO")}</strong>
+          </div>
+          <div class="wwtp-metric-item">
+            <span class="metric-k">Status Motor</span>
+            <strong class="metric-v ${isRunning ? "text-good" : ""}">${item.motorStatus || "OFF"}</strong>
+          </div>
+        </div>
+      `;
+    }
+
+    // Maintenance badge
+    let maintenanceBox = "";
+    if (item.maintenance) {
+      maintenanceBox = `
+        <div class="wwtp-card-maintenance-alert">
+          <div class="maintenance-alert-header">
+            <span class="alert-tag">Jadwal Pemeliharaan</span>
+            <span class="alert-date">${item.maintenance.scheduleDate ? actualTime(item.maintenance.scheduleDate).split(" ")[0] : "Planned"}</span>
+          </div>
+          <p class="maintenance-alert-issue">${escapeHtml(item.maintenance.issue || item.maintenance.actionPlan || "Pemeriksaan berkala")}</p>
+          <small class="maintenance-alert-pic">PIC: ${escapeHtml(item.maintenance.pic || "Tim Maintenance")}</small>
+        </div>
+      `;
+    }
+
+    return `
+      <article class="wwtp-equip-card ${statusClass}">
+        <div class="wwtp-card-top">
+          <div class="wwtp-card-id-block">
+            <span class="wwtp-card-stage-tag">${escapeHtml(item.stageName)}</span>
+            <h3 class="wwtp-card-title">${escapeHtml(item.name)}</h3>
+            <span class="wwtp-card-code">${escapeHtml(item.code || item.id)}</span>
+          </div>
+          <div class="wwtp-card-status-badge ${statusClass}">
+            <span class="status-pulse-dot"></span>
+            <strong>${statusText}</strong>
+          </div>
+        </div>
+
+        ${metricsHtml}
+
+        <div class="wwtp-card-runtime-section">
+          <div class="runtime-labels">
+            <span class="runtime-title">Kumulatif Runtime</span>
+            <strong class="runtime-hours">${Number(item.runtimeHours || 0).toFixed(1)} <small>/ ${item.runtimeTargetHours || 500} jam</small></strong>
+          </div>
+          <div class="runtime-progress-track">
+            <div class="runtime-progress-fill" style="width: ${pct}%; background-color: ${progressColor};"></div>
+          </div>
+          <div class="runtime-status-footer">
+            ${item.isServiceDue
+              ? `<span class="badge-due">Jatuh Tempo Servis (${item.serviceDueRemainingHours > 0 ? `${item.serviceDueRemainingHours} jam tersisa` : "Melebihi target"})</span>`
+              : `<span class="badge-ok">Kondisi Normal (${item.serviceDueRemainingHours} jam tersisa)</span>`}
+            <span class="runtime-pct-label">${pct}%</span>
+          </div>
+        </div>
+
+        ${maintenanceBox}
+      </article>
+    `;
+  };
+
+  return `
+    <div class="wwtp-equipment-view-container">
+      ${kpiSection}
+      ${toolbar}
+      <section class="wwtp-equipment-grid">
+        ${filtered.length ? filtered.map(renderCard).join("") : `<div class="card">${actualEmpty("Tidak ada peralatan yang sesuai dengan kriteria filter.")}</div>`}
+      </section>
+    </div>
+  `;
+}
+
+function bindWwtpEquipmentActions() {
+  // Stage filter buttons
+  document.querySelectorAll("[data-equip-filter-stage]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.wwtp.equipmentStage = btn.dataset.equipFilterStage;
+      renderWwtpView({ preserveScroll: true });
+    });
+  });
+
+  // Status select filter
+  const statusSelect = document.querySelector("[data-equip-filter-status]");
+  if (statusSelect) {
+    statusSelect.addEventListener("change", (e) => {
+      state.wwtp.equipmentStatus = e.target.value;
+      renderWwtpView({ preserveScroll: true });
+    });
+  }
+
+  // Search input
+  const searchInput = document.querySelector("[data-equip-search-input]");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      state.wwtp.search = e.target.value;
+      renderWwtpView({ preserveScroll: true });
+      // Keep cursor position in search box after render
+      const newInput = document.querySelector("[data-equip-search-input]");
+      if (newInput) {
+        newInput.focus();
+        newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+      }
+    });
+  }
+
+  // Refresh button
+  const refreshBtn = document.querySelector("[data-equip-refresh-btn]");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", () => {
+      refreshBtn.disabled = true;
+      void loadWwtpData({ force: true });
+    });
+  }
 }
 
 async function requestAlarmConfiguration(force = false) {
