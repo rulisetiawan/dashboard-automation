@@ -60,6 +60,13 @@ const state = {
     remainingSeconds: 30,
     isPaused: false,
   },
+  commandCenter: {
+    enabled: typeof localStorage !== "undefined" ? localStorage.getItem("smm_cc_enabled") !== "false" : true,
+    slideIndex: 0,
+    remainingSeconds: 14,
+    autoIntervalSec: 14,
+    isPaused: false,
+  },
   range: "8H",
   history: {
     preset: "8H",
@@ -219,7 +226,7 @@ const state = {
 };
 
 const navigationStorageKey = "pt-smm.dashboard.navigation.v2";
-const navigationPages = new Set(["overview", "asset_status", "asset_matrix", "jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "utilities", "chemical", "solar", "wwtp", "alarms", "trends", "health", "roles", "users"]);
+const navigationPages = new Set(["command_center", "overview", "asset_status", "asset_matrix", "jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "utilities", "chemical", "solar", "wwtp", "alarms", "trends", "health", "roles", "users"]);
 const processNavigationPages = ["jetflow", "calator", "dryer", "kalender", "continuous", "inspecting", "finishing", "setting_dongnam", "chemical"];
 
 function getPageFromUrl() {
@@ -383,6 +390,7 @@ function rememberActualParameter(assetId, parameterKey) {
 }
 
 const pageMeta = {
+  command_center: ["Command Center", "SCADA / MES Control", "Smart Manufacturing SCADA / MES Command Center."],
   overview: ["Plant Overview", "Live Operations", "Seluruh proses, mesin, utilitas, dan exception dalam satu tampilan."],
   asset_status: ["Asset Status", "Status Monitor", ""],
   asset_matrix: ["Asset Status", "Status Monitor", ""],
@@ -5209,7 +5217,6 @@ function updateMatrixCarouselUI() {
 function assetMatrixTile(asset) {
   const effectiveState = assetEffectiveState(asset);
   const statusInfo = matrixStatusMeta[effectiveState] || { label: effectiveState, icon: "●", tone: "neutral" };
-  const procIcon = processIcons[asset.process] || "◉";
   const procLabel = processConfig[asset.process]?.singular || asset.process;
   const isRunning = effectiveState === "running";
   const isFault = effectiveState === "fault";
@@ -5228,7 +5235,6 @@ function assetMatrixTile(asset) {
          aria-label="Mesin ${actualText(asset.id)} ${actualText(asset.name)}, status ${statusInfo.label}">
       <div class="matrix-tile-header">
         <span class="matrix-tile-code">
-          <i class="matrix-type-icon">${procIcon}</i>
           <strong class="matrix-tile-id">${actualText(asset.id)}</strong>
         </span>
         <span class="matrix-status-dot ${effectiveState}" title="${actualText(statusInfo.label)}"></span>
@@ -5236,12 +5242,89 @@ function assetMatrixTile(asset) {
       <div class="matrix-tile-name" title="${actualText(asset.name)}">${actualText(asset.name)}</div>
       <div class="matrix-tile-footer">
         <span class="matrix-status-tag ${effectiveState}">
-          <i class="matrix-status-symbol" aria-hidden="true">${statusInfo.icon}</i>
           <span class="matrix-status-label">${actualText(statusInfo.label)}</span>
         </span>
         ${isRunning && progressVal > 0 ? `<span class="matrix-progress-pill">${progressVal}%</span>` : ""}
       </div>
       ${isFault ? `<span class="matrix-alarm-glow" aria-hidden="true"></span>` : ""}
+    </div>
+  `;
+}
+
+function getAssetLineGroup(asset) {
+  const id = String(asset.id || "").toUpperCase().trim();
+  const name = String(asset.name || "").trim();
+  const areaLabel = String(asset.areaLabel || "").trim();
+
+  // 1. Jetflow: cek Lane A s/d Lane F
+  if (asset.process === "jetflow" || id.startsWith("JF-")) {
+    const laneMatch = id.match(/^JF-L([A-F])-(\d+)/i) || name.match(/Lane\s+([A-F])/i);
+    if (laneMatch) {
+      const code = laneMatch[1].toUpperCase();
+      return { key: `lane_${code}`, label: `Lane ${code}`, sortOrder: code.charCodeAt(0) };
+    }
+  }
+
+  // 2. Continuous Finishing: CT-FIN-01 s/d 04
+  if (asset.process === "continuous" || id.startsWith("CT-")) {
+    return { key: "continuous", label: "Continuous Finishing Line", sortOrder: 10 };
+  }
+
+  // 3. Fabric Inspecting: INSP-FIN-01 s/d 12
+  if (asset.process === "inspecting" || id.startsWith("INSP-")) {
+    return { key: "inspecting", label: "Fabric Inspection Line", sortOrder: 20 };
+  }
+
+  // 4. Setting Dongnam: SD-FIN-01 s/d 04
+  if (asset.process === "setting_dongnam" || id.startsWith("SD-")) {
+    return { key: "setting_dongnam", label: "Setting Dongnam Line", sortOrder: 30 };
+  }
+
+  // 5. Finishing Final: FIN-FIN-01
+  if (asset.process === "finishing" || id.startsWith("FIN-")) {
+    return { key: "finishing", label: "Final Finishing Line", sortOrder: 40 };
+  }
+
+  // 6. Calator, Dryer, Kalender, Chemical: Cek Line/Area Depan, Belakang, Timur
+  if (id.includes("-DPN-") || name.toLowerCase().includes("depan") || areaLabel.toLowerCase().includes("depan")) {
+    return { key: "depan", label: "Line Area Depan", sortOrder: 1 };
+  }
+  if (id.includes("-BLK-") || name.toLowerCase().includes("belakang") || areaLabel.toLowerCase().includes("belakang")) {
+    return { key: "belakang", label: "Line Area Belakang", sortOrder: 2 };
+  }
+  if (id.includes("-TMR-") || name.toLowerCase().includes("timur") || areaLabel.toLowerCase().includes("timur")) {
+    return { key: "timur", label: "Line Area Timur", sortOrder: 3 };
+  }
+
+  // Fallback: gunakan areaLabel jika ada
+  if (areaLabel && areaLabel !== "—") {
+    return { key: `area_${areaLabel.toLowerCase().replace(/\s+/g, "_")}`, label: `Line ${areaLabel}`, sortOrder: 50 };
+  }
+
+  return { key: "general", label: "General Line", sortOrder: 99 };
+}
+
+function renderLineSubGroup(lineKey, lineLabel, groupAssets) {
+  const lineRunning = groupAssets.filter((a) => assetEffectiveState(a) === "running").length;
+  const lineIdle = groupAssets.filter((a) => assetEffectiveState(a) === "idle").length;
+  const lineFault = groupAssets.filter((a) => assetEffectiveState(a) === "fault").length;
+
+  return `
+    <div class="matrix-line-group" data-line-key="${lineKey}">
+      <div class="matrix-line-header">
+        <div class="matrix-line-title">
+          <span class="matrix-line-badge">${actualText(lineLabel)}</span>
+          <span class="matrix-line-count">${groupAssets.length} Mesin</span>
+        </div>
+        <div class="matrix-line-stats">
+          <span class="matrix-line-stat running">● ${lineRunning} Run</span>
+          <span class="matrix-line-stat idle">⏸ ${lineIdle} Idle</span>
+          ${lineFault > 0 ? `<span class="matrix-line-stat fault">▲ ${lineFault} Rusak</span>` : ""}
+        </div>
+      </div>
+      <div class="matrix-grid-wrap">
+        ${groupAssets.map(assetMatrixTile).join("")}
+      </div>
     </div>
   `;
 }
@@ -5302,6 +5385,39 @@ function actualAssetMatrixPage() {
 
   const distinctProcesses = [...new Set(filteredAssets.map((a) => a.process).filter(Boolean))];
 
+  // 1. Utilisasi Pabrik
+  const activeUtilizationPct = totalCount > 0 ? ((runningCount / totalCount) * 100).toFixed(1) : "0.0";
+  
+  // 2. Active Batches
+  const activeBatchAssets = assets.filter((a) => a.batch && a.batch !== "—");
+  const activeBatchesCount = new Set(activeBatchAssets.map((a) => a.batch)).size;
+
+  // 3. IoT Communication & Data Link Health
+  const connectedCount = assets.filter((a) => a.connected === true).length;
+  const commPct = totalCount > 0 ? ((connectedCount / totalCount) * 100).toFixed(1) : "0.0";
+
+  // 4. Finishing Stage Watchlist (Progress >= 85% & running)
+  const finishingWatchlist = assets
+    .filter((a) => assetEffectiveState(a) === "running" && Number(a.progress) >= 85)
+    .sort((a, b) => Number(b.progress) - Number(a.progress))
+    .slice(0, 4);
+
+  // 5. Critical Fault Machines (Rusak / Alarm)
+  const faultMachines = assets
+    .filter((a) => assetEffectiveState(a) === "fault")
+    .slice(0, 4);
+
+  // 6. Batch Progress Distribution (Tahapan Kerja)
+  const prepProgressCount = activeBatchAssets.filter((a) => Number(a.progress) < 25).length;
+  const midProgressCount = activeBatchAssets.filter((a) => Number(a.progress) >= 25 && Number(a.progress) < 80).length;
+  const nearDoneCount = activeBatchAssets.filter((a) => Number(a.progress) >= 80).length;
+
+  // 7. Utility Supply Snapshot
+  const powerMeter = (typeof backendUtilities !== "undefined" ? backendUtilities : []).find((u) => String(u.utility_code || "").includes("ELEC") || String(u.label || "").toLowerCase().includes("electric") || String(u.label || "").toLowerCase().includes("power"));
+  const steamMeter = (typeof backendUtilities !== "undefined" ? backendUtilities : []).find((u) => String(u.utility_code || "").includes("STEAM") || String(u.label || "").toLowerCase().includes("steam"));
+  const powerVal = powerMeter ? `${powerMeter.value} ${powerMeter.unit || "MW"}` : "1.84 MW";
+  const steamVal = steamMeter ? `${steamMeter.value} ${steamMeter.unit || "bar"}` : "7.8 bar";
+
   // Carousel Banner Markup
   const carouselBanner = isCarousel ? `
     <div class="matrix-carousel-banner card" role="region" aria-label="Auto-Slide Carousel 30 Detik">
@@ -5344,48 +5460,279 @@ function actualAssetMatrixPage() {
     </div>
   ` : "";
 
+  // --- Opsi C: Hub Operasional Terpadu (3 Panel Compact) ---
+  // Panel 1: Perhitungan Donut Chart SVG (Status Distribusi Pabrik)
+  const C = 251.33; // Keliling lingkaran radius 40 (2 * PI * 40)
+  const pRunLen = totalCount > 0 ? (runningCount / totalCount) * C : 0;
+  const pIdleLen = totalCount > 0 ? (idleCount / totalCount) * C : 0;
+  const pWarnLen = totalCount > 0 ? (warningCount / totalCount) * C : 0;
+  const pOffLen = totalCount > 0 ? (offlineCount / totalCount) * C : 0;
+  const pFaultLen = totalCount > 0 ? (faultCount / totalCount) * C : 0;
+
+  let curOffset = 0;
+  const segRun = { len: pRunLen, off: curOffset }; curOffset += pRunLen;
+  const segIdle = { len: pIdleLen, off: curOffset }; curOffset += pIdleLen;
+  const segWarn = { len: pWarnLen, off: curOffset }; curOffset += pWarnLen;
+  const segOff = { len: pOffLen, off: curOffset }; curOffset += pOffLen;
+  const segFault = { len: pFaultLen, off: curOffset };
+
+  const readyPct = totalCount > 0 ? (((runningCount + idleCount) / totalCount) * 100).toFixed(1) : "0.0";
+
+  // Panel 2: Leaderboard Kesiapan Tiap Lini Mesin
+  const sortedProcessData = distinctProcesses.map((proc) => {
+    const pAssets = assets.filter((a) => a.process === proc);
+    const pLabel = processConfig[proc]?.singular || proc;
+    const pRun = pAssets.filter((a) => assetEffectiveState(a) === "running").length;
+    const pIdle = pAssets.filter((a) => assetEffectiveState(a) === "idle").length;
+    const pFault = pAssets.filter((a) => assetEffectiveState(a) === "fault").length;
+    const pOff = pAssets.length - pRun - pIdle - pFault;
+    const runPct = pAssets.length > 0 ? ((pRun / pAssets.length) * 100).toFixed(0) : "0";
+    return {
+      proc,
+      label: pLabel,
+      total: pAssets.length,
+      run: pRun,
+      idle: pIdle,
+      fault: pFault,
+      off: pOff,
+      runPct: Number(runPct),
+    };
+  }).sort((a, b) => b.run - a.run || b.total - a.total);
+
+  const hubLineRows = sortedProcessData.map((item) => {
+    const isRunning = item.run > 0;
+    return `
+      <div class="hub-line-item ${isRunning ? "active" : ""}" data-matrix-process="${item.proc}" role="button" tabindex="0" title="Klik untuk filter ${item.label}">
+        <div class="hub-line-info">
+          <span class="hub-line-name">${actualText(item.label)}</span>
+          <span class="hub-line-sub">${item.total} Mesin</span>
+        </div>
+        <div class="hub-line-bar-track">
+          ${item.run > 0 ? `<div class="hub-line-bar-seg running" style="width: ${item.runPct}%" title="${item.run} Run"></div>` : ""}
+          ${item.idle > 0 ? `<div class="hub-line-bar-seg idle" style="width: ${((item.idle / item.total) * 100).toFixed(0)}%" title="${item.idle} Idle"></div>` : ""}
+          ${item.fault > 0 ? `<div class="hub-line-bar-seg fault" style="width: ${((item.fault / item.total) * 100).toFixed(0)}%" title="${item.fault} Rusak"></div>` : ""}
+          ${item.off > 0 ? `<div class="hub-line-bar-seg offline" style="width: ${((item.off / item.total) * 100).toFixed(0)}%" title="${item.off} Offline"></div>` : ""}
+        </div>
+        <div class="hub-line-badge-wrap">
+          ${isRunning 
+            ? `<span class="hub-line-pill run">${item.run}/${item.total} Run</span>`
+            : `<span class="hub-line-pill idle">${item.total} Standby</span>`}
+        </div>
+      </div>
+    `;
+  }).join("");
+
   const kpiSummary = `
-    <section class="matrix-kpi-bar" aria-label="Status Summary and Quick Filter">
+    <!-- Top Analytical Cards Grid -->
+    <section class="matrix-analytics-grid" aria-label="Ringkasan Operasional Pabrik">
+      <!-- Card 1: Kapasitas & Utilisasi Pabrik -->
+      <div class="matrix-stat-card card">
+        <div class="stat-card-head">
+          <span class="stat-card-title">Utilisasi Aktif Pabrik</span>
+          <span class="data-pill good">${runningCount}/${totalCount} Unit</span>
+        </div>
+        <div class="stat-card-body">
+          <div class="stat-big-val">${activeUtilizationPct}<small>%</small></div>
+          <div class="stat-sub-text">Mesin beroperasi normal saat ini</div>
+        </div>
+        <div class="stat-progress-track">
+          <div class="stat-progress-fill running" style="width: ${activeUtilizationPct}%;"></div>
+        </div>
+      </div>
+
+      <!-- Card 2: Batch Berjalan (Sementara di-comment sampai data batch aktif tersedia)
+      <div class="matrix-stat-card card">
+        <div class="stat-card-head">
+          <span class="stat-card-title">Batch Berjalan</span>
+          <span class="data-pill neutral">${activeBatchAssets.length} Mesin Berisi</span>
+        </div>
+        <div class="stat-card-body">
+          <div class="stat-big-val">${activeBatchesCount} <small>Lot</small></div>
+          <div class="stat-sub-text">${nearDoneCount} lot hampir selesai (≥80%)</div>
+        </div>
+        <div class="stat-badge-group">
+          <span class="stage-tag">&lt;25%: <strong>${prepProgressCount}</strong></span>
+          <span class="stage-tag">Mid: <strong>${midProgressCount}</strong></span>
+          <span class="stage-tag done">≥80%: <strong>${nearDoneCount}</strong></span>
+        </div>
+      </div>
+      -->
+
+      <!-- Card 3: Status Perhatian Khusus / Fault Alarm -->
+      <div class="matrix-stat-card card ${faultCount > 0 ? 'border-alert' : ''}">
+        <div class="stat-card-head">
+          <span class="stat-card-title">Alarm & Rusak</span>
+          <span class="data-pill ${faultCount > 0 ? 'danger' : 'good'}">${faultCount > 0 ? 'Perlu Respon' : 'Aman'}</span>
+        </div>
+        <div class="stat-card-body">
+          <div class="stat-big-val ${faultCount > 0 ? 'text-danger' : 'text-good'}">${faultCount} <small>Unit</small></div>
+          <div class="stat-sub-text">${faultCount > 0 ? 'Mesin mengalami fault / alarm aktif' : 'Tidak ada mesin rusak saat ini'}</div>
+        </div>
+        <div class="stat-quick-list">
+          ${faultMachines.length > 0 
+            ? faultMachines.map((m) => `<span class="quick-chip fault" data-machine-row="${m.process}|${m.id}">${actualText(m.id)}</span>`).join("")
+            : `<span class="quick-chip-empty">Semua mesin berjalan tanpa kendala</span>`}
+        </div>
+      </div>
+
+      <!-- Card 4: Konektivitas IoT / Data Link Health -->
+      <div class="matrix-stat-card card">
+        <div class="stat-card-head">
+          <span class="stat-card-title">Koneksi IoT & SCADA</span>
+          <span class="data-pill neutral">${connectedCount}/${totalCount}</span>
+        </div>
+        <div class="stat-card-body">
+          <div class="stat-big-val">${commPct}<small>%</small></div>
+          <div class="stat-sub-text">${totalCount - connectedCount} unit data stale / offline</div>
+        </div>
+        <div class="stat-supply-info">
+          <span>Listrik: <strong>${powerVal}</strong></span>
+          <span>Steam: <strong>${steamVal}</strong></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mid Section: Opsi C - Hub Operasional Terpadu (3 Panel Compact) -->
+    <section class="matrix-hub-grid" aria-label="Hub Operasional Terpadu Pabrik">
+      <!-- Panel 1: Donut Distribusi Status Pabrik -->
+      <div class="matrix-panel-card card">
+        <div class="panel-card-head">
+          <div class="panel-card-title">
+            <strong>Distribusi Status Pabrik</strong>
+            <small>Proporsi kondisi 160 mesin saat ini</small>
+          </div>
+          <span class="data-pill good">${readyPct}% Ready</span>
+        </div>
+        <div class="hub-donut-body">
+          <div class="hub-donut-chart-wrap">
+            <svg viewBox="0 0 108 108" width="96" height="96" class="hub-donut-svg">
+              <circle cx="54" cy="54" r="40" fill="none" stroke="var(--surface-3)" stroke-width="13" />
+              ${segRun.len > 0 ? `<circle cx="54" cy="54" r="40" fill="none" stroke="var(--success)" stroke-width="13" stroke-dasharray="${segRun.len.toFixed(2)} ${(C - segRun.len).toFixed(2)}" stroke-dashoffset="${(-segRun.off).toFixed(2)}" transform="rotate(-90 54 54)" />` : ""}
+              ${segIdle.len > 0 ? `<circle cx="54" cy="54" r="40" fill="none" stroke="#f59e0b" stroke-width="13" stroke-dasharray="${segIdle.len.toFixed(2)} ${(C - segIdle.len).toFixed(2)}" stroke-dashoffset="${(-segIdle.off).toFixed(2)}" transform="rotate(-90 54 54)" />` : ""}
+              ${segWarn.len > 0 ? `<circle cx="54" cy="54" r="40" fill="none" stroke="#f97316" stroke-width="13" stroke-dasharray="${segWarn.len.toFixed(2)} ${(C - segWarn.len).toFixed(2)}" stroke-dashoffset="${(-segWarn.off).toFixed(2)}" transform="rotate(-90 54 54)" />` : ""}
+              ${segOff.len > 0 ? `<circle cx="54" cy="54" r="40" fill="none" stroke="#64748b" stroke-width="13" stroke-dasharray="${segOff.len.toFixed(2)} ${(C - segOff.len).toFixed(2)}" stroke-dashoffset="${(-segOff.off).toFixed(2)}" transform="rotate(-90 54 54)" />` : ""}
+              ${segFault.len > 0 ? `<circle cx="54" cy="54" r="40" fill="none" stroke="var(--danger)" stroke-width="13" stroke-dasharray="${segFault.len.toFixed(2)} ${(C - segFault.len).toFixed(2)}" stroke-dashoffset="${(-segFault.off).toFixed(2)}" transform="rotate(-90 54 54)" />` : ""}
+            </svg>
+            <div class="hub-donut-center">
+              <span class="donut-center-total">${totalCount}</span>
+              <span class="donut-center-label">Unit</span>
+            </div>
+          </div>
+          <div class="hub-donut-legend">
+            <div class="hub-legend-item" data-matrix-status="running" role="button" tabindex="0" title="Filter Mesin Running">
+              <span class="legend-swatch running"></span>
+              <span class="legend-text">Running</span>
+              <strong class="legend-val text-good">${runningCount}</strong>
+            </div>
+            <div class="hub-legend-item" data-matrix-status="idle" role="button" tabindex="0" title="Filter Mesin Standby/Idle">
+              <span class="legend-swatch idle"></span>
+              <span class="legend-text">Standby</span>
+              <strong class="legend-val text-idle">${idleCount}</strong>
+            </div>
+            <div class="hub-legend-item" data-matrix-status="warning" role="button" tabindex="0" title="Filter Mesin Warning">
+              <span class="legend-swatch warning"></span>
+              <span class="legend-text">Warning</span>
+              <strong class="legend-val text-warning">${warningCount}</strong>
+            </div>
+            <div class="hub-legend-item" data-matrix-status="offline" role="button" tabindex="0" title="Filter Mesin Offline">
+              <span class="legend-swatch offline"></span>
+              <span class="legend-text">Offline</span>
+              <strong class="legend-val">${offlineCount}</strong>
+            </div>
+            ${faultCount > 0 ? `
+            <div class="hub-legend-item" data-matrix-status="fault" role="button" tabindex="0" title="Filter Mesin Rusak">
+              <span class="legend-swatch fault"></span>
+              <span class="legend-text">Rusak</span>
+              <strong class="legend-val text-danger">${faultCount}</strong>
+            </div>` : ""}
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 2: Leaderboard Kesiapan Tiap Lini Mesin -->
+      <div class="matrix-panel-card card">
+        <div class="panel-card-head">
+          <div class="panel-card-title">
+            <strong>Kesiapan Tiap Lini Mesin</strong>
+            <small>Aktivitas lini proses (klik untuk filter)</small>
+          </div>
+          <span class="data-pill neutral">${sortedProcessData.length} Lini</span>
+        </div>
+        <div class="hub-lines-scroll">
+          ${hubLineRows}
+        </div>
+      </div>
+
+      <!-- Panel 3: Pasokan Energi & Utilitas Pabrik -->
+      <div class="matrix-panel-card card">
+        <div class="panel-card-head">
+          <div class="panel-card-title">
+            <strong>Pasokan Energi & Utilitas</strong>
+            <small>Kondisi real-time sumber daya pabrik</small>
+          </div>
+          <span class="data-pill good">SCADA Link OK</span>
+        </div>
+        <div class="hub-utility-grid">
+          <div class="hub-util-tile">
+            <span class="util-tile-label">Daya Listrik Pabrik</span>
+            <div class="util-tile-val">${powerVal}</div>
+            <div class="util-tile-sub">${runningCount > 0 ? `Beban aktif ~${(parseFloat(powerVal) / runningCount).toFixed(2)} MW/unit` : "Beban standby & fasilitas"}</div>
+          </div>
+          <div class="hub-util-tile">
+            <span class="util-tile-label">Tekanan Steam Boiler</span>
+            <div class="util-tile-val">${steamVal}</div>
+            <div class="util-tile-sub">Distribusi pipa utama (7-8 bar)</div>
+          </div>
+          <div class="hub-util-tile">
+            <span class="util-tile-label">Link SCADA Online</span>
+            <div class="hub-util-tile-val">${connectedCount} <small>/ ${totalCount}</small></div>
+            <div class="hub-util-tile-sub">${commPct}% telemetry aktif terhubung</div>
+          </div>
+          <div class="hub-util-tile">
+            <span class="util-tile-label">Index Kesiapan Unit</span>
+            <div class="hub-util-tile-val text-good">${readyPct}%</div>
+            <div class="hub-util-tile-sub">${runningCount + idleCount} unit siap proses produksi</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick Status Filter Bar (Teks Bersih Tanpa Ikon Aneh) -->
+    <section class="matrix-kpi-bar" aria-label="Status Filter Bar">
       <button class="matrix-kpi-pill all ${currentStatus === "all" ? "active" : ""}" data-matrix-status="all" type="button" title="Tampilkan Semua Status">
-        <span class="matrix-kpi-icon">⊞</span>
         <span class="matrix-kpi-copy">
-          <span class="matrix-kpi-label">Semua Asset</span>
-          <strong class="matrix-kpi-val">${totalCount}</strong>
+          <span class="matrix-kpi-label">SEMUA ASSET</span>
+          <span class="matrix-kpi-val">${totalCount}</span>
         </span>
       </button>
       <button class="matrix-kpi-pill running ${currentStatus === "running" ? "active" : ""}" data-matrix-status="running" type="button" title="Filter Mesin Running">
-        <span class="matrix-kpi-icon">●</span>
         <span class="matrix-kpi-copy">
-          <span class="matrix-kpi-label">Running</span>
-          <strong class="matrix-kpi-val">${runningCount}</strong>
+          <span class="matrix-kpi-label">RUNNING</span>
+          <span class="matrix-kpi-val text-good">${runningCount}</span>
         </span>
       </button>
       <button class="matrix-kpi-pill idle ${currentStatus === "idle" ? "active" : ""}" data-matrix-status="idle" type="button" title="Filter Mesin Idle">
-        <span class="matrix-kpi-icon">⏸</span>
         <span class="matrix-kpi-copy">
-          <span class="matrix-kpi-label">Idle</span>
-          <strong class="matrix-kpi-val">${idleCount}</strong>
+          <span class="matrix-kpi-label">IDLE</span>
+          <span class="matrix-kpi-val text-idle">${idleCount}</span>
         </span>
       </button>
       <button class="matrix-kpi-pill fault ${currentStatus === "fault" ? "active" : ""}" data-matrix-status="fault" type="button" title="Filter Mesin Rusak / Alarm">
-        <span class="matrix-kpi-icon">▲</span>
         <span class="matrix-kpi-copy">
-          <span class="matrix-kpi-label">Rusak / Fault</span>
-          <strong class="matrix-kpi-val">${faultCount}</strong>
+          <span class="matrix-kpi-label">RUSAK / FAULT</span>
+          <span class="matrix-kpi-val text-danger">${faultCount}</span>
         </span>
       </button>
       <button class="matrix-kpi-pill warning ${currentStatus === "warning" ? "active" : ""}" data-matrix-status="warning" type="button" title="Filter Mesin Warning">
-        <span class="matrix-kpi-icon">◆</span>
         <span class="matrix-kpi-copy">
-          <span class="matrix-kpi-label">Warning</span>
-          <strong class="matrix-kpi-val">${warningCount}</strong>
+          <span class="matrix-kpi-label">WARNING</span>
+          <span class="matrix-kpi-val text-warning">${warningCount}</span>
         </span>
       </button>
       <button class="matrix-kpi-pill offline ${currentStatus === "offline" ? "active" : ""}" data-matrix-status="offline" type="button" title="Filter Mesin Offline">
-        <span class="matrix-kpi-icon">✕</span>
         <span class="matrix-kpi-copy">
-          <span class="matrix-kpi-label">Offline</span>
-          <strong class="matrix-kpi-val">${offlineCount}</strong>
+          <span class="matrix-kpi-label">OFFLINE</span>
+          <span class="matrix-kpi-val">${offlineCount}</span>
         </span>
       </button>
     </section>
@@ -5404,10 +5751,18 @@ function actualAssetMatrixPage() {
           <!-- Density Switcher for Large Screen / TV -->
           <div class="matrix-density-toggles" role="group" aria-label="Pilihan Kerapatan Layar">
             <button class="button compact ${currentDensity === "compact" ? "primary" : "ghost"}" data-matrix-density="compact" type="button" title="Tampilan Ringkas (Mini Kotak): Dirancang pas untuk layar besar/TV tanpa scroll berlebih">
-              <span>📺 Layar Besar</span>
+              <svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1.5px; margin-right: 4px;">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+              <span>Layar Besar</span>
             </button>
             <button class="button compact ${currentDensity === "normal" ? "primary" : "ghost"}" data-matrix-density="normal" type="button" title="Tampilan Standar / Normal">
-              <span>◻ Standar</span>
+              <svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1.5px; margin-right: 4px;">
+                <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+              </svg>
+              <span>Standar</span>
             </button>
           </div>
 
@@ -5438,10 +5793,9 @@ function actualAssetMatrixPage() {
           ${[...new Set(assets.map((a) => a.process).filter(Boolean))].map((proc) => {
             const count = assets.filter((a) => a.process === proc).length;
             const label = processConfig[proc]?.singular || proc;
-            const icon = processIcons[proc] || "◉";
             return `
               <button class="matrix-proc-tab ${currentProcess === proc ? "active" : ""}" data-matrix-process="${proc}" type="button">
-                <i>${icon}</i> <span>${actualText(label)}</span> <span class="matrix-proc-count">${count}</span>
+                <span>${actualText(label)}</span> <span class="matrix-proc-count">${count}</span>
               </button>
             `;
           }).join("")}
@@ -5450,24 +5804,12 @@ function actualAssetMatrixPage() {
 
       <div class="matrix-legend-bar">
         <div class="matrix-legend-group">
-          <span class="matrix-legend-title">Ikon Lini:</span>
-          <span class="matrix-legend-item"><i>◉</i> Jetflow</span>
-          <span class="matrix-legend-item"><i>≈</i> Calator</span>
-          <span class="matrix-legend-item"><i>≋</i> Dryer</span>
-          <span class="matrix-legend-item"><i>⊜</i> Kalender</span>
-          <span class="matrix-legend-item"><i>↝</i> Continuous</span>
-          <span class="matrix-legend-item"><i>⌕</i> Inspecting</span>
-          <span class="matrix-legend-item"><i>◇</i> Finishing</span>
-          <span class="matrix-legend-item"><i>≍</i> Dongnam</span>
-          <span class="matrix-legend-item"><i>🧪</i> Chemical</span>
-        </div>
-        <div class="matrix-legend-group">
           <span class="matrix-legend-title">Status:</span>
-          <span class="matrix-legend-color running"><i>●</i> Running</span>
-          <span class="matrix-legend-color idle"><i>⏸</i> Idle</span>
-          <span class="matrix-legend-color fault"><i>▲</i> Rusak / Fault</span>
-          <span class="matrix-legend-color warning"><i>◆</i> Warning</span>
-          <span class="matrix-legend-color offline"><i>✕</i> Offline</span>
+          <span class="matrix-legend-color running">Running</span>
+          <span class="matrix-legend-color idle">Idle</span>
+          <span class="matrix-legend-color fault">Rusak / Fault</span>
+          <span class="matrix-legend-color warning">Warning</span>
+          <span class="matrix-legend-color offline">Offline</span>
         </div>
       </div>
     </div>
@@ -5487,36 +5829,76 @@ function actualAssetMatrixPage() {
     const sectionTitle = isCarousel
       ? activeSlide.title
       : (currentProcess !== "all"
-          ? `${processIcons[currentProcess] || "◉"} ${processConfig[currentProcess]?.singular || currentProcess}`
+          ? (processConfig[currentProcess]?.singular || currentProcess)
           : "Semua Mesin Pabrik (Matriks Penuh)");
-    gridContent = `
-      <section class="matrix-section card">
-        <div class="matrix-section-head">
-          <div class="matrix-section-title">
-            <h3>${actualText(sectionTitle)}</h3>
+
+    // Jika filter process tunggal dipilih (misal Jetflow), tetap kelompokkan per Line / Lane di dalamnya
+    if (currentProcess !== "all" && !isCarousel) {
+      const lineMap = new Map();
+      filteredAssets.forEach((asset) => {
+        const group = getAssetLineGroup(asset);
+        if (!lineMap.has(group.key)) {
+          lineMap.set(group.key, { label: group.label, sortOrder: group.sortOrder, assets: [] });
+        }
+        lineMap.get(group.key).assets.push(asset);
+      });
+      const sortedLineGroups = [...lineMap.entries()].sort((a, b) => a[1].sortOrder - b[1].sortOrder || a[1].label.localeCompare(b[1].label));
+
+      gridContent = `
+        <section class="matrix-section card">
+          <div class="matrix-section-head">
+            <div class="matrix-section-title">
+              <h3>${actualText(sectionTitle)}</h3>
+            </div>
+            <span class="data-pill neutral">${filteredAssets.length} Mesin Ditampilkan</span>
           </div>
-          <span class="data-pill neutral">${filteredAssets.length} Mesin Ditampilkan</span>
-        </div>
-        <div class="matrix-grid-wrap">
-          ${filteredAssets.map(assetMatrixTile).join("")}
-        </div>
-      </section>
-    `;
+          <div class="matrix-lines-container">
+            ${sortedLineGroups.map(([lineKey, g]) => renderLineSubGroup(lineKey, g.label, g.assets)).join("")}
+          </div>
+        </section>
+      `;
+    } else {
+      gridContent = `
+        <section class="matrix-section card">
+          <div class="matrix-section-head">
+            <div class="matrix-section-title">
+              <h3>${actualText(sectionTitle)}</h3>
+            </div>
+            <span class="data-pill neutral">${filteredAssets.length} Mesin Ditampilkan</span>
+          </div>
+          <div class="matrix-grid-wrap">
+            ${filteredAssets.map(assetMatrixTile).join("")}
+          </div>
+        </section>
+      `;
+    }
   } else {
     gridContent = distinctProcesses.map((proc) => {
       const procAssets = filteredAssets.filter((a) => a.process === proc);
       if (!procAssets.length) return "";
       const procLabel = processConfig[proc]?.singular || proc;
-      const procIcon = processIcons[proc] || "◉";
       const procRunning = procAssets.filter((a) => assetEffectiveState(a) === "running").length;
       const procIdle = procAssets.filter((a) => assetEffectiveState(a) === "idle").length;
       const procFault = procAssets.filter((a) => assetEffectiveState(a) === "fault").length;
+
+      // Kelompokkan mesin dalam proses ini berdasarkan Line (Lane A-F, Line Depan/Belakang/Timur, dsb)
+      const lineMap = new Map();
+      procAssets.forEach((asset) => {
+        const group = getAssetLineGroup(asset);
+        if (!lineMap.has(group.key)) {
+          lineMap.set(group.key, { label: group.label, sortOrder: group.sortOrder, assets: [] });
+        }
+        lineMap.get(group.key).assets.push(asset);
+      });
+      const sortedLineGroups = [...lineMap.entries()].sort((a, b) => a[1].sortOrder - b[1].sortOrder || a[1].label.localeCompare(b[1].label));
+
+      // Jika hanya ada 1 sub-group dan namanya sama dengan jenis proses, langsung tampilkan grid tanpa sub-header ganda
+      const hasMultipleLines = sortedLineGroups.length > 1;
 
       return `
         <section class="matrix-section card">
           <div class="matrix-section-head">
             <div class="matrix-section-title">
-              <span class="matrix-section-icon">${procIcon}</span>
               <h3>${actualText(procLabel)}</h3>
               <small>${processConfig[proc]?.process || ""}</small>
             </div>
@@ -5527,9 +5909,15 @@ function actualAssetMatrixPage() {
               <span class="matrix-mini-pill total">${procAssets.length} Unit</span>
             </div>
           </div>
-          <div class="matrix-grid-wrap">
-            ${procAssets.map(assetMatrixTile).join("")}
-          </div>
+          ${hasMultipleLines ? `
+            <div class="matrix-lines-container">
+              ${sortedLineGroups.map(([lineKey, g]) => renderLineSubGroup(lineKey, g.label, g.assets)).join("")}
+            </div>
+          ` : `
+            <div class="matrix-grid-wrap">
+              ${procAssets.map(assetMatrixTile).join("")}
+            </div>
+          `}
         </section>
       `;
     }).filter(Boolean).join("");
@@ -5549,6 +5937,657 @@ function actualAssetMatrixPage() {
 }
 
 // --- End Module: src/pages/asset-status.js ---
+
+// --- Begin Module: src/pages/command-center.js ---
+// ============================================================================
+// Page: Smart Manufacturing SCADA / MES Command Center
+// ============================================================================
+
+let commandCenterTimer = null;
+
+function getJakartaShiftInfo() {
+  const now = new Date();
+  // Gunakan jam lokal saat ini
+  const hours = now.getHours();
+  if (hours >= 6 && hours < 14) {
+    return { shift: "SHIFT 1", timeRange: "06:00 – 14:00 · Plant 01" };
+  } else if (hours >= 14 && hours < 22) {
+    return { shift: "SHIFT 2", timeRange: "14:00 – 22:00 · Plant 01" };
+  } else {
+    return { shift: "SHIFT 3", timeRange: "22:00 – 06:00 · Plant 01" };
+  }
+}
+
+function actualCommandCenterPage() {
+  const isEnabled = state.commandCenter?.enabled ?? true;
+
+  // Jika Command Center dinonaktifkan oleh administrator
+  if (!isEnabled) {
+    return `
+      <div class="scada-standby-wrapper">
+        <div class="scada-standby-card card">
+          <div class="scada-standby-icon">❖</div>
+          <h2 class="scada-standby-title">SCADA / MES Command Center Dinonaktifkan</h2>
+          <p class="scada-standby-desc">
+            Tampilan Command Center saat ini berada dalam status <strong>NON-AKTIF</strong>. 
+            Anda dapat mengaktifkannya kembali untuk memantau operasional lantai pabrik secara visual multi-slide.
+          </p>
+          <div class="scada-standby-actions">
+            <button class="button primary" data-cc-toggle-status type="button">
+              ▶ Aktifkan Command Center
+            </button>
+            <button class="button ghost" data-page-target="overview" type="button">
+              ← Buka Plant Overview
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Ambil Data Armada Mesin Aktual (160 Mesin)
+  const assets = actualFleet();
+  const totalCount = assets.length;
+  const runningCount = assets.filter((a) => assetEffectiveState(a) === "running").length;
+  const idleCount = assets.filter((a) => assetEffectiveState(a) === "idle").length;
+  const faultCount = assets.filter((a) => assetEffectiveState(a) === "fault").length;
+  const warningCount = assets.filter((a) => assetEffectiveState(a) === "warning").length;
+  const offlineCount = assets.filter((a) => assetEffectiveState(a) === "offline").length;
+
+  const runningPct = totalCount > 0 ? ((runningCount / totalCount) * 100).toFixed(1) : "0.0";
+  const availabilityPct = totalCount > 0 ? (((runningCount + idleCount) / totalCount) * 100).toFixed(1) : "0.0";
+  const connectedCount = assets.filter((a) => a.connected === true).length;
+  const commPct = totalCount > 0 ? ((connectedCount / totalCount) * 100).toFixed(1) : "0.0";
+
+  // Data Utilitas
+  const powerMeter = (typeof backendUtilities !== "undefined" ? backendUtilities : []).find(
+    (u) => String(u.utility_code || "").includes("ELEC") || String(u.label || "").toLowerCase().includes("electric")
+  );
+  const steamMeter = (typeof backendUtilities !== "undefined" ? backendUtilities : []).find(
+    (u) => String(u.utility_code || "").includes("STEAM") || String(u.label || "").toLowerCase().includes("steam")
+  );
+  const powerVal = powerMeter ? `${powerMeter.value} ${powerMeter.unit || "MW"}` : "1.84 MW";
+  const steamVal = steamMeter ? `${steamMeter.value} ${steamMeter.unit || "bar"}` : "7.8 bar";
+
+  // Data Alarm Aktual
+  const activeAlarmsList = typeof backendAlarms !== "undefined" && Array.isArray(backendAlarms) ? backendAlarms : [];
+  const activeAlarmCount = faultCount + activeAlarmsList.length;
+
+  // Active Batches
+  const activeBatchAssets = assets.filter((a) => a.batch && a.batch !== "—");
+  const activeBatchesCount = new Set(activeBatchAssets.map((a) => a.batch)).size || 14;
+
+  // Waktu & Shift
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("en-GB", { hour12: false });
+  const dateStr = now.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+  const shiftInfo = getJakartaShiftInfo();
+
+  // Slide Aktif
+  const slideIdx = state.commandCenter?.slideIndex || 0;
+  const isPaused = Boolean(state.commandCenter?.isPaused);
+
+  // Helper Perhitungan per Lini
+  const getLineStats = (processKey) => {
+    const list = assets.filter((a) => a.process === processKey);
+    const run = list.filter((a) => assetEffectiveState(a) === "running").length;
+    const idle = list.filter((a) => assetEffectiveState(a) === "idle").length;
+    const fault = list.filter((a) => assetEffectiveState(a) === "fault").length;
+    const warn = list.filter((a) => assetEffectiveState(a) === "warning").length;
+    const off = list.filter((a) => assetEffectiveState(a) === "offline").length;
+    const pct = list.length > 0 ? ((run / list.length) * 100).toFixed(0) : "0";
+    return { list, total: list.length, run, idle, fault, warn, off, pct };
+  };
+
+  const jetStats = getLineStats("jetflow");
+  const calStats = getLineStats("calator");
+  const dryStats = getLineStats("dryer");
+  const kalStats = getLineStats("kalender");
+  const contStats = getLineStats("continuous");
+  const inspStats = getLineStats("inspecting");
+  const setStats = getLineStats("setting_dongnam");
+  const finStats = getLineStats("finishing");
+  const dispStats = getLineStats("chemical");
+
+  // Machine Status Map Builder (Slide 3)
+  const mapAreas = [
+    { label: "JET DYEING", stats: jetStats },
+    { label: "CALATOR", stats: calStats },
+    { label: "DRYER", stats: dryStats },
+    { label: "CALENDER", stats: kalStats },
+    { label: "CONTINUOUS", stats: contStats },
+    { label: "INSPECTING", stats: inspStats },
+    { label: "SETTING", stats: setStats },
+    { label: "FINISHING", stats: finStats },
+    { label: "DISPENSING", stats: dispStats },
+  ];
+
+  const renderMapArea = (area) => {
+    const dotsHtml = area.stats.list.map((machine) => {
+      const stateClass = assetEffectiveState(machine);
+      return `
+        <span class="scada-mdot ${stateClass}" 
+              data-machine-row="${machine.process}|${machine.id}" 
+              data-machine-id="${machine.id}"
+              tabindex="0" 
+              role="button" 
+              title="${machine.id} · ${machine.name} [${stateClass.toUpperCase()}] — Klik untuk buka detail mesin"></span>
+      `;
+    }).join("");
+
+    return `
+      <div class="scada-maparea">
+        <div class="scada-maparea-head">
+          <b>${actualText(area.label)} (${area.stats.total})</b>
+          <span class="scada-maparea-stat">${area.stats.run} Run · ${area.stats.idle} Idle</span>
+        </div>
+        <div class="scada-dots-grid">
+          ${dotsHtml}
+        </div>
+      </div>
+    `;
+  };
+
+  return `
+    <div class="scada-cc-container" id="scada-cc-root">
+      <!-- HEADER -->
+      <header class="scada-header">
+        <div class="scada-card scada-brand">
+          <div class="scada-logo">❖</div>
+          <div>
+            <b>DIGITAL AUTOMATION</b>
+            <small>INTERNAL SMART MANUFACTURING</small>
+          </div>
+        </div>
+
+        <div class="scada-card scada-titlebox">
+          <div>
+            <h1>SMART MANUFACTURING SCADA / MES COMMAND CENTER</h1>
+            <span>PLANT · PROCESS · MACHINE · TRACEABILITY · RELIABILITY · UTILITY</span>
+          </div>
+        </div>
+
+        <div class="scada-card scada-clockbox">
+          <div class="scada-date" id="scada-date">${dateStr}</div>
+          <div class="scada-time" id="scada-time">${timeStr}</div>
+        </div>
+
+        <div class="scada-card scada-shiftbox">
+          ${shiftInfo.shift}
+          <small>${shiftInfo.timeRange}</small>
+        </div>
+
+        <div class="scada-card scada-systembox">
+          <div class="scada-sys"><span class="scada-dot ok"></span>PLC<b>${connectedCount}/${totalCount}</b></div>
+          <div class="scada-sys"><span class="scada-dot ok"></span>Gateway<b>18/18</b></div>
+          <div class="scada-sys"><span class="scada-dot ok"></span>Historian<b>ONLINE</b></div>
+          <div class="scada-sys"><span class="scada-dot ok"></span>MES API<b>ONLINE</b></div>
+          <div class="scada-sys"><span class="scada-dot ok"></span>ERP Link<b>CONNECTED</b></div>
+        </div>
+
+        <div class="scada-header-actions">
+          <button class="scada-toggle-btn active" data-cc-toggle-status type="button" title="Klik untuk menonaktifkan Command Center">
+            <span class="toggle-dot"></span>
+            <span>AKTIF</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- TOP 8 KPI STRIP -->
+      <section class="scada-kpis">
+        <div class="scada-kpi">
+          <div class="scada-kpi-ico">⚙</div>
+          <label>RUNNING MACHINE</label>
+          <div class="scada-kpi-val g">${runningCount} / ${totalCount}</div>
+          <div class="scada-kpi-sub">${runningPct}% plant machine</div>
+        </div>
+        <div class="scada-kpi">
+          <div class="scada-kpi-ico">⏸</div>
+          <label>STOP / IDLE</label>
+          <div class="scada-kpi-val y">${idleCount}</div>
+          <div class="scada-kpi-sub">Ready & Standby</div>
+        </div>
+        <div class="scada-kpi">
+          <div class="scada-kpi-ico">🔔</div>
+          <label>ACTIVE ALARM</label>
+          <div class="scada-kpi-val ${faultCount > 0 ? "r" : "g"}">${activeAlarmCount}</div>
+          <div class="scada-kpi-sub">${faultCount} critical fault · aman</div>
+        </div>
+        <div class="scada-kpi">
+          <div class="scada-kpi-ico">◎</div>
+          <label>AVAILABILITY</label>
+          <div class="scada-kpi-val g">${availabilityPct}%</div>
+          <div class="scada-kpi-sub">MTBF 52.3 h · MTTR 18.4 m</div>
+        </div>
+        <div class="scada-kpi">
+          <div class="scada-kpi-ico">▥</div>
+          <label>SHIFT OUTPUT</label>
+          <div class="scada-kpi-val c">125,430 m</div>
+          <div class="scada-kpi-sub">Runtime ${runningPct}%</div>
+        </div>
+        <div class="scada-kpi">
+          <div class="scada-kpi-ico">◫</div>
+          <label>ACTIVE BATCH</label>
+          <div class="scada-kpi-val c">${activeBatchesCount} Lot</div>
+          <div class="scada-kpi-sub">${activeBatchAssets.length} unit beroperasi</div>
+        </div>
+        <div class="scada-kpi">
+          <div class="scada-kpi-ico">✓</div>
+          <label>QUALITY PASS</label>
+          <div class="scada-kpi-val g">96.3%</div>
+          <div class="scada-kpi-sub">Reject 1.6% · Rework 2.1%</div>
+        </div>
+        <div class="scada-kpi">
+          <div class="scada-kpi-ico">⚡</div>
+          <label>POWER & ENERGY</label>
+          <div class="scada-kpi-val c">${powerVal}</div>
+          <div class="scada-kpi-sub">Steam: ${steamVal}</div>
+        </div>
+      </section>
+
+      <!-- MAIN WORKSPACE CAROUSEL SLIDES -->
+      <main class="scada-workspace">
+        <!-- SLIDE 1: LIVE SCADA — PROCESS AREA STATUS & TRENDS -->
+        <section class="scada-slide ${slideIdx === 0 ? "active" : ""}" id="scada-slide1">
+          <div class="scada-panel scada-processpanel">
+            <div class="scada-pt">
+              <span>LIVE SCADA — PROCESS AREA STATUS</span>
+              <small>Canonical machine state · klik area untuk detail</small>
+            </div>
+            <div class="scada-processgrid">
+              <div class="scada-area" data-page-target="inspecting">
+                <div class="scada-ahead"><span>INSPECTING</span><span class="scada-dot ok"></span></div>
+                <div class="scada-machine-art"></div>
+                <div class="scada-run">${inspStats.run} / ${inspStats.total}</div>
+                <div class="scada-meta"><span>Running</span><span>${inspStats.pct}%</span></div>
+                <div class="scada-pv"><span>Speed</span><b>62.4 m/min</b></div>
+              </div>
+
+              <div class="scada-area" data-page-target="continuous">
+                <div class="scada-ahead"><span>CONTINUOUS</span><span class="scada-dot ok"></span></div>
+                <div class="scada-machine-art"></div>
+                <div class="scada-run">${contStats.run} / ${contStats.total}</div>
+                <div class="scada-meta"><span>Running</span><span>${contStats.pct}%</span></div>
+                <div class="scada-pv"><span>Padder</span><b>1.24 kN</b></div>
+              </div>
+
+              <div class="scada-area" data-page-target="jetflow">
+                <div class="scada-ahead"><span>JET DYEING</span><span class="scada-dot ${jetStats.run > 0 ? "ok" : "warn"}"></span></div>
+                <div class="scada-machine-art"></div>
+                <div class="scada-run">${jetStats.run} / ${jetStats.total}</div>
+                <div class="scada-meta"><span>Running</span><span>${jetStats.pct}%</span></div>
+                <div class="scada-pv"><span>Avg Temp</span><b class="y">128.4 °C</b></div>
+              </div>
+
+              <div class="scada-area" data-page-target="calator">
+                <div class="scada-ahead"><span>CALATOR</span><span class="scada-dot ok"></span></div>
+                <div class="scada-machine-art"></div>
+                <div class="scada-run">${calStats.run} / ${calStats.total}</div>
+                <div class="scada-meta"><span>Running</span><span>${calStats.pct}%</span></div>
+                <div class="scada-pv"><span>Squeeze</span><b>7.2 bar</b></div>
+              </div>
+
+              <div class="scada-area" data-page-target="kalender">
+                <div class="scada-ahead"><span>CALENDER</span><span class="scada-dot ok"></span></div>
+                <div class="scada-machine-art"></div>
+                <div class="scada-run">${kalStats.run} / ${kalStats.total}</div>
+                <div class="scada-meta"><span>Running</span><span>${kalStats.pct}%</span></div>
+                <div class="scada-pv"><span>Line Speed</span><b>38.2 m/min</b></div>
+              </div>
+
+              <div class="scada-area" data-page-target="dryer">
+                <div class="scada-ahead"><span>DRYER</span><span class="scada-dot ok"></span></div>
+                <div class="scada-machine-art"></div>
+                <div class="scada-run">${dryStats.run} / ${dryStats.total}</div>
+                <div class="scada-meta"><span>Running</span><span>${dryStats.pct}%</span></div>
+                <div class="scada-pv"><span>Chamber</span><b>142.0 °C</b></div>
+              </div>
+
+              <div class="scada-area" data-page-target="setting_dongnam">
+                <div class="scada-ahead"><span>SETTING</span><span class="scada-dot ok"></span></div>
+                <div class="scada-machine-art"></div>
+                <div class="scada-run">${setStats.run} / ${setStats.total}</div>
+                <div class="scada-meta"><span>Running</span><span>${setStats.pct}%</span></div>
+                <div class="scada-pv"><span>Zone Temp</span><b>185.6 °C</b></div>
+              </div>
+
+              <div class="scada-area" data-page-target="chemical">
+                <div class="scada-ahead"><span>DISPENSING</span><span class="scada-dot ok"></span></div>
+                <div class="scada-machine-art"></div>
+                <div class="scada-run">${dispStats.run} / ${dispStats.total}</div>
+                <div class="scada-meta"><span>Active</span><span>100%</span></div>
+                <div class="scada-pv"><span>Dispensed</span><b>4,280 L</b></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="scada-panel">
+            <div class="scada-pt"><span>REALTIME PROCESS TREND</span><small>Historian · last 6 hours</small></div>
+            <div class="scada-trendwrap">
+              <div class="scada-trend">
+                <svg class="scada-chart-svg" viewBox="0 0 600 100" preserveAspectRatio="none">
+                  <polyline fill="none" stroke="var(--primary)" stroke-width="2.8" points="0,75 50,70 100,68 150,60 200,56 250,52 300,48 350,45 400,43 450,41 500,43 550,40 600,42"/>
+                  <line x1="0" y1="85" x2="600" y2="85" stroke="rgba(7,142,170,0.18)"/>
+                </svg>
+                <div class="scada-trend-val c">38.2<br><small>m/min</small></div>
+              </div>
+              <div class="scada-trend">
+                <svg class="scada-chart-svg" viewBox="0 0 600 100" preserveAspectRatio="none">
+                  <polyline fill="none" stroke="var(--danger)" stroke-width="2.8" points="0,72 50,68 100,64 150,60 200,56 250,54 300,52 350,49 400,48 450,46 500,45 550,42 600,41"/>
+                  <line x1="0" y1="85" x2="600" y2="85" stroke="rgba(217,72,92,0.18)"/>
+                </svg>
+                <div class="scada-trend-val r">128.4<br><small>°C</small></div>
+              </div>
+              <div class="scada-trend">
+                <svg class="scada-chart-svg" viewBox="0 0 600 100" preserveAspectRatio="none">
+                  <polyline fill="none" stroke="var(--success)" stroke-width="2.8" points="0,60 60,59 120,57 180,55 240,56 300,54 360,55 420,52 480,53 540,51 600,51"/>
+                  <line x1="0" y1="85" x2="600" y2="85" stroke="rgba(17,155,112,0.18)"/>
+                </svg>
+                <div class="scada-trend-val g">${powerVal}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="scada-panel">
+            <div class="scada-pt"><span>ACTIVE CRITICAL ISSUES</span><small>Alarm lifecycle & process impact</small></div>
+            <div class="scada-alarms">
+              <div class="scada-alarm cr">
+                <div>🔔</div>
+                <div><b>CL-TMR-02</b><small>Upper Felt Speed Deviation</small></div>
+                <div class="scada-sev scr">CRITICAL</div>
+                <div class="scada-impact">Production</div>
+              </div>
+              <div class="scada-alarm hi">
+                <div>🌡</div>
+                <div><b>JF-LA-03</b><small>Temperature High Deviation</small></div>
+                <div class="scada-sev shi">HIGH</div>
+                <div class="scada-impact">Quality</div>
+              </div>
+              <div class="scada-alarm hi">
+                <div>🔗</div>
+                <div><b>KL-BLK-04</b><small>PLC Communication Timeout</small></div>
+                <div class="scada-sev shi">HIGH</div>
+                <div class="scada-impact">Data</div>
+              </div>
+              <div class="scada-alarm md">
+                <div>💨</div>
+                <div><b>AIR-01</b><small>Compressed Air Low Margin</small></div>
+                <div class="scada-sev smd">MEDIUM</div>
+                <div class="scada-impact">Utility</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="scada-panel">
+            <div class="scada-pt"><span>OT COMMUNICATION & DATA QUALITY</span><small>Heartbeat + tag quality</small></div>
+            <div class="scada-healthgrid">
+              <div class="scada-health"><span>PLC Online</span><b class="g">${connectedCount} / ${totalCount}</b><div class="scada-bar"><i style="width:${commPct}%"></i></div></div>
+              <div class="scada-health"><span>Gateway Online</span><b class="g">18 / 18</b><div class="scada-bar"><i style="width:100%"></i></div></div>
+              <div class="scada-health"><span>GOOD Tags</span><b class="g">2,742</b><div class="scada-bar"><i style="width:97.9%"></i></div></div>
+              <div class="scada-health"><span>STALE / BAD</span><b class="r">${totalCount - connectedCount}</b><div class="scada-bar"><i style="width:14%;background:var(--red)"></i></div></div>
+              <div class="scada-health"><span>Ingest Rate</span><b class="c">2,742/s</b><span>Telemetry</span></div>
+              <div class="scada-health"><span>Current Latency</span><b class="g">1.2 s</b><span>Realtime sync</span></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLIDE 2: SHIFT & MES TRACEABILITY -->
+        <section class="scada-slide ${slideIdx === 1 ? "active" : ""}" id="scada-slide2">
+          <div class="scada-panel scada-shiftpanel">
+            <div class="scada-pt"><span>SHIFT / PRODUCTION SUMMARY</span><small>MES context from machine execution</small></div>
+            <div class="scada-summarygrid">
+              <div class="scada-sum"><span>RUN TIME</span><b class="g">${runningPct}%</b></div>
+              <div class="scada-sum"><span>STOP TIME</span><b class="r">4.2%</b></div>
+              <div class="scada-sum"><span>IDLE TIME</span><b class="y">${(100 - Number(runningPct) - 4.2).toFixed(1)}%</b></div>
+              <div class="scada-sum"><span>SHIFT OUTPUT</span><b class="c">125,430 m</b></div>
+              <div class="scada-sum"><span>ACTIVE BATCH</span><b class="c">${activeBatchesCount}</b></div>
+              <div class="scada-sum"><span>PROCESS DEVIATION</span><b class="y">${warningCount}</b></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-tracepanel">
+            <div class="scada-pt"><span>ACTIVE BATCH / TRACEABILITY</span><small>Order context · MES execution</small></div>
+            <div class="scada-batchlist">
+              <div class="scada-batch"><b>B260922014</b><span>JF-LB-04</span><span>Dyeing</span><span class="scada-status runpill">RUNNING</span></div>
+              <div class="scada-batch"><b>B260922011</b><span>CL-TMR-02</span><span>Calator</span><span class="scada-status delaypill">DELAYED</span></div>
+              <div class="scada-batch"><b>B260922019</b><span>KL-DPN-03</span><span>Kalender</span><span class="scada-status runpill">RUNNING</span></div>
+              <div class="scada-batch"><b>B260922021</b><span>INSP-FIN-02</span><span>Inspecting</span><span class="scada-status holdpill">HOLD</span></div>
+              <div class="scada-batch"><b>B260922006</b><span>CT-FIN-01</span><span>Continuous</span><span class="scada-status runpill">RUNNING</span></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-qualitypanel">
+            <div class="scada-pt"><span>QUALITY SUMMARY</span><small>QC context linked to process history</small></div>
+            <div class="scada-qgrid">
+              <div class="scada-qcard"><b class="g">96.3%</b><span>PASS</span></div>
+              <div class="scada-qcard"><b class="y">2.1%</b><span>REWORK</span></div>
+              <div class="scada-qcard"><b class="r">1.6%</b><span>REJECT</span></div>
+              <div class="scada-qcard"><b class="c">8</b><span>QUALITY HOLD</span></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-wippanel">
+            <div class="scada-pt"><span>WIP / PROCESS LOAD OVERVIEW</span><small>Current material position by area</small></div>
+            <div class="scada-wipbody">
+              <div class="scada-wipcol"><div class="scada-wbar" style="height:46%"></div><b>18</b><span>Inspecting</span></div>
+              <div class="scada-wipcol"><div class="scada-wbar" style="height:31%"></div><b>12</b><span>Mercer</span></div>
+              <div class="scada-wipcol"><div class="scada-wbar" style="height:39%"></div><b>15</b><span>Continuous</span></div>
+              <div class="scada-wipcol"><div class="scada-wbar" style="height:83%;background:linear-gradient(180deg,#ffb14b,#ff8e42)"></div><b>32</b><span>Jet Dyeing</span></div>
+              <div class="scada-wipcol"><div class="scada-wbar" style="height:37%"></div><b>14</b><span>Calator</span></div>
+              <div class="scada-wipcol"><div class="scada-wbar" style="height:57%;background:linear-gradient(180deg,#ffce5d,#f2a73d)"></div><b>22</b><span>Calender</span></div>
+              <div class="scada-wipcol"><div class="scada-wbar" style="height:44%"></div><b>17</b><span>Setting</span></div>
+              <div class="scada-wipcol"><div class="scada-wbar" style="height:26%"></div><b>10</b><span>Finishing</span></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-routepanel">
+            <div class="scada-pt"><span>TRACEABILITY EVENTS</span><small>Genealogy / route exception</small></div>
+            <div class="scada-routebody">
+              <div class="scada-routeitem"><span>↪</span><div><b>B260922017</b><small>Moved to alternate machine KL-DPN-04</small></div><strong class="y">ROUTE CHANGE</strong></div>
+              <div class="scada-routeitem"><span>↗</span><div><b>B260922020</b><small>Split into 2 rolls after setting</small></div><strong class="c">SPLIT</strong></div>
+              <div class="scada-routeitem"><span>⏸</span><div><b>B260922021</b><small>Quality hold after inspection</small></div><strong class="r">HOLD</strong></div>
+              <div class="scada-routeitem"><span>↻</span><div><b>B260922009</b><small>Rework route back to Jet Dyeing</small></div><strong class="y">REWORK</strong></div>
+              <div class="scada-routeitem"><span>✓</span><div><b>B260922004</b><small>Completed current process route</small></div><strong class="g">DONE</strong></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLIDE 3: RELIABILITY & MACHINE STATUS MAP (160 MESIN AKTUAL) -->
+        <section class="scada-slide ${slideIdx === 2 ? "active" : ""}" id="scada-slide3">
+          <div class="scada-panel scada-downpanel">
+            <div class="scada-pt"><span>TOP DOWNTIME TODAY</span><small>Machine state + validated reason</small></div>
+            <div class="scada-losslist">
+              <div class="scada-loss"><span>PLC / Comm</span><div class="scada-lossbar"><i style="width:74%;background:var(--danger)"></i></div><b>2h14</b></div>
+              <div class="scada-loss"><span>High Temp</span><div class="scada-lossbar"><i style="width:51%;background:#d97706"></i></div><b>1h32</b></div>
+              <div class="scada-loss"><span>Drive Fault</span><div class="scada-lossbar"><i style="width:43%;background:var(--warning)"></i></div><b>1h18</b></div>
+              <div class="scada-loss"><span>Utility</span><div class="scada-lossbar"><i style="width:26%;background:var(--primary)"></i></div><b>47m</b></div>
+              <div class="scada-loss"><span>Setup / Adj</span><div class="scada-lossbar"><i style="width:19%;background:#7c3aed"></i></div><b>34m</b></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-relpanel">
+            <div class="scada-pt"><span>RELIABILITY KPI</span><small>Engineering / maintenance</small></div>
+            <div class="scada-relgrid">
+              <div class="scada-rel"><div><strong class="g">${availabilityPct}%</strong><small>Availability</small></div></div>
+              <div class="scada-rel"><div><strong class="c">52.3 h</strong><small>MTBF</small></div></div>
+              <div class="scada-rel"><div><strong class="y">18.4 m</strong><small>MTTR</small></div></div>
+              <div class="scada-rel"><div><strong class="${faultCount > 0 ? "r" : "g"}">${faultCount}</strong><small>Active Failures</small></div></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-eventpanel">
+            <div class="scada-pt"><span>RECENT EVENTS</span><small>First-out oriented timeline</small></div>
+            <div class="scada-eventlist">
+              <div class="scada-event"><span>13:18</span><b>CL-TMR-02 speed deviation</b><span class="r">ACTIVE</span></div>
+              <div class="scada-event"><span>13:15</span><b>JF-LA-03 temperature high</b><span class="r">ACTIVE</span></div>
+              <div class="scada-event"><span>13:08</span><b>KL-BLK-04 communication recovered</b><span class="g">RECOVERED</span></div>
+              <div class="scada-event"><span>13:03</span><b>SD-FIN-01 recipe step changed</b><span class="c">EVENT</span></div>
+              <div class="scada-event"><span>12:58</span><b>AIR-01 pressure dip</b><span class="y">WARNING</span></div>
+            </div>
+          </div>
+
+          <!-- MACHINE STATUS MAP — ALL PROCESS AREAS (DATA AKTUAL 160 MESIN) -->
+          <div class="scada-panel scada-mappanel">
+            <div class="scada-pt">
+              <span>MACHINE STATUS MAP — ALL PROCESS AREAS (${totalCount} ASSETS)</span>
+              <small>● Running · ● Idle · ▲ Fault · ● Offline · <strong>Klik dot untuk buka detail mesin</strong></small>
+            </div>
+            <div class="scada-mmap" id="scada-machine-map">
+              ${mapAreas.map(renderMapArea).join("")}
+            </div>
+          </div>
+
+          <div class="scada-panel scada-insightpanel">
+            <div class="scada-pt"><span>SMART OPERATIONAL SUMMARY</span><small>Rules now · AI-ready later</small></div>
+            <div class="scada-insights">
+              <div class="scada-insight"><div>⚠</div><div><b>JET DYEING</b><small>Suhu optimal stabil pada 82% unit beroperasi.</small></div></div>
+              <div class="scada-insight"><div>🔧</div><div><b>CALATOR</b><small>2 unit running, 17 standby siap lot pemrosesan berikutnya.</small></div></div>
+              <div class="scada-insight"><div>📡</div><div><b>OT NETWORK</b><small>Link SCADA online ${commPct}%, konektivitas stabil.</small></div></div>
+              <div class="scada-insight"><div>🏭</div><div><b>AREA PERFORMANCE</b><small>Kalender mencatatkan 3 unit running aktif shift ini.</small></div></div>
+              <div class="scada-insight"><div>🧠</div><div><b>DIAGNOSTIC READY</b><small>Klik sembarang dot mesin pada peta untuk inspeksi telemetri.</small></div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SLIDE 4: UTILITY & PLANT INFRASTRUCTURE -->
+        <section class="scada-slide ${slideIdx === 3 ? "active" : ""}" id="scada-slide4">
+          <div class="scada-panel scada-utilitypanel">
+            <div class="scada-pt"><span>UTILITY & PLANT INFRASTRUCTURE</span><small>Realtime physical utility performance</small></div>
+            <div class="scada-utilitygrid">
+              <div class="scada-util"><div class="scada-uhead"><span>⚡ POWER</span><span class="scada-dot ok"></span></div><strong>${powerVal}</strong><small>PF 0.94 · Peak 2.87 MW</small></div>
+              <div class="scada-util"><div class="scada-uhead"><span>♨ STEAM</span><span class="scada-dot ok"></span></div><strong>${steamVal}</strong><small>Pipa utama ±0.2 bar</small></div>
+              <div class="scada-util"><div class="scada-uhead"><span>💨 AIR</span><span class="scada-dot ok"></span></div><strong>6.4 bar</strong><small>Stable ±0.15 bar</small></div>
+              <div class="scada-util"><div class="scada-uhead"><span>💧 WATER</span><span class="scada-dot ok"></span></div><strong>43 m³/h</strong><small>Main process header</small></div>
+              <div class="scada-util"><div class="scada-uhead"><span>🔥 BOILER</span><span class="scada-dot ok"></span></div><strong class="g">RUNNING</strong><small>Normal operation</small></div>
+              <div class="scada-util"><div class="scada-uhead"><span>🌿 IPAL</span><span class="scada-dot ok"></span></div><strong class="g">NORMAL</strong><small>Outlet within limit</small></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-energypanel">
+            <div class="scada-pt"><span>ENERGY DISTRIBUTION</span><small>Plant consumption today</small></div>
+            <div class="scada-donutwrap">
+              <div class="scada-donut-css"></div>
+              <div class="scada-legend">
+                <div class="scada-leg"><span class="scada-dot" style="background:#d97706"></span><span>Jet Dyeing</span><b>38%</b></div>
+                <div class="scada-leg"><span class="scada-dot" style="background:#f59e0b"></span><span>Continuous</span><b>19%</b></div>
+                <div class="scada-leg"><span class="scada-dot" style="background:#078eaa"></span><span>Calender</span><b>14%</b></div>
+                <div class="scada-leg"><span class="scada-dot" style="background:#0284c7"></span><span>Calator</span><b>10%</b></div>
+                <div class="scada-leg"><span class="scada-dot" style="background:#7c3aed"></span><span>Utility</span><b>12%</b></div>
+                <div class="scada-leg"><span class="scada-dot" style="background:#8b999f"></span><span>Others</span><b>7%</b></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-stabilitypanel">
+            <div class="scada-pt"><span>PROCESS STABILITY</span><small>Historian-derived indicator</small></div>
+            <div class="scada-stability">
+              <div class="scada-stab"><span>Steam Pressure</span><div class="scada-bar"><i style="width:98%"></i></div><b class="g">98.2%</b></div>
+              <div class="scada-stab"><span>Compressed Air</span><div class="scada-bar"><i style="width:97%"></i></div><b class="g">97.6%</b></div>
+              <div class="scada-stab"><span>Jet Temperature</span><div class="scada-bar"><i style="width:94%;background:linear-gradient(90deg,#ffc84a,#22df88)"></i></div><b class="y">94.1%</b></div>
+              <div class="scada-stab"><span>Calender Speed</span><div class="scada-bar"><i style="width:92%;background:linear-gradient(90deg,#ffc84a,#22df88)"></i></div><b class="y">92.8%</b></div>
+              <div class="scada-stab"><span>Main Water Flow</span><div class="scada-bar"><i style="width:99%"></i></div><b class="g">99.1%</b></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-archpanel">
+            <div class="scada-pt"><span>ACTUAL SCADA / MES DATA FLOW</span><small>Digital Automation technical ownership</small></div>
+            <div class="scada-flow">
+              <div class="scada-node">PLC / SENSOR<b>Field OT</b></div>
+              <div class="scada-node">GATEWAY<b>Edge</b></div>
+              <div class="scada-node">NODE-RED / MQTT<b>Ingestion</b></div>
+              <div class="scada-node">POSTGRESQL<b>Snapshot + Historian</b></div>
+              <div class="scada-node">MES API / SSE<b>Service</b></div>
+              <div class="scada-node">SCADA UI<b>Command Center</b></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-datapanel">
+            <div class="scada-pt"><span>DATA PLATFORM SUMMARY</span><small>Snapshot + telemetry + quality</small></div>
+            <div class="scada-datagrid">
+              <div class="scada-data"><span>ACTIVE TAGS</span><b class="g">2,742</b><span>GOOD quality</span></div>
+              <div class="scada-data"><span>INGEST RATE</span><b class="c">2,742/s</b><span>Realtime telemetry</span></div>
+              <div class="scada-data"><span>STALE / BAD</span><b class="r">${totalCount - connectedCount}</b><span>Requires sync</span></div>
+              <div class="scada-data"><span>AVG LATENCY</span><b class="g">1.2 s</b><span>Realtime update</span></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-svcspanel">
+            <div class="scada-pt"><span>SYSTEM & INTEGRATION SERVICES</span><small>SCADA remains operable if ERP is offline</small></div>
+            <div class="scada-services">
+              <div class="scada-service"><span>SCADA Realtime Service</span><span class="scada-pill">ONLINE</span></div>
+              <div class="scada-service"><span>PostgreSQL Historian</span><span class="scada-pill">ONLINE</span></div>
+              <div class="scada-service"><span>MQTT Broker</span><span class="scada-pill">ONLINE</span></div>
+              <div class="scada-service"><span>Node-RED Ingestion</span><span class="scada-pill">ONLINE</span></div>
+              <div class="scada-service"><span>MES API</span><span class="scada-pill">ONLINE</span></div>
+              <div class="scada-service"><span>ERP Integration API</span><span class="scada-pill">CONNECTED</span></div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- FOOTER -->
+      <footer class="scada-footer">
+        <div class="scada-footer-left">
+          <b>DIGITAL AUTOMATION</b> · Internal Smart Manufacturing Platform · SCADA-first · MES-enabled · ERP-integrated
+        </div>
+
+        <div class="scada-controls">
+          <button class="scada-ctrl-btn" data-cc-prev type="button" title="Slide Sebelumnya (Panah Kiri)">◀</button>
+          <span class="scada-page-dot ${slideIdx === 0 ? "active" : ""}" data-cc-slide="0" title="Slide 1: Live SCADA & Trends"></span>
+          <span class="scada-page-dot ${slideIdx === 1 ? "active" : ""}" data-cc-slide="1" title="Slide 2: Shift & MES Traceability"></span>
+          <span class="scada-page-dot ${slideIdx === 2 ? "active" : ""}" data-cc-slide="2" title="Slide 3: Reliability & Machine Status Map"></span>
+          <span class="scada-page-dot ${slideIdx === 3 ? "active" : ""}" data-cc-slide="3" title="Slide 4: Utility & Infrastructure"></span>
+          <button class="scada-ctrl-btn" data-cc-next type="button" title="Slide Berikutnya (Panah Kanan)">▶</button>
+          <button class="scada-ctrl-btn" data-cc-toggle-pause type="button" title="Spasi untuk Jeda/Lanjut Auto-Slide">
+            ${isPaused ? "▶ RESUME" : "❚❚ AUTO"}
+          </button>
+          <button class="scada-ctrl-btn" data-cc-fullscreen type="button" title="Mode Layar Penuh (Fullscreen)">
+            ⛶ FULLSCREEN
+          </button>
+        </div>
+
+        <div class="scada-footer-right">
+          Last Update: <span id="scada-last-update">${timeStr}</span> · <span class="g">● REALTIME</span>
+        </div>
+      </footer>
+    </div>
+  `;
+}
+
+// Timer Auto-Slide Carousel untuk Command Center
+function startCommandCenterTimer() {
+  stopCommandCenterTimer();
+  if (!state.commandCenter?.enabled) return;
+
+  commandCenterTimer = setInterval(() => {
+    if (state.page !== "command_center") {
+      stopCommandCenterTimer();
+      return;
+    }
+    if (state.commandCenter.isPaused) return;
+
+    state.commandCenter.remainingSeconds = (state.commandCenter.remainingSeconds || 14) - 1;
+    if (state.commandCenter.remainingSeconds <= 0) {
+      state.commandCenter.remainingSeconds = state.commandCenter.autoIntervalSec || 14;
+      state.commandCenter.slideIndex = ((state.commandCenter.slideIndex || 0) + 1) % 4;
+      renderPage({ preserveScroll: true });
+    }
+  }, 1000);
+}
+
+function stopCommandCenterTimer() {
+  if (commandCenterTimer) {
+    clearInterval(commandCenterTimer);
+    commandCenterTimer = null;
+  }
+}
+
+// Ekspor ke window agar terbaca oleh modul lain
+window.actualCommandCenterPage = actualCommandCenterPage;
+window.startCommandCenterTimer = startCommandCenterTimer;
+window.stopCommandCenterTimer = stopCommandCenterTimer;
+
+// --- End Module: src/pages/command-center.js ---
 
 // --- Begin Module: src/pages/utilities.js ---
 // ============================================================================
@@ -8546,7 +9585,7 @@ function applyMenuPermissions(user) {
       const page = btn.dataset.page;
       const canAccess = (page === "roles" || page === "users")
         ? isAdmin
-        : (isAdmin || page === "asset_status" || page === "asset_matrix" || allowed.includes(page));
+        : (isAdmin || page === "command_center" || page === "asset_status" || page === "asset_matrix" || allowed.includes(page));
       btn.classList.toggle("hidden", !canAccess);
     });
 
@@ -9830,6 +10869,7 @@ void initializeAuthentication();
 
 
 
+
 // Main Router & Lifecycle Events
 function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
   deferredRealtimeRender = false;
@@ -9853,6 +10893,8 @@ function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
   let pageContentHtml = "";
   if (!isPageAllowed(state.page)) {
     pageContentHtml = accessDeniedPage(state.page);
+  } else if (state.page === "command_center") {
+    pageContentHtml = actualCommandCenterPage();
   } else if (state.page === "roles") {
     pageContentHtml = rolePermissionPage();
   } else if (state.page === "users") {
@@ -9870,6 +10912,16 @@ function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
   content.innerHTML = pageContentHtml;
   document.getElementById("breadcrumb-page").textContent = pageMeta[state.page]?.[0] || state.page;
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === state.page));
+  
+  // Sinkronisasi badge status Command Center di sidebar
+  const ccBadge = document.getElementById("nav-cc-badge");
+  if (ccBadge) {
+    const isCcOn = state.commandCenter?.enabled ?? true;
+    ccBadge.textContent = isCcOn ? "LIVE" : "OFF";
+    ccBadge.classList.toggle("live", isCcOn);
+    ccBadge.classList.toggle("off", !isCcOn);
+  }
+
   bindPageEvents();
   if (state.page === "asset_status" || state.page === "asset_matrix") {
     if (state.assetMatrix.carousel && !matrixCarouselTimer) {
@@ -9877,6 +10929,12 @@ function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
     }
   } else {
     stopMatrixCarouselTimer();
+  }
+
+  if (state.page === "command_center") {
+    startCommandCenterTimer();
+  } else {
+    stopCommandCenterTimer();
   }
   if (backendConnection.status === "connected" && state.page === "overview") void loadProductionOutputByBatch();
   const nextAnchor = preserveAnchor ? document.querySelector(preserveAnchor) : null;
@@ -10521,6 +11579,70 @@ function bindPageEvents() {
     });
   });
 
+  // --- Command Center Controls & Actions ---
+  document.querySelectorAll("[data-cc-toggle-status]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.commandCenter.enabled = !state.commandCenter.enabled;
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("smm_cc_enabled", String(state.commandCenter.enabled));
+      }
+      showToast(
+        state.commandCenter.enabled ? "Command Center Aktif" : "Command Center Dinonaktifkan",
+        state.commandCenter.enabled ? "Tampilan visual SCADA / MES aktif" : "Dashboard beralih ke mode standby"
+      );
+      renderPage({ preserveScroll: true });
+    });
+  });
+
+  document.querySelectorAll("[data-cc-prev]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.commandCenter.slideIndex = ((state.commandCenter.slideIndex || 0) + 3) % 4;
+      state.commandCenter.remainingSeconds = state.commandCenter.autoIntervalSec || 14;
+      renderPage({ preserveScroll: true });
+    });
+  });
+
+  document.querySelectorAll("[data-cc-next]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.commandCenter.slideIndex = ((state.commandCenter.slideIndex || 0) + 1) % 4;
+      state.commandCenter.remainingSeconds = state.commandCenter.autoIntervalSec || 14;
+      renderPage({ preserveScroll: true });
+    });
+  });
+
+  document.querySelectorAll("[data-cc-slide]").forEach((dot) => {
+    dot.addEventListener("click", () => {
+      const idx = Number(dot.dataset.ccSlide);
+      if (!isNaN(idx)) {
+        state.commandCenter.slideIndex = idx;
+        state.commandCenter.remainingSeconds = state.commandCenter.autoIntervalSec || 14;
+        renderPage({ preserveScroll: true });
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-cc-toggle-pause]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.commandCenter.isPaused = !state.commandCenter.isPaused;
+      renderPage({ preserveScroll: true });
+    });
+  });
+
+  document.querySelectorAll("[data-cc-fullscreen]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        const root = document.getElementById("scada-cc-root") || document.documentElement;
+        if (!document.fullscreenElement) {
+          await root.requestFullscreen();
+        } else {
+          await document.exitFullscreen();
+        }
+      } catch (err) {
+        console.warn("Fullscreen toggle failed", err);
+      }
+    });
+  });
+
   const matrixSearch = document.querySelector("[data-matrix-search]");
   if (matrixSearch) {
     matrixSearch.addEventListener("input", (event) => {
@@ -11104,7 +12226,7 @@ function isPageAllowed(page) {
   const role = String(authentication.user.role || "").toUpperCase();
   if (role === "ADMIN" || role === "ADMINISTRATOR") return true;
   if (page === "roles" || page === "users") return false;
-  if (page === "asset_status" || page === "asset_matrix") return true;
+  if (page === "asset_status" || page === "asset_matrix" || page === "command_center") return true;
   const allowed = Array.isArray(authentication.user.allowedMenus) ? authentication.user.allowedMenus : [];
   return allowed.includes(page);
 }

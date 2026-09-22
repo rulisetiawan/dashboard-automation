@@ -64,9 +64,10 @@ export class SolarFuelingController {
              COALESCE(
                (SELECT transaction.calculated_stock_liters
                 FROM solar_fueling_transaction transaction
-                WHERE transaction.calculated_stock_liters IS NOT NULL
-                  AND COALESCE(transaction.fueling_completed_at,transaction.source_updated_at,transaction.qr_created_at) <= ${alias}
-                ORDER BY COALESCE(transaction.fueling_completed_at,transaction.source_updated_at,transaction.qr_created_at) DESC,transaction.source_id DESC LIMIT 1),
+                WHERE transaction.transaction_status = 'COMPLETED'
+                  AND transaction.calculated_stock_liters IS NOT NULL
+                  AND transaction.fueling_completed_at <= ${alias}
+                ORDER BY transaction.fueling_completed_at DESC NULLS LAST, transaction.source_id DESC LIMIT 1),
                config.opening_stock_liters
                + COALESCE((SELECT SUM(CASE WHEN movement.direction = 'IN' THEN movement.quantity_liters ELSE -movement.quantity_liters END)
                            FROM solar_stock_movement movement WHERE movement.tank_id = config.tank_id AND movement.occurred_at >= config.opening_at AND movement.occurred_at <= ${alias}), 0)
@@ -294,8 +295,10 @@ export class SolarFuelingController {
         const sourceId = raw.id == null || raw.id === "" ? null : Math.trunc(positiveNumber(raw.id,"id"));
         const totalizerIn = raw.total_solar_IN == null ? null : positiveNumber(raw.total_solar_IN,"total_solar_IN");
         const totalizerOut = raw.total_solar_out == null ? null : positiveNumber(raw.total_solar_out,"total_solar_out");
+        const actualSolar = raw.actual_solar == null ? null : positiveNumber(raw.actual_solar,"actual_solar");
+        const requestedLiters = (actualSolar != null && actualSolar > 0) ? actualSolar : positiveNumber(raw.jumlah,"jumlah");
         const calculatedStock = raw.calculated_volume == null ? null : positiveNumber(raw.calculated_volume,"calculated_volume");
-        const values = [sourceSystem,sourceId,boundedText(raw.code,"code",160,true),positiveNumber(raw.jumlah,"jumlah"),raw.actual_solar == null ? null : positiveNumber(raw.actual_solar,"actual_solar"),totalizerOut ?? totalizerIn,totalizerIn,totalizerOut,calculatedStock,normalizeSourceStatus(raw.status,completedAt),raw.date_created ? isoTimestamp(raw.date_created,"date_created") : null,completedAt,boundedText(raw.nama_pemesan,"nama_pemesan"),boundedText(raw.nama_pembuat,"nama_pembuat"),boundedText(raw.process_by,"process_by"),boundedText(raw.consumer_id,"consumer_id",120),boundedText(raw.consumer_label,"consumer_label",200),boundedText(raw.keterangan,"keterangan",2000),raw.process_at ? isoTimestamp(raw.process_at,"process_at") : null,JSON.stringify(raw)];
+        const values = [sourceSystem,sourceId,boundedText(raw.code,"code",160,true),requestedLiters,actualSolar,totalizerOut ?? totalizerIn,totalizerIn,totalizerOut,calculatedStock,normalizeSourceStatus(raw.status,completedAt),raw.date_created ? isoTimestamp(raw.date_created,"date_created") : null,completedAt,boundedText(raw.nama_pemesan,"nama_pemesan"),boundedText(raw.nama_pembuat,"nama_pembuat"),boundedText(raw.process_by,"process_by"),boundedText(raw.consumer_id,"consumer_id",120),boundedText(raw.consumer_label,"consumer_label",200),boundedText(raw.keterangan,"keterangan",2000),raw.process_at ? isoTimestamp(raw.process_at,"process_at") : null,JSON.stringify(raw)];
         const upsert = await client.query(`
           INSERT INTO solar_fueling_transaction (source_system,source_id,qr_code,requested_liters,metered_liters,calculated_liters,machine_totalizer_liters,source_totalizer_in_liters,source_totalizer_out_liters,calculated_stock_liters,transaction_status,qr_created_at,fueling_completed_at,requester_name,qr_created_by,processed_by,consumer_id,consumer_label,notes,source_updated_at,raw_payload)
           VALUES ($1,$2,$3,$4,$5,NULL,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb)

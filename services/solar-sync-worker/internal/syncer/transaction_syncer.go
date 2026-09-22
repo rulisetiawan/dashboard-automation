@@ -244,7 +244,9 @@ func (s *TransactionSyncer) Sync(ctx context.Context) (*SyncResult, error) {
 			}
 
 			requestedLiters := 0.0
-			if r.Jumlah.Valid {
+			if r.ActualSolar.Valid && r.ActualSolar.Float64 > 0 {
+				requestedLiters = r.ActualSolar.Float64
+			} else if r.Jumlah.Valid {
 				requestedLiters = r.Jumlah.Float64
 			}
 

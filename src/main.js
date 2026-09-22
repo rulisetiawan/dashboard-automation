@@ -8,6 +8,7 @@ import "./utils/formatters.js";
 import "./pages/fleet.js";
 import "./pages/overview.js";
 import "./pages/asset-status.js";
+import "./pages/command-center.js";
 import "./pages/utilities.js";
 import "./pages/chemical.js";
 import "./pages/solar.js";
@@ -42,6 +43,8 @@ function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
   let pageContentHtml = "";
   if (!isPageAllowed(state.page)) {
     pageContentHtml = accessDeniedPage(state.page);
+  } else if (state.page === "command_center") {
+    pageContentHtml = actualCommandCenterPage();
   } else if (state.page === "roles") {
     pageContentHtml = rolePermissionPage();
   } else if (state.page === "users") {
@@ -59,6 +62,16 @@ function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
   content.innerHTML = pageContentHtml;
   document.getElementById("breadcrumb-page").textContent = pageMeta[state.page]?.[0] || state.page;
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === state.page));
+  
+  // Sinkronisasi badge status Command Center di sidebar
+  const ccBadge = document.getElementById("nav-cc-badge");
+  if (ccBadge) {
+    const isCcOn = state.commandCenter?.enabled ?? true;
+    ccBadge.textContent = isCcOn ? "LIVE" : "OFF";
+    ccBadge.classList.toggle("live", isCcOn);
+    ccBadge.classList.toggle("off", !isCcOn);
+  }
+
   bindPageEvents();
   if (state.page === "asset_status" || state.page === "asset_matrix") {
     if (state.assetMatrix.carousel && !matrixCarouselTimer) {
@@ -66,6 +79,12 @@ function renderPage({ preserveScroll = false, preserveAnchor = null } = {}) {
     }
   } else {
     stopMatrixCarouselTimer();
+  }
+
+  if (state.page === "command_center") {
+    startCommandCenterTimer();
+  } else {
+    stopCommandCenterTimer();
   }
   if (backendConnection.status === "connected" && state.page === "overview") void loadProductionOutputByBatch();
   const nextAnchor = preserveAnchor ? document.querySelector(preserveAnchor) : null;
@@ -710,6 +729,70 @@ function bindPageEvents() {
     });
   });
 
+  // --- Command Center Controls & Actions ---
+  document.querySelectorAll("[data-cc-toggle-status]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.commandCenter.enabled = !state.commandCenter.enabled;
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("smm_cc_enabled", String(state.commandCenter.enabled));
+      }
+      showToast(
+        state.commandCenter.enabled ? "Command Center Aktif" : "Command Center Dinonaktifkan",
+        state.commandCenter.enabled ? "Tampilan visual SCADA / MES aktif" : "Dashboard beralih ke mode standby"
+      );
+      renderPage({ preserveScroll: true });
+    });
+  });
+
+  document.querySelectorAll("[data-cc-prev]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.commandCenter.slideIndex = ((state.commandCenter.slideIndex || 0) + 3) % 4;
+      state.commandCenter.remainingSeconds = state.commandCenter.autoIntervalSec || 14;
+      renderPage({ preserveScroll: true });
+    });
+  });
+
+  document.querySelectorAll("[data-cc-next]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.commandCenter.slideIndex = ((state.commandCenter.slideIndex || 0) + 1) % 4;
+      state.commandCenter.remainingSeconds = state.commandCenter.autoIntervalSec || 14;
+      renderPage({ preserveScroll: true });
+    });
+  });
+
+  document.querySelectorAll("[data-cc-slide]").forEach((dot) => {
+    dot.addEventListener("click", () => {
+      const idx = Number(dot.dataset.ccSlide);
+      if (!isNaN(idx)) {
+        state.commandCenter.slideIndex = idx;
+        state.commandCenter.remainingSeconds = state.commandCenter.autoIntervalSec || 14;
+        renderPage({ preserveScroll: true });
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-cc-toggle-pause]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.commandCenter.isPaused = !state.commandCenter.isPaused;
+      renderPage({ preserveScroll: true });
+    });
+  });
+
+  document.querySelectorAll("[data-cc-fullscreen]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        const root = document.getElementById("scada-cc-root") || document.documentElement;
+        if (!document.fullscreenElement) {
+          await root.requestFullscreen();
+        } else {
+          await document.exitFullscreen();
+        }
+      } catch (err) {
+        console.warn("Fullscreen toggle failed", err);
+      }
+    });
+  });
+
   const matrixSearch = document.querySelector("[data-matrix-search]");
   if (matrixSearch) {
     matrixSearch.addEventListener("input", (event) => {
@@ -1293,7 +1376,7 @@ function isPageAllowed(page) {
   const role = String(authentication.user.role || "").toUpperCase();
   if (role === "ADMIN" || role === "ADMINISTRATOR") return true;
   if (page === "roles" || page === "users") return false;
-  if (page === "asset_status" || page === "asset_matrix") return true;
+  if (page === "asset_status" || page === "asset_matrix" || page === "command_center") return true;
   const allowed = Array.isArray(authentication.user.allowedMenus) ? authentication.user.allowedMenus : [];
   return allowed.includes(page);
 }

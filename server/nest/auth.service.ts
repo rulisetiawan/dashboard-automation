@@ -9,6 +9,7 @@ const failedLoginLimit = 5;
 const lockDurationMinutes = 15;
 
 export const ALL_CANONICAL_MENUS = [
+  "command_center",
   "overview",
   "asset_status",
   "asset_matrix",

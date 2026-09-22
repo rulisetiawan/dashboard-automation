@@ -146,8 +146,9 @@ async function syncTransactions(source, postgres) {
       const startedAt = sourceTimestamp(row.process_at);
       const completedAt = sourceTimestamp(row.date_activated);
       const sourceUpdatedAt = latestTimestamp(row.date_activated,row.process_at,row.date_created);
+      const requested = (row.actual_solar != null && Number(row.actual_solar) > 0) ? Number(row.actual_solar) : Number(row.jumlah || 0);
       values.push(
-        sourceSystem,Number(row.id),cleanText(row.code) || `SOURCE-${row.id}`,Number(row.jumlah),row.actual_solar == null ? null : Number(row.actual_solar),
+        sourceSystem,Number(row.id),cleanText(row.code) || `SOURCE-${row.id}`,requested,row.actual_solar == null ? null : Number(row.actual_solar),
         totalizerOut ?? totalizerIn,totalizerIn,totalizerOut,row.calculated_volume == null ? null : Number(row.calculated_volume),
         "FUELING","OUT",executionMode(row.process_type),normalizedStatus(row.status),createdAt,startedAt,completedAt,
         cleanText(row.nama_pemesan),cleanText(row.nama_pembuat),cleanText(row.process_by),cleanText(row.keterangan),sourceUpdatedAt,JSON.stringify(raw),

@@ -9,6 +9,7 @@ const sourceFiles = [
   'src/pages/fleet.js',
   'src/pages/overview.js',
   'src/pages/asset-status.js',
+  'src/pages/command-center.js',
   'src/pages/utilities.js',
   'src/pages/chemical.js',
   'src/pages/solar.js',

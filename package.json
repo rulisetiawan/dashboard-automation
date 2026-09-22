@@ -21,7 +21,8 @@
     "sync:solar-mysql": "node --env-file=.env scripts/migrate-solar-mysql-to-postgres.mjs --follow",
     "worker:solar": "go run ./services/solar-sync-worker/cmd/worker",
     "worker:solar:follow": "go run ./services/solar-sync-worker/cmd/worker --follow",
-    "worker:solar:full": "go run ./services/solar-sync-worker/cmd/worker --full"
+    "worker:solar:full": "go run ./services/solar-sync-worker/cmd/worker --full",
+    "reconcile:solar-requested": "node --env-file=.env scripts/reconcile-solar-requested-liters.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.1",
