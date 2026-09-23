@@ -14719,13 +14719,13 @@ select:focus-visible {
 /* KPI Strip */
 .scada-kpis {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 6px;
 }
 
 @media (max-width: 1200px) {
   .scada-kpis {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -15052,8 +15052,8 @@ select:focus-visible {
 
 /* Slide 2: Shift & MES Traceability */
 #scada-slide2 {
-  grid-template-columns: 1.1fr 0.95fr 0.9fr;
-  grid-template-rows: 44% 56%;
+  grid-template-columns: 1fr 2fr;
+  grid-template-rows: 100%;
 }
 
 .scada-shiftpanel { grid-column: 1 / 2; }
@@ -15195,15 +15195,15 @@ select:focus-visible {
 
 /* Slide 3: Reliability & Machine Status Map (160 Mesin) */
 #scada-slide3 {
-  grid-template-columns: 1.08fr 1fr 0.9fr;
-  grid-template-rows: 44% 56%;
+  grid-template-columns: 1.8fr 1.2fr;
+  grid-template-rows: 100px 1fr;
 }
 
 .scada-downpanel { grid-column: 1 / 2; }
-.scada-relpanel { grid-column: 2 / 3; }
+.scada-relpanel { grid-column: 1 / 2; }
 .scada-eventpanel { grid-column: 3 / 4; }
 .scada-mappanel { grid-column: 1 / 3; }
-.scada-insightpanel { grid-column: 3 / 4; }
+.scada-insightpanel { grid-column: 2 / 3; }
 
 .scada-losslist {
   flex: 1;
@@ -15397,16 +15397,16 @@ select:focus-visible {
 
 /* Slide 4: Utility & Infrastructure Flow */
 #scada-slide4 {
-  grid-template-columns: 1.05fr 1fr 0.92fr;
-  grid-template-rows: 47% 53%;
+  grid-template-columns: 1.8fr 1.2fr;
+  grid-template-rows: 1fr auto;
 }
 
 .scada-utilitypanel { grid-column: 1 / 2; }
 .scada-energypanel { grid-column: 2 / 3; }
 .scada-stabilitypanel { grid-column: 3 / 4; }
-.scada-archpanel { grid-column: 1 / 2; }
+.scada-archpanel { grid-column: 1 / 3; }
 .scada-datapanel { grid-column: 2 / 3; }
-.scada-svcspanel { grid-column: 3 / 4; }
+.scada-svcspanel { grid-column: 2 / 3; }
 
 .scada-utilitygrid {
   flex: 1;

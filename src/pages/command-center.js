@@ -68,13 +68,83 @@ function actualCommandCenterPage() {
   const powerVal = powerMeter ? `${powerMeter.value} ${powerMeter.unit || "MW"}` : "1.84 MW";
   const steamVal = steamMeter ? `${steamMeter.value} ${steamMeter.unit || "bar"}` : "7.8 bar";
 
-  // Data Alarm Aktual
-  const activeAlarmsList = typeof backendAlarms !== "undefined" && Array.isArray(backendAlarms) ? backendAlarms : [];
-  const activeAlarmCount = faultCount + activeAlarmsList.length;
+  // 1. Data Alarm Aktual (Poin 1: Data Riil dari backendActiveAlarmEvents & Mesin Trip)
+  const realActiveAlarms = typeof backendActiveAlarmEvents !== "undefined" && Array.isArray(backendActiveAlarmEvents)
+    ? backendActiveAlarmEvents
+    : [];
+  const faultMachines = assets.filter((a) => assetEffectiveState(a) === "fault");
+  
+  const combinedActiveAlarms = [];
+  const seenAlarmKeys = new Set();
 
-  // Active Batches
+  realActiveAlarms.forEach((item) => {
+    const key = `${item.asset_id || ""}-${item.title || ""}`;
+    if (!seenAlarmKeys.has(key)) {
+      seenAlarmKeys.add(key);
+      combinedActiveAlarms.push({
+        assetId: item.asset_id || "SYSTEM",
+        severity: String(item.severity || "CRITICAL").toUpperCase(),
+        title: item.title || "Parameter Deviation",
+        detail: item.detail || "Alarm aktif membutuhkan respon operator",
+        area: item.area_code || "Process Line",
+        time: item.occurred_at ? actualTime(item.occurred_at) : "Active",
+      });
+    }
+  });
+
+  faultMachines.forEach((machine) => {
+    const key = `${machine.id}-trip`;
+    if (!seenAlarmKeys.has(key)) {
+      seenAlarmKeys.add(key);
+      combinedActiveAlarms.push({
+        assetId: machine.id,
+        severity: "CRITICAL",
+        title: `${machine.name || machine.id} Trip / Fault`,
+        detail: machine.alarms?.[0]?.message || "Proteksi mesin aktif / unit terhenti otomatis",
+        area: machine.process ? actualText(machine.process) : "Plant",
+        time: "Active",
+      });
+    }
+  });
+
+  const activeAlarmCount = combinedActiveAlarms.length;
+
+  // 2. Active Batches Aktual (Poin 2: Data Riil Lot Mesin Berjalan)
   const activeBatchAssets = assets.filter((a) => a.batch && a.batch !== "—");
-  const activeBatchesCount = new Set(activeBatchAssets.map((a) => a.batch)).size || 14;
+  const uniqueBatchesSet = new Set(activeBatchAssets.map((a) => a.batch));
+  const activeBatchesCount = uniqueBatchesSet.size;
+
+  const activeBatchRuns = [];
+  const seenBatches = new Set();
+
+  activeBatchAssets.forEach((machine) => {
+    const batchNo = String(machine.batch).trim();
+    if (!seenBatches.has(batchNo) && batchNo !== "—") {
+      seenBatches.add(batchNo);
+      activeBatchRuns.push({
+        batchNo: batchNo,
+        assetId: machine.id,
+        process: machine.process ? actualText(machine.process) : "Dyeing",
+        status: assetEffectiveState(machine).toUpperCase(),
+        runtimeText: machine.recipe ? `Recipe ${machine.recipe}` : "In Production",
+      });
+    }
+  });
+
+  if (typeof backendProcessRuns !== "undefined" && Array.isArray(backendProcessRuns)) {
+    backendProcessRuns.forEach((run) => {
+      if (run.batch_no && !seenBatches.has(run.batch_no) && (run.run_status === "RUNNING" || run.run_status === "IN_PROGRESS")) {
+        seenBatches.add(run.batch_no);
+        activeBatchRuns.push({
+          batchNo: run.batch_no,
+          assetId: run.asset_id || "—",
+          process: run.process_type ? actualText(run.process_type) : "Production",
+          status: "RUNNING",
+          runtimeText: run.recipe_code ? `Recipe ${run.recipe_code}` : "In Progress",
+        });
+      }
+    });
+  }
 
   // Waktu & Shift
   const now = new Date();
@@ -192,13 +262,13 @@ function actualCommandCenterPage() {
         </div>
       </header>
 
-      <!-- TOP 8 KPI STRIP -->
+      <!-- TOP 6 OPERATIONAL KPI STRIP (HANYA DATA RIIL & AKTUAL) -->
       <section class="scada-kpis">
         <div class="scada-kpi">
           <div class="scada-kpi-ico">⚙</div>
           <label>RUNNING MACHINE</label>
           <div class="scada-kpi-val g">${runningCount} / ${totalCount}</div>
-          <div class="scada-kpi-sub">${runningPct}% plant machine</div>
+          <div class="scada-kpi-sub">${runningPct}% armada beroperasi</div>
         </div>
         <div class="scada-kpi">
           <div class="scada-kpi-ico">⏸</div>
@@ -209,33 +279,37 @@ function actualCommandCenterPage() {
         <div class="scada-kpi">
           <div class="scada-kpi-ico">🔔</div>
           <label>ACTIVE ALARM</label>
-          <div class="scada-kpi-val ${faultCount > 0 ? "r" : "g"}">${activeAlarmCount}</div>
-          <div class="scada-kpi-sub">${faultCount} critical fault · aman</div>
+          <div class="scada-kpi-val ${activeAlarmCount > 0 ? "r" : "g"}">${activeAlarmCount}</div>
+          <div class="scada-kpi-sub">${activeAlarmCount > 0 ? `${faultMachines.length} trip kritis` : "Kondisi pabrik aman"}</div>
         </div>
         <div class="scada-kpi">
           <div class="scada-kpi-ico">◎</div>
           <label>AVAILABILITY</label>
           <div class="scada-kpi-val g">${availabilityPct}%</div>
-          <div class="scada-kpi-sub">MTBF 52.3 h · MTTR 18.4 m</div>
+          <div class="scada-kpi-sub">${runningCount + idleCount} dari ${totalCount} unit siap</div>
         </div>
+        <!-- [POIN 3: DIKOMENTARI SEMENTARA KARENA BELUM ADA SENSOR / AKUMULATOR SHIFT METER]
         <div class="scada-kpi">
           <div class="scada-kpi-ico">▥</div>
           <label>SHIFT OUTPUT</label>
           <div class="scada-kpi-val c">125,430 m</div>
           <div class="scada-kpi-sub">Runtime ${runningPct}%</div>
         </div>
+        -->
         <div class="scada-kpi">
           <div class="scada-kpi-ico">◫</div>
           <label>ACTIVE BATCH</label>
           <div class="scada-kpi-val c">${activeBatchesCount} Lot</div>
           <div class="scada-kpi-sub">${activeBatchAssets.length} unit beroperasi</div>
         </div>
+        <!-- [POIN 3: DIKOMENTARI SEMENTARA KARENA BELUM ADA INTEGRASI LAB QC / DEFECT METER]
         <div class="scada-kpi">
           <div class="scada-kpi-ico">✓</div>
           <label>QUALITY PASS</label>
           <div class="scada-kpi-val g">96.3%</div>
           <div class="scada-kpi-sub">Reject 1.6% · Rework 2.1%</div>
         </div>
+        -->
         <div class="scada-kpi">
           <div class="scada-kpi-ico">⚡</div>
           <label>POWER & ENERGY</label>
@@ -255,19 +329,19 @@ function actualCommandCenterPage() {
             </div>
             <div class="scada-processgrid">
               <div class="scada-area" data-page-target="inspecting">
-                <div class="scada-ahead"><span>INSPECTING</span><span class="scada-dot ok"></span></div>
+                <div class="scada-ahead"><span>INSPECTING</span><span class="scada-dot ${inspStats.run > 0 ? "ok" : "warn"}"></span></div>
                 <div class="scada-machine-art"></div>
                 <div class="scada-run">${inspStats.run} / ${inspStats.total}</div>
                 <div class="scada-meta"><span>Running</span><span>${inspStats.pct}%</span></div>
-                <div class="scada-pv"><span>Speed</span><b>62.4 m/min</b></div>
+                <div class="scada-pv"><span>Standby</span><b>${inspStats.idle} Unit</b></div>
               </div>
 
               <div class="scada-area" data-page-target="continuous">
-                <div class="scada-ahead"><span>CONTINUOUS</span><span class="scada-dot ok"></span></div>
+                <div class="scada-ahead"><span>CONTINUOUS</span><span class="scada-dot ${contStats.run > 0 ? "ok" : "warn"}"></span></div>
                 <div class="scada-machine-art"></div>
                 <div class="scada-run">${contStats.run} / ${contStats.total}</div>
                 <div class="scada-meta"><span>Running</span><span>${contStats.pct}%</span></div>
-                <div class="scada-pv"><span>Padder</span><b>1.24 kN</b></div>
+                <div class="scada-pv"><span>Standby</span><b>${contStats.idle} Unit</b></div>
               </div>
 
               <div class="scada-area" data-page-target="jetflow">
@@ -275,39 +349,39 @@ function actualCommandCenterPage() {
                 <div class="scada-machine-art"></div>
                 <div class="scada-run">${jetStats.run} / ${jetStats.total}</div>
                 <div class="scada-meta"><span>Running</span><span>${jetStats.pct}%</span></div>
-                <div class="scada-pv"><span>Avg Temp</span><b class="y">128.4 °C</b></div>
+                <div class="scada-pv"><span>Standby</span><b>${jetStats.idle} Unit</b></div>
               </div>
 
               <div class="scada-area" data-page-target="calator">
-                <div class="scada-ahead"><span>CALATOR</span><span class="scada-dot ok"></span></div>
+                <div class="scada-ahead"><span>CALATOR</span><span class="scada-dot ${calStats.run > 0 ? "ok" : "warn"}"></span></div>
                 <div class="scada-machine-art"></div>
                 <div class="scada-run">${calStats.run} / ${calStats.total}</div>
                 <div class="scada-meta"><span>Running</span><span>${calStats.pct}%</span></div>
-                <div class="scada-pv"><span>Squeeze</span><b>7.2 bar</b></div>
+                <div class="scada-pv"><span>Standby</span><b>${calStats.idle} Unit</b></div>
               </div>
 
               <div class="scada-area" data-page-target="kalender">
-                <div class="scada-ahead"><span>CALENDER</span><span class="scada-dot ok"></span></div>
+                <div class="scada-ahead"><span>CALENDER</span><span class="scada-dot ${kalStats.run > 0 ? "ok" : "warn"}"></span></div>
                 <div class="scada-machine-art"></div>
                 <div class="scada-run">${kalStats.run} / ${kalStats.total}</div>
                 <div class="scada-meta"><span>Running</span><span>${kalStats.pct}%</span></div>
-                <div class="scada-pv"><span>Line Speed</span><b>38.2 m/min</b></div>
+                <div class="scada-pv"><span>Standby</span><b>${kalStats.idle} Unit</b></div>
               </div>
 
               <div class="scada-area" data-page-target="dryer">
-                <div class="scada-ahead"><span>DRYER</span><span class="scada-dot ok"></span></div>
+                <div class="scada-ahead"><span>DRYER</span><span class="scada-dot ${dryStats.run > 0 ? "ok" : "warn"}"></span></div>
                 <div class="scada-machine-art"></div>
                 <div class="scada-run">${dryStats.run} / ${dryStats.total}</div>
                 <div class="scada-meta"><span>Running</span><span>${dryStats.pct}%</span></div>
-                <div class="scada-pv"><span>Chamber</span><b>142.0 °C</b></div>
+                <div class="scada-pv"><span>Standby</span><b>${dryStats.idle} Unit</b></div>
               </div>
 
               <div class="scada-area" data-page-target="setting_dongnam">
-                <div class="scada-ahead"><span>SETTING</span><span class="scada-dot ok"></span></div>
+                <div class="scada-ahead"><span>SETTING</span><span class="scada-dot ${setStats.run > 0 ? "ok" : "warn"}"></span></div>
                 <div class="scada-machine-art"></div>
                 <div class="scada-run">${setStats.run} / ${setStats.total}</div>
                 <div class="scada-meta"><span>Running</span><span>${setStats.pct}%</span></div>
-                <div class="scada-pv"><span>Zone Temp</span><b>185.6 °C</b></div>
+                <div class="scada-pv"><span>Standby</span><b>${setStats.idle} Unit</b></div>
               </div>
 
               <div class="scada-area" data-page-target="chemical">
@@ -315,106 +389,127 @@ function actualCommandCenterPage() {
                 <div class="scada-machine-art"></div>
                 <div class="scada-run">${dispStats.run} / ${dispStats.total}</div>
                 <div class="scada-meta"><span>Active</span><span>100%</span></div>
-                <div class="scada-pv"><span>Dispensed</span><b>4,280 L</b></div>
+                <div class="scada-pv"><span>Status</span><b>Siap Operasi</b></div>
               </div>
             </div>
           </div>
 
           <div class="scada-panel">
-            <div class="scada-pt"><span>REALTIME PROCESS TREND</span><small>Historian · last 6 hours</small></div>
+            <div class="scada-pt"><span>REALTIME UTILITY & ENERGY</span><small>Live power demand & steam supply</small></div>
             <div class="scada-trendwrap">
               <div class="scada-trend">
-                <svg class="scada-chart-svg" viewBox="0 0 600 100" preserveAspectRatio="none">
-                  <polyline fill="none" stroke="var(--primary)" stroke-width="2.8" points="0,75 50,70 100,68 150,60 200,56 250,52 300,48 350,45 400,43 450,41 500,43 550,40 600,42"/>
-                  <line x1="0" y1="85" x2="600" y2="85" stroke="rgba(7,142,170,0.18)"/>
-                </svg>
-                <div class="scada-trend-val c">38.2<br><small>m/min</small></div>
+                <div style="font-size:10px;color:var(--ink-2);font-weight:700">ELECTRICAL POWER LOAD</div>
+                <div class="scada-trend-val c">${powerVal}</div>
               </div>
               <div class="scada-trend">
-                <svg class="scada-chart-svg" viewBox="0 0 600 100" preserveAspectRatio="none">
-                  <polyline fill="none" stroke="var(--danger)" stroke-width="2.8" points="0,72 50,68 100,64 150,60 200,56 250,54 300,52 350,49 400,48 450,46 500,45 550,42 600,41"/>
-                  <line x1="0" y1="85" x2="600" y2="85" stroke="rgba(217,72,92,0.18)"/>
-                </svg>
-                <div class="scada-trend-val r">128.4<br><small>°C</small></div>
+                <div style="font-size:10px;color:var(--ink-2);font-weight:700">MAIN STEAM HEADER</div>
+                <div class="scada-trend-val g">${steamVal}</div>
               </div>
               <div class="scada-trend">
-                <svg class="scada-chart-svg" viewBox="0 0 600 100" preserveAspectRatio="none">
-                  <polyline fill="none" stroke="var(--success)" stroke-width="2.8" points="0,60 60,59 120,57 180,55 240,56 300,54 360,55 420,52 480,53 540,51 600,51"/>
-                  <line x1="0" y1="85" x2="600" y2="85" stroke="rgba(17,155,112,0.18)"/>
-                </svg>
-                <div class="scada-trend-val g">${powerVal}</div>
+                <div style="font-size:10px;color:var(--ink-2);font-weight:700">FLEET AVAILABILITY</div>
+                <div class="scada-trend-val g">${availabilityPct}%</div>
               </div>
             </div>
           </div>
 
           <div class="scada-panel">
-            <div class="scada-pt"><span>ACTIVE CRITICAL ISSUES</span><small>Alarm lifecycle & process impact</small></div>
+            <div class="scada-pt">
+              <span>ACTIVE CRITICAL ISSUES (${activeAlarmCount})</span>
+              <small>${activeAlarmCount > 0 ? "Alarm aktif terdeteksi" : "Semua mesin normal"}</small>
+            </div>
             <div class="scada-alarms">
-              <div class="scada-alarm cr">
-                <div>🔔</div>
-                <div><b>CL-TMR-02</b><small>Upper Felt Speed Deviation</small></div>
-                <div class="scada-sev scr">CRITICAL</div>
-                <div class="scada-impact">Production</div>
-              </div>
-              <div class="scada-alarm hi">
-                <div>🌡</div>
-                <div><b>JF-LA-03</b><small>Temperature High Deviation</small></div>
-                <div class="scada-sev shi">HIGH</div>
-                <div class="scada-impact">Quality</div>
-              </div>
-              <div class="scada-alarm hi">
-                <div>🔗</div>
-                <div><b>KL-BLK-04</b><small>PLC Communication Timeout</small></div>
-                <div class="scada-sev shi">HIGH</div>
-                <div class="scada-impact">Data</div>
-              </div>
-              <div class="scada-alarm md">
-                <div>💨</div>
-                <div><b>AIR-01</b><small>Compressed Air Low Margin</small></div>
-                <div class="scada-sev smd">MEDIUM</div>
-                <div class="scada-impact">Utility</div>
-              </div>
+              ${combinedActiveAlarms.length > 0 ? combinedActiveAlarms.slice(0, 4).map((alm) => `
+                <div class="scada-alarm ${alm.severity === "CRITICAL" ? "cr" : "hi"}" 
+                     data-machine-row="${alm.assetId}" 
+                     role="button" 
+                     tabindex="0" 
+                     title="Klik untuk membuka detail mesin ${alm.assetId}">
+                  <div>${alm.severity === "CRITICAL" ? "🔔" : "⚠"}</div>
+                  <div>
+                    <b>${alm.assetId} · ${actualText(alm.title)}</b>
+                    <small>${actualText(alm.detail)}</small>
+                  </div>
+                  <div class="scada-sev ${alm.severity === "CRITICAL" ? "scr" : "shi"}">${alm.severity}</div>
+                  <div class="scada-impact">${alm.area}</div>
+                </div>
+              `).join("") : `
+                <div style="display:flex;align-items:center;justify-content:center;height:100%;padding:14px;text-align:center;gap:8px;color:var(--success);font-size:11px;font-weight:700;">
+                  <span class="scada-dot ok"></span>
+                  <span>Tidak ada alarm kritis aktif saat ini. Semua mesin dalam kondisi aman.</span>
+                </div>
+              `}
             </div>
           </div>
 
           <div class="scada-panel">
-            <div class="scada-pt"><span>OT COMMUNICATION & DATA QUALITY</span><small>Heartbeat + tag quality</small></div>
-            <div class="scada-healthgrid">
-              <div class="scada-health"><span>PLC Online</span><b class="g">${connectedCount} / ${totalCount}</b><div class="scada-bar"><i style="width:${commPct}%"></i></div></div>
-              <div class="scada-health"><span>Gateway Online</span><b class="g">18 / 18</b><div class="scada-bar"><i style="width:100%"></i></div></div>
-              <div class="scada-health"><span>GOOD Tags</span><b class="g">2,742</b><div class="scada-bar"><i style="width:97.9%"></i></div></div>
-              <div class="scada-health"><span>STALE / BAD</span><b class="r">${totalCount - connectedCount}</b><div class="scada-bar"><i style="width:14%;background:var(--red)"></i></div></div>
-              <div class="scada-health"><span>Ingest Rate</span><b class="c">2,742/s</b><span>Telemetry</span></div>
-              <div class="scada-health"><span>Current Latency</span><b class="g">1.2 s</b><span>Realtime sync</span></div>
+            <div class="scada-pt"><span>OT COMMUNICATION & DATA QUALITY</span><small>Koneksi aktual armada mesin</small></div>
+            <div class="scada-healthgrid" style="grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr);">
+              <div class="scada-health">
+                <span>PLC Online</span>
+                <b class="g">${connectedCount} / ${totalCount}</b>
+                <div class="scada-bar"><i style="width:${commPct}%"></i></div>
+              </div>
+              <div class="scada-health">
+                <span>Link Availability</span>
+                <b class="g">${commPct}%</b>
+                <div class="scada-bar"><i style="width:${commPct}%"></i></div>
+              </div>
+              <div class="scada-health">
+                <span>Stale / Offline</span>
+                <b class="${totalCount - connectedCount > 0 ? "r" : "g"}">${totalCount - connectedCount} Unit</b>
+                <div class="scada-bar"><i style="width:${((totalCount - connectedCount) / totalCount * 100).toFixed(0)}%;background:var(--danger)"></i></div>
+              </div>
+              <div class="scada-health">
+                <span>Armada Terpasang</span>
+                <b class="c">${totalCount} Mesin</b>
+                <small style="font-size:8.5px;color:var(--ink-2)">9 Lini Produksi</small>
+              </div>
             </div>
           </div>
         </section>
 
-        <!-- SLIDE 2: SHIFT & MES TRACEABILITY -->
+        <!-- SLIDE 2: SHIFT & MES TRACEABILITY (100% REAL DATA) -->
         <section class="scada-slide ${slideIdx === 1 ? "active" : ""}" id="scada-slide2">
           <div class="scada-panel scada-shiftpanel">
-            <div class="scada-pt"><span>SHIFT / PRODUCTION SUMMARY</span><small>MES context from machine execution</small></div>
+            <div class="scada-pt"><span>SHIFT & FLEET EXECUTION SUMMARY</span><small>Status shift & eksekusi aktual pabrik</small></div>
             <div class="scada-summarygrid">
               <div class="scada-sum"><span>RUN TIME</span><b class="g">${runningPct}%</b></div>
-              <div class="scada-sum"><span>STOP TIME</span><b class="r">4.2%</b></div>
-              <div class="scada-sum"><span>IDLE TIME</span><b class="y">${(100 - Number(runningPct) - 4.2).toFixed(1)}%</b></div>
-              <div class="scada-sum"><span>SHIFT OUTPUT</span><b class="c">125,430 m</b></div>
-              <div class="scada-sum"><span>ACTIVE BATCH</span><b class="c">${activeBatchesCount}</b></div>
-              <div class="scada-sum"><span>PROCESS DEVIATION</span><b class="y">${warningCount}</b></div>
+              <div class="scada-sum"><span>IDLE RATIO</span><b class="y">${((idleCount / totalCount) * 100).toFixed(1)}%</b></div>
+              <div class="scada-sum"><span>MESIN RUNNING</span><b class="g">${runningCount} Unit</b></div>
+              <div class="scada-sum"><span>MESIN STANDBY</span><b class="y">${idleCount} Unit</b></div>
+              <div class="scada-sum"><span>ACTIVE BATCH</span><b class="c">${activeBatchesCount} Lot</b></div>
+              <div class="scada-sum"><span>MESIN TRIP / RUSAK</span><b class="${faultCount > 0 ? "r" : "g"}">${faultCount} Unit</b></div>
             </div>
           </div>
 
-          <div class="scada-panel scada-tracepanel">
-            <div class="scada-pt"><span>ACTIVE BATCH / TRACEABILITY</span><small>Order context · MES execution</small></div>
-            <div class="scada-batchlist">
-              <div class="scada-batch"><b>B260922014</b><span>JF-LB-04</span><span>Dyeing</span><span class="scada-status runpill">RUNNING</span></div>
-              <div class="scada-batch"><b>B260922011</b><span>CL-TMR-02</span><span>Calator</span><span class="scada-status delaypill">DELAYED</span></div>
-              <div class="scada-batch"><b>B260922019</b><span>KL-DPN-03</span><span>Kalender</span><span class="scada-status runpill">RUNNING</span></div>
-              <div class="scada-batch"><b>B260922021</b><span>INSP-FIN-02</span><span>Inspecting</span><span class="scada-status holdpill">HOLD</span></div>
-              <div class="scada-batch"><b>B260922006</b><span>CT-FIN-01</span><span>Continuous</span><span class="scada-status runpill">RUNNING</span></div>
+          <div class="scada-panel scada-tracepanel" style="grid-column: 2 / 4; grid-row: 1 / 3;">
+            <div class="scada-pt">
+              <span>ACTIVE BATCH / TRACEABILITY (${activeBatchesCount} LOT AKTUAL)</span>
+              <small>Lot & recipe yang sedang diproses di armada mesin · klik untuk detail</small>
+            </div>
+            <div class="scada-batchlist" style="grid-template-rows: auto; max-height: calc(100% - 35px); overflow-y: auto;">
+              ${activeBatchRuns.length > 0 ? activeBatchRuns.map((batch) => `
+                <div class="scada-batch" 
+                     data-machine-row="${batch.assetId}" 
+                     role="button" 
+                     tabindex="0" 
+                     title="Klik untuk membuka detail mesin ${batch.assetId}">
+                  <b>${actualText(batch.batchNo)}</b>
+                  <span><strong>${actualText(batch.assetId)}</strong></span>
+                  <span>${actualText(batch.process)}</span>
+                  <span class="scada-status ${batch.status === "RUNNING" ? "runpill" : "holdpill"}">
+                    ${batch.status}
+                  </span>
+                </div>
+              `).join("") : `
+                <div style="display:flex;align-items:center;justify-content:center;height:140px;color:var(--ink-2);font-size:12px;text-align:center;padding:20px;">
+                  <span>Belum ada lot batch yang tercatat aktif beroperasi pada mesin saat ini.</span>
+                </div>
+              `}
             </div>
           </div>
 
+          <!-- [POIN 3: DIKOMENTARI SEMENTARA - MENUNGGU INTEGRASI LAB QC, SENSOR WIP & EVENT ROUTING]
           <div class="scada-panel scada-qualitypanel">
             <div class="scada-pt"><span>QUALITY SUMMARY</span><small>QC context linked to process history</small></div>
             <div class="scada-qgrid">
@@ -431,9 +526,9 @@ function actualCommandCenterPage() {
               <div class="scada-wipcol"><div class="scada-wbar" style="height:46%"></div><b>18</b><span>Inspecting</span></div>
               <div class="scada-wipcol"><div class="scada-wbar" style="height:31%"></div><b>12</b><span>Mercer</span></div>
               <div class="scada-wipcol"><div class="scada-wbar" style="height:39%"></div><b>15</b><span>Continuous</span></div>
-              <div class="scada-wipcol"><div class="scada-wbar" style="height:83%;background:linear-gradient(180deg,#ffb14b,#ff8e42)"></div><b>32</b><span>Jet Dyeing</span></div>
+              <div class="scada-wipcol"><div class="scada-wbar" style="height:83%"></div><b>32</b><span>Jet Dyeing</span></div>
               <div class="scada-wipcol"><div class="scada-wbar" style="height:37%"></div><b>14</b><span>Calator</span></div>
-              <div class="scada-wipcol"><div class="scada-wbar" style="height:57%;background:linear-gradient(180deg,#ffce5d,#f2a73d)"></div><b>22</b><span>Calender</span></div>
+              <div class="scada-wipcol"><div class="scada-wbar" style="height:57%"></div><b>22</b><span>Calender</span></div>
               <div class="scada-wipcol"><div class="scada-wbar" style="height:44%"></div><b>17</b><span>Setting</span></div>
               <div class="scada-wipcol"><div class="scada-wbar" style="height:26%"></div><b>10</b><span>Finishing</span></div>
             </div>
@@ -449,10 +544,44 @@ function actualCommandCenterPage() {
               <div class="scada-routeitem"><span>✓</span><div><b>B260922004</b><small>Completed current process route</small></div><strong class="g">DONE</strong></div>
             </div>
           </div>
+          -->
         </section>
 
         <!-- SLIDE 3: RELIABILITY & MACHINE STATUS MAP (160 MESIN AKTUAL) -->
         <section class="scada-slide ${slideIdx === 2 ? "active" : ""}" id="scada-slide3">
+          <div class="scada-panel scada-relpanel" style="grid-column: 1 / 3;">
+            <div class="scada-pt"><span>RELIABILITY & FLEET READINESS KPI</span><small>Status keandalan & ketersediaan armada 160 mesin pabrik</small></div>
+            <div class="scada-relgrid" style="grid-template-columns: repeat(4, 1fr);">
+              <div class="scada-rel"><div><strong class="g">${availabilityPct}%</strong><small>Plant Availability</small></div></div>
+              <div class="scada-rel"><div><strong class="${faultCount > 0 ? "r" : "g"}">${faultCount} Unit</strong><small>Active Faults / Trip</small></div></div>
+              <div class="scada-rel"><div><strong class="y">${idleCount} Unit</strong><small>Standby / Ready</small></div></div>
+              <div class="scada-rel"><div><strong class="c">${offlineCount} Unit</strong><small>Offline / Stale</small></div></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-insightpanel" style="grid-column: 3 / 4;">
+            <div class="scada-pt"><span>OPERATIONAL HIGHLIGHTS</span><small>Kondisi lini & telemetri</small></div>
+            <div class="scada-insights">
+              <div class="scada-insight"><div>⚙</div><div><b>ARMADA AKTIF</b><small>${runningCount} dari ${totalCount} mesin sedang memproses produksi.</small></div></div>
+              <div class="scada-insight"><div>📡</div><div><b>LINK TELEMETRI</b><small>Koneksi SCADA mencapai ${commPct}% online stabil.</small></div></div>
+              <div class="scada-insight"><div>⚡</div><div><b>BEBAN DAYA LISTRIK</b><small>Total pemakaian listrik pabrik saat ini: ${powerVal}.</small></div></div>
+              <div class="scada-insight"><div>♨</div><div><b>PASOKAN STEAM</b><small>Tekanan uap pipa distribusi boiler: ${steamVal}.</small></div></div>
+              <div class="scada-insight"><div>🧠</div><div><b>DIAGNOSTIK LANGSUNG</b><small>Klik sembarang dot mesin pada peta di bawah untuk detail.</small></div></div>
+            </div>
+          </div>
+
+          <!-- MACHINE STATUS MAP — ALL PROCESS AREAS (DATA AKTUAL 160 MESIN) -->
+          <div class="scada-panel scada-mappanel" style="grid-column: 1 / 4;">
+            <div class="scada-pt">
+              <span>MACHINE STATUS MAP — ALL PROCESS AREAS (${totalCount} ASSETS)</span>
+              <small>● Running · ● Idle · ▲ Fault · ● Offline · <strong>Klik dot untuk buka detail mesin</strong></small>
+            </div>
+            <div class="scada-mmap" id="scada-machine-map">
+              ${mapAreas.map(renderMapArea).join("")}
+            </div>
+          </div>
+
+          <!-- [POIN 3: DIKOMENTARI SEMENTARA - MENUNGGU INTEGRASI PARETO DOWNTIME DARI DATABASE]
           <div class="scada-panel scada-downpanel">
             <div class="scada-pt"><span>TOP DOWNTIME TODAY</span><small>Machine state + validated reason</small></div>
             <div class="scada-losslist">
@@ -461,16 +590,6 @@ function actualCommandCenterPage() {
               <div class="scada-loss"><span>Drive Fault</span><div class="scada-lossbar"><i style="width:43%;background:var(--warning)"></i></div><b>1h18</b></div>
               <div class="scada-loss"><span>Utility</span><div class="scada-lossbar"><i style="width:26%;background:var(--primary)"></i></div><b>47m</b></div>
               <div class="scada-loss"><span>Setup / Adj</span><div class="scada-lossbar"><i style="width:19%;background:#7c3aed"></i></div><b>34m</b></div>
-            </div>
-          </div>
-
-          <div class="scada-panel scada-relpanel">
-            <div class="scada-pt"><span>RELIABILITY KPI</span><small>Engineering / maintenance</small></div>
-            <div class="scada-relgrid">
-              <div class="scada-rel"><div><strong class="g">${availabilityPct}%</strong><small>Availability</small></div></div>
-              <div class="scada-rel"><div><strong class="c">52.3 h</strong><small>MTBF</small></div></div>
-              <div class="scada-rel"><div><strong class="y">18.4 m</strong><small>MTTR</small></div></div>
-              <div class="scada-rel"><div><strong class="${faultCount > 0 ? "r" : "g"}">${faultCount}</strong><small>Active Failures</small></div></div>
             </div>
           </div>
 
@@ -484,44 +603,69 @@ function actualCommandCenterPage() {
               <div class="scada-event"><span>12:58</span><b>AIR-01 pressure dip</b><span class="y">WARNING</span></div>
             </div>
           </div>
-
-          <!-- MACHINE STATUS MAP — ALL PROCESS AREAS (DATA AKTUAL 160 MESIN) -->
-          <div class="scada-panel scada-mappanel">
-            <div class="scada-pt">
-              <span>MACHINE STATUS MAP — ALL PROCESS AREAS (${totalCount} ASSETS)</span>
-              <small>● Running · ● Idle · ▲ Fault · ● Offline · <strong>Klik dot untuk buka detail mesin</strong></small>
-            </div>
-            <div class="scada-mmap" id="scada-machine-map">
-              ${mapAreas.map(renderMapArea).join("")}
-            </div>
-          </div>
-
-          <div class="scada-panel scada-insightpanel">
-            <div class="scada-pt"><span>SMART OPERATIONAL SUMMARY</span><small>Rules now · AI-ready later</small></div>
-            <div class="scada-insights">
-              <div class="scada-insight"><div>⚠</div><div><b>JET DYEING</b><small>Suhu optimal stabil pada 82% unit beroperasi.</small></div></div>
-              <div class="scada-insight"><div>🔧</div><div><b>CALATOR</b><small>2 unit running, 17 standby siap lot pemrosesan berikutnya.</small></div></div>
-              <div class="scada-insight"><div>📡</div><div><b>OT NETWORK</b><small>Link SCADA online ${commPct}%, konektivitas stabil.</small></div></div>
-              <div class="scada-insight"><div>🏭</div><div><b>AREA PERFORMANCE</b><small>Kalender mencatatkan 3 unit running aktif shift ini.</small></div></div>
-              <div class="scada-insight"><div>🧠</div><div><b>DIAGNOSTIC READY</b><small>Klik sembarang dot mesin pada peta untuk inspeksi telemetri.</small></div></div>
-            </div>
-          </div>
+          -->
         </section>
 
         <!-- SLIDE 4: UTILITY & PLANT INFRASTRUCTURE -->
+        <!-- SLIDE 4: UTILITY & PLANT INFRASTRUCTURE (HANYA METRIK RIIL) -->
         <section class="scada-slide ${slideIdx === 3 ? "active" : ""}" id="scada-slide4">
-          <div class="scada-panel scada-utilitypanel">
-            <div class="scada-pt"><span>UTILITY & PLANT INFRASTRUCTURE</span><small>Realtime physical utility performance</small></div>
-            <div class="scada-utilitygrid">
-              <div class="scada-util"><div class="scada-uhead"><span>⚡ POWER</span><span class="scada-dot ok"></span></div><strong>${powerVal}</strong><small>PF 0.94 · Peak 2.87 MW</small></div>
-              <div class="scada-util"><div class="scada-uhead"><span>♨ STEAM</span><span class="scada-dot ok"></span></div><strong>${steamVal}</strong><small>Pipa utama ±0.2 bar</small></div>
+          <div class="scada-panel scada-utilitypanel" style="grid-column: 1 / 3;">
+            <div class="scada-pt"><span>REALTIME UTILITY & ENERGY SUPPLY</span><small>Telemetri aktual pasokan listrik & steam pabrik</small></div>
+            <div class="scada-utilitygrid" style="grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr);">
+              <div class="scada-util">
+                <div class="scada-uhead"><span>⚡ POWER LOAD</span><span class="scada-dot ok"></span></div>
+                <strong>${powerVal}</strong>
+                <small>Beban daya listrik operasional pabrik</small>
+              </div>
+              <div class="scada-util">
+                <div class="scada-uhead"><span>♨ STEAM SUPPLY</span><span class="scada-dot ok"></span></div>
+                <strong>${steamVal}</strong>
+                <small>Tekanan uap header pipa boiler utama</small>
+              </div>
+              <div class="scada-util">
+                <div class="scada-uhead"><span>📡 LINK AVAILABILITY</span><span class="scada-dot ok"></span></div>
+                <strong class="g">${commPct}%</strong>
+                <small>${connectedCount} dari ${totalCount} mesin terhubung</small>
+              </div>
+              <div class="scada-util">
+                <div class="scada-uhead"><span>🏭 TOTAL MONITORING</span><span class="scada-dot ok"></span></div>
+                <strong class="c">${totalCount} Unit</strong>
+                <small>9 Lini proses tekstil terintegrasi</small>
+              </div>
+              <!-- [POIN 3: DIKOMENTARI SEMENTARA KARENA BELUM TERPASANG SENSOR AIR, WATER, BOILER & IPAL DI SCADA]
               <div class="scada-util"><div class="scada-uhead"><span>💨 AIR</span><span class="scada-dot ok"></span></div><strong>6.4 bar</strong><small>Stable ±0.15 bar</small></div>
               <div class="scada-util"><div class="scada-uhead"><span>💧 WATER</span><span class="scada-dot ok"></span></div><strong>43 m³/h</strong><small>Main process header</small></div>
               <div class="scada-util"><div class="scada-uhead"><span>🔥 BOILER</span><span class="scada-dot ok"></span></div><strong class="g">RUNNING</strong><small>Normal operation</small></div>
               <div class="scada-util"><div class="scada-uhead"><span>🌿 IPAL</span><span class="scada-dot ok"></span></div><strong class="g">NORMAL</strong><small>Outlet within limit</small></div>
+              -->
             </div>
           </div>
 
+          <div class="scada-panel scada-svcspanel" style="grid-column: 3 / 4;">
+            <div class="scada-pt"><span>SYSTEM & INTEGRATION SERVICES</span><small>Status platform SCADA & MES</small></div>
+            <div class="scada-services">
+              <div class="scada-service"><span>SCADA Realtime Service</span><span class="scada-pill">ONLINE</span></div>
+              <div class="scada-service"><span>PostgreSQL Historian</span><span class="scada-pill">ONLINE</span></div>
+              <div class="scada-service"><span>MQTT Broker</span><span class="scada-pill">ONLINE</span></div>
+              <div class="scada-service"><span>Node-RED Ingestion</span><span class="scada-pill">ONLINE</span></div>
+              <div class="scada-service"><span>MES API Gateway</span><span class="scada-pill">ONLINE</span></div>
+              <div class="scada-service"><span>ERP Integration Link</span><span class="scada-pill">CONNECTED</span></div>
+            </div>
+          </div>
+
+          <div class="scada-panel scada-archpanel" style="grid-column: 1 / 4;">
+            <div class="scada-pt"><span>ACTUAL SCADA / MES DATA FLOW</span><small>Arsitektur aliran data OT/IT dari sensor hingga dashboard</small></div>
+            <div class="scada-flow">
+              <div class="scada-node">PLC / SENSOR<b>Field OT</b></div>
+              <div class="scada-node">GATEWAY<b>Edge</b></div>
+              <div class="scada-node">NODE-RED / MQTT<b>Ingestion</b></div>
+              <div class="scada-node">POSTGRESQL<b>Historian & Storage</b></div>
+              <div class="scada-node">NESTJS MES API<b>Service Backend</b></div>
+              <div class="scada-node">COMMAND CENTER<b>Real-Time UI</b></div>
+            </div>
+          </div>
+
+          <!-- [POIN 3: DIKOMENTARI SEMENTARA - MENUNGGU PEMASANGAN SENSOR SUBCONSUMPTION & HISTORIAN STABILITY]
           <div class="scada-panel scada-energypanel">
             <div class="scada-pt"><span>ENERGY DISTRIBUTION</span><small>Plant consumption today</small></div>
             <div class="scada-donutwrap">
@@ -547,40 +691,7 @@ function actualCommandCenterPage() {
               <div class="scada-stab"><span>Main Water Flow</span><div class="scada-bar"><i style="width:99%"></i></div><b class="g">99.1%</b></div>
             </div>
           </div>
-
-          <div class="scada-panel scada-archpanel">
-            <div class="scada-pt"><span>ACTUAL SCADA / MES DATA FLOW</span><small>Digital Automation technical ownership</small></div>
-            <div class="scada-flow">
-              <div class="scada-node">PLC / SENSOR<b>Field OT</b></div>
-              <div class="scada-node">GATEWAY<b>Edge</b></div>
-              <div class="scada-node">NODE-RED / MQTT<b>Ingestion</b></div>
-              <div class="scada-node">POSTGRESQL<b>Snapshot + Historian</b></div>
-              <div class="scada-node">MES API / SSE<b>Service</b></div>
-              <div class="scada-node">SCADA UI<b>Command Center</b></div>
-            </div>
-          </div>
-
-          <div class="scada-panel scada-datapanel">
-            <div class="scada-pt"><span>DATA PLATFORM SUMMARY</span><small>Snapshot + telemetry + quality</small></div>
-            <div class="scada-datagrid">
-              <div class="scada-data"><span>ACTIVE TAGS</span><b class="g">2,742</b><span>GOOD quality</span></div>
-              <div class="scada-data"><span>INGEST RATE</span><b class="c">2,742/s</b><span>Realtime telemetry</span></div>
-              <div class="scada-data"><span>STALE / BAD</span><b class="r">${totalCount - connectedCount}</b><span>Requires sync</span></div>
-              <div class="scada-data"><span>AVG LATENCY</span><b class="g">1.2 s</b><span>Realtime update</span></div>
-            </div>
-          </div>
-
-          <div class="scada-panel scada-svcspanel">
-            <div class="scada-pt"><span>SYSTEM & INTEGRATION SERVICES</span><small>SCADA remains operable if ERP is offline</small></div>
-            <div class="scada-services">
-              <div class="scada-service"><span>SCADA Realtime Service</span><span class="scada-pill">ONLINE</span></div>
-              <div class="scada-service"><span>PostgreSQL Historian</span><span class="scada-pill">ONLINE</span></div>
-              <div class="scada-service"><span>MQTT Broker</span><span class="scada-pill">ONLINE</span></div>
-              <div class="scada-service"><span>Node-RED Ingestion</span><span class="scada-pill">ONLINE</span></div>
-              <div class="scada-service"><span>MES API</span><span class="scada-pill">ONLINE</span></div>
-              <div class="scada-service"><span>ERP Integration API</span><span class="scada-pill">CONNECTED</span></div>
-            </div>
-          </div>
+          -->
         </section>
       </main>
 
