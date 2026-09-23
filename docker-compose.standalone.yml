@@ -70,23 +70,23 @@ services:
       - "host.docker.internal:host-gateway"
       - "host.orb.internal:host-gateway"
 
-  emqx:
-    image: emqx/emqx:5.8.0
-    container_name: pt_smm_emqx
-    restart: unless-stopped
-    ports:
-      - "0.0.0.0:${EMQX_MQTT_PORT:-1889}:1883"
-      - "0.0.0.0:${EMQX_DASHBOARD_PORT:-18083}:18083"
-    environment:
-      EMQX_NODE__NAME: emqx@node.pt_smm
-      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
-      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DEFAULT_PASSWORD:-public}
-    volumes:
-      - emqx_data:/opt/emqx/data
-      - emqx_log:/opt/emqx/log
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-      - "host.orb.internal:host-gateway"
+  # emqx:
+  #   image: emqx/emqx:5.8.0
+  #   container_name: pt_smm_emqx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "0.0.0.0:${EMQX_MQTT_PORT:-1889}:1883"
+  #     - "0.0.0.0:${EMQX_DASHBOARD_PORT:-18083}:18083"
+  #   environment:
+  #     EMQX_NODE__NAME: emqx@node.pt_smm
+  #     EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+  #     EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DEFAULT_PASSWORD:-public}
+  #   volumes:
+  #     - emqx_data:/opt/emqx/data
+  #     - emqx_log:/opt/emqx/log
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #     - "host.orb.internal:host-gateway"
 
   scada-ingest:
     build:
@@ -112,7 +112,8 @@ services:
       - "host.docker.internal:host-gateway"
       - "host.orb.internal:host-gateway"
 
-volumes:
-  emqx_data:
-  emqx_log:
+# volumes:
+#   emqx_data:
+#   emqx_log:
+
 

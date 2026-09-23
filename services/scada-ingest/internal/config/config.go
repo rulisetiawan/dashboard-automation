@@ -38,10 +38,10 @@ func Load() *Config {
 	}
 
 	return &Config{
-		MQTTBroker:   getEnv("MQTT_BROKER", "tcp://127.0.0.1:1889"),
+		MQTTBroker:   getEnv("MQTT_BROKER", "tcp://127.0.0.1:1883"),
 		MQTTClientID: getEnv("MQTT_CLIENT_ID", "scada-ingest-worker"),
-		MQTTUsername: getEnv("MQTT_USERNAME", ""),
-		MQTTPassword: getEnv("MQTT_PASSWORD", ""),
+		MQTTUsername: getEnv("MQTT_USERNAME", "engineering"),
+		MQTTPassword: getEnv("MQTT_PASSWORD", "admineng"),
 		MQTTTopic:    getEnv("MQTT_TOPIC", "pt_smm/telemetry/#"),
 		MQTTQoS:      byte(qosInt),
 
