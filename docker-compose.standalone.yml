@@ -75,8 +75,8 @@ services:
     container_name: pt_smm_emqx
     restart: unless-stopped
     ports:
-      - "${EMQX_MQTT_PORT:-1889}:1883"
-      - "${EMQX_DASHBOARD_PORT:-18083}:18083"
+      - "0.0.0.0:${EMQX_MQTT_PORT:-1889}:1883"
+      - "0.0.0.0:${EMQX_DASHBOARD_PORT:-18083}:18083"
     environment:
       EMQX_NODE__NAME: emqx@node.pt_smm
       EMQX_DASHBOARD__DEFAULT_USERNAME: admin
