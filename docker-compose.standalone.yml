@@ -101,8 +101,9 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       DATABASE_SSL: ${DATABASE_SSL:-false}
-      DATABASE_URL: ${DATABASE_URL:-}
-      MQTT_BROKER: ${MQTT_BROKER:-tcp://emqx:1883}
+      MQTT_BROKER: ${MQTT_BROKER:-tcp://host.docker.internal:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-engineering}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-admineng}
       MQTT_TOPIC: ${MQTT_TOPIC:-pt_smm/telemetry/#}
     env_file:
       - path: .env
@@ -110,8 +111,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
       - "host.orb.internal:host-gateway"
-    depends_on:
-      - emqx
 
 volumes:
   emqx_data:
