@@ -174,12 +174,52 @@ export class ApiController {
   }
 
   @Get("assets")
-  async assets(@Query("process") process?: string, @Query("area") area?: string) {
-    if (!process || !validProcesses.has(process)) throw new BadRequestException(`process must be one of: ${supportedProcesses.join(", ")}`);
-    const result = area
-      ? await this.database.query(`${assetProjection} WHERE a.process_type = $1 AND a.area_code = $2 AND a.active = TRUE ORDER BY a.asset_id`, [process, area])
-      : await this.database.query(`${assetProjection} WHERE a.process_type = $1 AND a.active = TRUE ORDER BY a.asset_id`, [process]);
-    return { data_mode: actualDataMode, assets: result.rows.map(assetRow) };
+  async assets(
+    @Query("process") process?: string,
+    @Query("area") area?: string,
+    @Query("active") active?: string,
+    @Query("area_code") areaCode?: string,
+  ) {
+    if (process) {
+      if (!validProcesses.has(process)) throw new BadRequestException(`process must be one of: ${supportedProcesses.join(", ")}`);
+      const result = area
+        ? await this.database.query(`${assetProjection} WHERE a.process_type = $1 AND a.area_code = $2 AND a.active = TRUE ORDER BY a.asset_id`, [process, area])
+        : await this.database.query(`${assetProjection} WHERE a.process_type = $1 AND a.active = TRUE ORDER BY a.asset_id`, [process]);
+      return { data_mode: actualDataMode, assets: result.rows.map(assetRow) };
+    }
+
+    const targetArea = (areaCode || area || "").trim();
+    const isActive = active == null || active === "" || active === "true" || active === "1";
+    const filterAll = active === "all";
+
+    const clauses: string[] = [];
+    const values: unknown[] = [];
+
+    if (!filterAll) {
+      values.push(isActive);
+      clauses.push(`active = $${values.length}`);
+    }
+    if (targetArea) {
+      values.push(targetArea);
+      clauses.push(`area_code = $${values.length}`);
+    }
+
+    const whereClause = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const result = await this.database.query(`
+      SELECT asset_id, display_name, process_type, area_code, area_name, active
+      FROM asset
+      ${whereClause}
+      ORDER BY asset_id ASC
+    `, values);
+
+    return result.rows.map((row) => ({
+      asset_id: row.asset_id,
+      display_name: row.display_name,
+      process_type: row.process_type,
+      area_code: row.area_code,
+      area_name: row.area_name,
+      active: row.active,
+    }));
   }
 
   @Get("assets/:assetId/snapshot")

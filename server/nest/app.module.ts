@@ -22,12 +22,16 @@ import { WwtpController } from "./wwtp.controller.js";
 import { AiAssistantController } from "./ai-assistant.controller.js";
 import { AiAssistantService } from "./ai-assistant.service.js";
 import { RbacController } from "./rbac.controller.js";
+import { TagDefinitionController } from "./tag-definition.controller.js";
+import { TelemetryIngestController } from "./telemetry-ingest.controller.js";
 
 @Module({
   controllers: [
     AuthController,
     RbacController,
     ApiController,
+    TagDefinitionController,
+    TelemetryIngestController,
     AlarmController,
     BatchController,
     BatchExportController,
@@ -56,6 +60,10 @@ export class AppModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(DashboardAuthMiddleware).exclude(
       { path: "api/v1/auth/{*path}", method: RequestMethod.ALL },
+      { path: "api/v1/assets", method: RequestMethod.GET },
+      { path: "api/v1/tag-definitions", method: RequestMethod.ALL },
+      { path: "api/v1/tag-definitions/{*path}", method: RequestMethod.ALL },
+      { path: "api/v1/telemetry/ingest", method: RequestMethod.POST },
       { path: "api/v1/ingestion/{*path}", method: RequestMethod.POST },
       { path: "api/v1/batch/production-batches", method: RequestMethod.POST },
       { path: "api/v1/batch/process-runs", method: RequestMethod.POST },

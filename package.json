@@ -22,6 +22,7 @@
     "worker:solar": "go run ./services/solar-sync-worker/cmd/worker",
     "worker:solar:follow": "go run ./services/solar-sync-worker/cmd/worker --follow",
     "worker:solar:full": "go run ./services/solar-sync-worker/cmd/worker --full",
+    "worker:scada-ingest": "go run ./services/scada-ingest/cmd/worker",
     "reconcile:solar-requested": "node --env-file=.env scripts/reconcile-solar-requested-liters.mjs"
   },
   "dependencies": {
