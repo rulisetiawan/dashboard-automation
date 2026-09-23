@@ -104,6 +104,49 @@ services:
       postgres:
         condition: service_healthy
 
+  emqx:
+    image: emqx/emqx:5.8.0
+    container_name: pt_smm_emqx
+    restart: unless-stopped
+    ports:
+      - "${EMQX_MQTT_PORT:-1889}:1883"
+      - "${EMQX_DASHBOARD_PORT:-18083}:18083"
+    environment:
+      EMQX_NODE__NAME: emqx@node.pt_smm
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DEFAULT_PASSWORD:-public}
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+
+  scada-ingest:
+    build:
+      context: ./services/scada-ingest
+      dockerfile: Dockerfile
+    container_name: pt_smm_scada_ingest
+    restart: unless-stopped
+    environment:
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-pt_smm_scada}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      DATABASE_URL: ${DATABASE_URL:-}
+      MQTT_BROKER: ${MQTT_BROKER:-tcp://emqx:1883}
+      MQTT_TOPIC: ${MQTT_TOPIC:-pt_smm/telemetry/#}
+    env_file:
+      - path: .env
+        required: false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "host.orb.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      emqx:
+        condition: service_started
+
   nginx:
     image: nginx:alpine
     container_name: pt_smm_nginx
@@ -118,3 +161,5 @@ services:
 
 volumes:
   postgres_data:
+  emqx_data:
+  emqx_log:
