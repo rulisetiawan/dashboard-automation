@@ -94,23 +94,21 @@ services:
       dockerfile: Dockerfile
     container_name: pt_smm_scada_ingest
     restart: unless-stopped
+    network_mode: "host"
     environment:
-      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_HOST: ${DB_HOST:-localhost}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-pt_smm_scada}
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       DATABASE_SSL: ${DATABASE_SSL:-false}
-      MQTT_BROKER: ${MQTT_BROKER:-tcp://host.docker.internal:1883}
+      MQTT_BROKER: ${MQTT_BROKER:-tcp://localhost:1883}
       MQTT_USERNAME: ${MQTT_USERNAME:-engineering}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-admineng}
       MQTT_TOPIC: ${MQTT_TOPIC:-pt_smm/telemetry/#}
     env_file:
       - path: .env
         required: false
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-      - "host.orb.internal:host-gateway"
 
 # volumes:
 #   emqx_data:

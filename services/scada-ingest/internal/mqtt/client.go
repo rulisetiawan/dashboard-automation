@@ -63,8 +63,12 @@ func NewSubscriber(cfg *config.Config, database *db.Database) *Subscriber {
 func (s *Subscriber) Start() error {
 	log.Printf("[INFO] Connecting to MQTT broker at %s ...", s.cfg.MQTTBroker)
 	token := s.client.Connect()
-	if token.Wait() && token.Error() != nil {
-		return fmt.Errorf("connect to mqtt broker: %w", token.Error())
+	if token.WaitTimeout(5 * time.Second) {
+		if token.Error() != nil {
+			return fmt.Errorf("connect to mqtt broker: %w", token.Error())
+		}
+	} else {
+		log.Printf("[WARN] Initial MQTT connection timed out after 5s. Auto-reconnect is active and will retry in background.")
 	}
 	return nil
 }
