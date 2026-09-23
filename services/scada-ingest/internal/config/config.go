@@ -46,9 +46,9 @@ func Load() *Config {
 		MQTTQoS:      byte(qosInt),
 
 		PGHost:     getEnv("DB_HOST", "192.168.100.82"),
-		PGPort:     getEnvInt("DB_PORT", 5432),
+		PGPort:     getEnvInt("DB_PORT", 5433),
 		PGUser:     getEnv("DB_USER", "postgres"),
-		PGPassword: getEnv("DB_PASSWORD", "postgres"),
+		PGPassword: getEnv("DB_PASSWORD", "sensorSMM!"),
 		PGDatabase: getEnv("DB_NAME", "pt_smm_scada"),
 		PGSSLMode:  sslMode,
 		PGURL:      getEnv("DATABASE_URL", ""),
