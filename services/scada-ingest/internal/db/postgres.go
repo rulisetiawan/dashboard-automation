@@ -3,8 +3,10 @@ package db
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -20,7 +22,8 @@ type TelemetrySample struct {
 }
 
 type Database struct {
-	pool *pgxpool.Pool
+	pool      *pgxpool.Pool
+	knownTags sync.Map
 }
 
 func NewPostgresPool(ctx context.Context, connString string) (*Database, error) {
@@ -53,6 +56,36 @@ func (d *Database) Close() {
 	}
 }
 
+func (d *Database) ensureAssetAndTag(ctx context.Context, tx pgx.Tx, assetID, tagCode string) error {
+	key := assetID + "::" + tagCode
+	if _, ok := d.knownTags.Load(key); ok {
+		return nil
+	}
+
+	// 1. Pastikan asset ada di tabel asset
+	const insertAssetSQL = `
+		INSERT INTO asset (asset_id, process_type, area_code, area_name, display_name, active, created_at, updated_at)
+		VALUES ($1, 'CONTINUOUS', 'FINISHING', 'Finishing', $1, true, clock_timestamp(), clock_timestamp())
+		ON CONFLICT (asset_id) DO NOTHING
+	`
+	if _, err := tx.Exec(ctx, insertAssetSQL, assetID); err != nil {
+		return fmt.Errorf("ensure asset %s: %w", assetID, err)
+	}
+
+	// 2. Pastikan tag terdaftar di tabel tag_definition
+	const insertTagSQL = `
+		INSERT INTO tag_definition (tag_code, asset_id, signal_role, engineering_unit, source_status, active, created_at)
+		VALUES ($1, $2, 'MEASUREMENT', '', 'MAPPED', true, clock_timestamp())
+		ON CONFLICT (tag_code) DO NOTHING
+	`
+	if _, err := tx.Exec(ctx, insertTagSQL, tagCode, assetID); err != nil {
+		return fmt.Errorf("ensure tag %s: %w", tagCode, err)
+	}
+
+	d.knownTags.Store(key, struct{}{})
+	return nil
+}
+
 // IngestBatch inserts telemetry samples with deduplication (ON CONFLICT DO NOTHING)
 func (d *Database) IngestBatch(ctx context.Context, samples []TelemetrySample) (int, error) {
 	if len(samples) == 0 {
@@ -71,11 +104,14 @@ func (d *Database) IngestBatch(ctx context.Context, samples []TelemetrySample) (
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp()
 		)
-		ON CONFLICT (message_id, tag_code) DO NOTHING
 	`
 
 	inserted := 0
 	for _, s := range samples {
+		if err := d.ensureAssetAndTag(ctx, tx, s.AssetID, s.TagCode); err != nil {
+			return inserted, fmt.Errorf("ensure metadata for asset %s tag %s: %w", s.AssetID, s.TagCode, err)
+		}
+
 		cmdTag, err := tx.Exec(ctx, insertSQL,
 			s.AssetID,
 			s.TagCode,

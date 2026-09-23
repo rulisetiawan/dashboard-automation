@@ -170,7 +170,6 @@ export class TelemetryIngestController {
           INSERT INTO telemetry_sample (
             asset_id, tag_code, source_ts, value_number, value_text, quality, gateway_id, message_id, ingested_at
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp())
-          ON CONFLICT (message_id, tag_code) DO NOTHING
           RETURNING id, tag_code
         `, [
           sample.assetId,
