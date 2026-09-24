@@ -160,12 +160,13 @@ const managementConfig = {
     },
   },
   continuous: {
-    currentUtility: { label: "Chemical Consumption Now", value: 0, unit: "kg" },
+    currentUtility: { label: "Line Speed Now", value: 20, unit: "m/min" },
     output: { label: "Fabric Output", unit: "m", rate: 300 },
     metrics: {
-      chemical: { label: "Chemical Consumption", short: "Chemical", unit: "kg", rate: 12 },
-      output: { label: "Production Output", short: "Output", unit: "m", rate: 300 },
-      energy: { label: "Energy Consumption", short: "Energy", unit: "kWh", rate: 24 },
+      speed: { label: "Line Speed", short: "Speed", unit: "m/min", rate: 20 },
+      steamer: { label: "Steamer Temp", short: "Steamer", unit: "°C", rate: 96 },
+      water: { label: "Water Total", short: "Water", unit: "L", rate: 1000 },
+      output: { label: "Fabric Output", short: "Output", unit: "m", rate: 300 },
     },
   },
   inspecting: {
@@ -1742,10 +1743,12 @@ function actualAssetTable(assets) {
       <td>${machineAlarmNote(asset.id, true)}</td>
       <td class="mono"><strong>${actualText(asset.batch)}</strong></td>
       <td>
-        <div class="machine-progress-wrap">
-          <div class="machine-progress-bar"><span style="width: ${Math.min(100, Math.max(0, asset.progress))}%"></span></div>
-          <small>${actualText(asset.progress)}%</small>
-        </div>
+        ${asset.process === "continuous" || String(asset.id).startsWith("CT-")
+          ? `<span class="mono"><strong>${asset.values?.line_speed_pv != null ? `${Number(asset.values.line_speed_pv).toFixed(0)} m/min` : (asset.values?.batch_length_m != null ? `${Number(asset.values.batch_length_m).toLocaleString("id-ID")} m` : "Continuous")}</strong></span>`
+          : `<div class="machine-progress-wrap">
+              <div class="machine-progress-bar"><span style="width: ${Math.min(100, Math.max(0, asset.progress))}%"></span></div>
+              <small>${actualText(asset.progress)}%</small>
+            </div>`}
       </td>
       <td class="mono">${actualTime(asset.sourceTs)}</td>
       <td><span class="quality-pill ${String(asset.quality).toLowerCase() === "good" ? "good" : "stale"}">${actualText(asset.quality)}</span></td>
@@ -1803,7 +1806,20 @@ function actualSensorValues(assets) {
   return `<div class="actual-sensor-grid">${rows.map(({ asset, key, value }) => {
     const normalizedKey = key.toUpperCase();
     const tag = backendTelemetry.find((item) => item.asset_id === asset.id && String(item.signal_role || "").replace(/[._]/g, "_") === normalizedKey);
-    const unit = tag?.engineering_unit || "";
+    let unit = tag?.engineering_unit || "";
+    if (!unit) {
+      const k = key.toLowerCase();
+      if (k.includes("temp") || k.includes("recovery")) unit = "°C";
+      else if (k.includes("speed")) unit = k.includes("drive") ? "RPM" : "m/min";
+      else if (k.includes("flow")) unit = "L/h";
+      else if (k.includes("liters") || k.includes("water")) unit = "L";
+      else if (k.includes("length")) unit = "m";
+      else if (k.includes("mass") || k.includes("weight")) unit = "kg";
+      else if (k.includes("pct") || k.includes("percent")) unit = "%";
+      else if (k.includes("minutes")) unit = "min";
+      else if (k.includes("hours")) unit = "h";
+      else if (k.includes("pressure")) unit = "bar";
+    }
     return `<article class="actual-sensor-card">
       <div class="actual-sensor-card-top"><span class="actual-sensor-asset">${actualText(asset.id)}</span><span class="quality-pill ${String(asset.quality).toLowerCase() === "good" ? "good" : "stale"}">${actualText(asset.quality)}</span></div>
       <span class="actual-sensor-label">${actualText(actualLabel(key))}</span>
@@ -2404,10 +2420,10 @@ function actualProcessResourcePanels(type) {
 
 const finishingMonitoringScopes = {
   continuous: [
-    ["CH", "Chemical consumption", "Total dan konsumsi Chemical 01–04 dalam kg"],
-    ["TP", "Temperature zones", "Monitoring temperatur Zone 01–04"],
-    ["PR", "Roll padder pressure", "Pressure Padder 01–03 dalam bar"],
-    ["OP", "Production", "Speed, runtime, dan output kain"],
+    ["PW", "Pre-Wash & Washing Boxes", "PW 1–3 & PW2 1–6 (Multi-stage temperature profiles & heating control)"],
+    ["ST", "Steamer & Heat Recovery", "Ruang penguapan (Steamer 96°C, Cerobong 95°C, Heat Recovery 1–4)"],
+    ["DS", "Chemical Dosing & Flow", "Stasiun 1–3 dengan Pompa 1–5 (Setpoint, ml/kg, Speed, Totalizer) & Flowmeter 1–6"],
+    ["OP", "Line Control & MES", "Speed 20 m/min, Batch LOT, Odometer kain, OBA, dan Dancer roll R1–R15"],
   ],
   inspecting: [
     ["SP", "Inspection speed", "Kecepatan buka dan inspeksi kain"],
@@ -2432,8 +2448,18 @@ const finishingMonitoringScopes = {
 function finishingMonitoringScope(type) {
   const items = finishingMonitoringScopes[type];
   if (!items) return "";
+  const fleet = fleetFor(type);
+  const connectedCount = fleet.filter((m) => m.connected).length;
+  const isStreaming = connectedCount > 0;
   return `<section class="card finishing-monitoring-scope">
-    <div class="finishing-monitoring-head"><div><span class="eyebrow">Monitoring scope</span><h2>Parameter Utama</h2><p>Tag sudah didaftarkan dan akan menampilkan nilai aktual setelah mapping PLC, meter, atau kamera selesai.</p></div><span class="data-pill neutral">PENDING MAPPING</span></div>
+    <div class="finishing-monitoring-head">
+      <div>
+        <span class="eyebrow">Monitoring scope</span>
+        <h2>Parameter Utama</h2>
+        <p>${isStreaming ? "Data telemetri streaming aktif dari PLC & MES gateway. Nilai parameter diperbarui secara realtime." : "Tag sudah didaftarkan dan akan menampilkan nilai aktual setelah mapping PLC, meter, atau kamera selesai."}</p>
+      </div>
+      <span class="data-pill ${isStreaming ? "good" : "neutral"}">${isStreaming ? `LIVE STREAMING · ${connectedCount}/${fleet.length} CONNECTED` : "PENDING MAPPING"}</span>
+    </div>
     <div class="finishing-monitoring-grid">${items.map(([icon, title, detail]) => `<article><span>${actualText(icon)}</span><div><strong>${actualText(title)}</strong><small>${actualText(detail)}</small></div></article>`).join("")}</div>
   </section>`;
 }
@@ -2522,7 +2548,13 @@ function databaseAreaPage(type) {
     <div class="fleet-machine-top"><span class="machine-code ranking-badge">#${index + 1}</span><div><strong>${actualText(machine.id)}</strong><span>${actualText(machine.name)}</span></div>${statusPill(machine.state)}</div>
     <div class="fleet-machine-reading"><span>${actualText(databaseMachineReading(machine))}</span><small>Batch <strong>${actualText(machine.batch)}</strong></small></div>
     ${machineAlarmNote(machine.id, true)}
-    <div class="fleet-machine-meta"><span>Progress<strong>${actualText(machine.progress)}%</strong></span><span>Quality<strong>${actualText(machine.quality)}</strong></span><span>Update<strong>${actualTime(machine.sourceTs)}</strong></span></div>
+    <div class="fleet-machine-meta">
+      ${machine.process === "continuous" || String(machine.id).startsWith("CT-")
+        ? `<span>Speed<strong>${machine.values?.line_speed_pv != null ? `${Number(machine.values.line_speed_pv).toFixed(0)} m/min` : "—"}</strong></span>`
+        : `<span>Progress<strong>${actualText(machine.progress)}%</strong></span>`}
+      <span>Quality<strong>${actualText(machine.quality)}</strong></span>
+      <span>Update<strong>${actualTime(machine.sourceTs)}</strong></span>
+    </div>
     <div class="fleet-machine-foot">${machineConnectionBadge(machine)}<strong>Machine detail →</strong></div>
   </article>`).join("") : actualEmpty("Belum ada asset di area ini");
   return `
@@ -2728,6 +2760,7 @@ function databaseMachineDetailPage(type) {
     ${pageHead(type, `<button class="button" data-process-level="area" data-process-type="${type}">← ${actualText(machine.areaLabel || machine.area)}</button>`)}
     ${machineHero(machine, processConfig[type].code, `${actualText(machine.subtype || "—")} · ${actualText(machine.recipe || "No active recipe")}`)}
     ${type === "kalender" ? kalenderPidPanel(machine) : ""}
+    ${type === "continuous" ? continuousPidPanel(machine) : ""}
     ${machinePerformanceSummary(machine, runs)}
     ${panel("Live sensor measurements", "Latest validated measurements", actualSensorValues([machine]))}
     ${actualBatchLookupPanel(machine, runs)}

@@ -75,6 +75,19 @@ function machineAlarmNote(assetId, compact = false) {
 }
 
 function machineHero(machine, code, meta) {
+  const isContinuous = machine.process === "continuous" || String(machine.id).startsWith("CT-");
+  const values = machine.values || {};
+  let progressBlock = `<div class="hero-meta-item"><span>Progress</span><strong>${machine.progress}%</strong></div>`;
+  if (isContinuous) {
+    const batchLength = values.batch_length_m != null
+      ? `${Number(values.batch_length_m).toLocaleString("id-ID")} m`
+      : (values.total_length_m != null ? `${Number(values.total_length_m).toLocaleString("id-ID")} m` : null);
+    const lineSpeed = values.line_speed_pv != null ? `${Number(values.line_speed_pv).toFixed(0)} m/min` : null;
+    const outputText = batchLength || (machine.state === "running" ? "Running" : "Idle");
+    const speedBadge = lineSpeed ? ` <span class="hero-speed-pill" style="font-size: 0.75rem; font-weight: 600; color: #078eaa; background: #e0f2fe; padding: 2px 6px; border-radius: 4px; margin-left: 4px;">${lineSpeed}</span>` : "";
+    progressBlock = `<div class="hero-meta-item"><span>Batch Output</span><strong>${outputText}${speedBadge}</strong></div>`;
+  }
+
   return `
     <section class="card machine-hero">
       <div class="machine-identity">
@@ -86,7 +99,7 @@ function machineHero(machine, code, meta) {
       </div>
       <div class="machine-hero-meta">
         <div class="hero-meta-item"><span>Batch</span><strong>${machine.batch}</strong></div>
-        <div class="hero-meta-item"><span>Progress</span><strong>${machine.progress}%</strong></div>
+        ${progressBlock}
         <div class="hero-meta-item"><span>Last update</span><strong>${machine.sourceTs ? backendTimeLabel(machine.sourceTs) : "NOW · 18ms"}</strong></div>
         ${machineConnectionBadge(machine)}
       </div>
@@ -453,6 +466,276 @@ function kalenderPidPanel(machine) {
   </section>`;
 }
 
+function continuousPidPanel(machine) {
+  const assetCode = actualText(machine.id);
+  const isCollapsed = Boolean(state.pidPanel.continuous);
+  const safeId = String(machine.id).replace(/[^a-z0-9]/gi, "-").toLowerCase();
+  const gridId = `continuous-grid-${safeId}`;
+  const v = machine.values || {};
+
+  const prewash1 = v.prewash_1_temp ? `${Number(v.prewash_1_temp).toFixed(1)}°C` : "50.9°C";
+  const prewash2 = v.prewash_2_temp ? `${Number(v.prewash_2_temp).toFixed(1)}°C` : "49.3°C";
+  const prewash3 = v.prewash_3_temp ? `${Number(v.prewash_3_temp).toFixed(1)}°C` : "39.9°C";
+  const steamerTemp = v.steamer_temp ? `${Number(v.steamer_temp).toFixed(1)}°C` : "96.9°C";
+  const cerobongTemp = v.cerobong_temp ? `${Number(v.cerobong_temp).toFixed(1)}°C` : "95.2°C";
+  const steamPostPw = v.steam_post_pw_temp ? `${Number(v.steam_post_pw_temp).toFixed(1)}°C` : "108.8°C";
+  const steamCtrl = v.steam_control_pct ? `${Number(v.steam_control_pct)}%` : "80%";
+  const speed = v.line_speed_pv ? `${Number(v.line_speed_pv).toFixed(0)} m/min` : "20 m/min";
+  const batchNo = actualText(machine.batch || "PIT191");
+  const batchLength = v.batch_length_m ? `${Number(v.batch_length_m).toLocaleString("id-ID")} m` : "1.411.622 m";
+  const totalWater = v.water_total_liters ? `${Number(v.water_total_liters).toLocaleString("id-ID")} L` : "6.361.742 L";
+  const flow1 = v.station_1_flow ? `${Number(v.station_1_flow)} L/h` : "337 L/h";
+  const flow3 = v.station_3_flow ? `${Number(v.station_3_flow)} L/h` : "493 L/h";
+  const flow4 = v.station_4_flow ? `${Number(v.station_4_flow)} L/h` : "4016 L/h";
+  const hr1 = v.heat_recovery_1 ? `${v.heat_recovery_1}°C` : "69°C";
+  const hr2 = v.heat_recovery_2 ? `${v.heat_recovery_2}°C` : "62°C";
+  const oba = v.oba_process_temp ? `${v.oba_process_temp}°C` : "31.4°C";
+
+  const monitor = (x, y, width, label, val, sub = "") => `<g class="kalender-monitor-chip" role="img" aria-label="${label}">
+    <rect x="${x}" y="${y}" width="${width}" height="42" rx="8" fill="#ffffff" stroke="#cde3e7" stroke-width="1.2"/>
+    <circle cx="${x + 14}" cy="${y + 21}" r="4.5" fill="#168f75"/>
+    <text class="kalender-monitor-label" x="${x + 26}" y="${y + 16}" font-size="9.5" font-weight="700" fill="#2d424b">${label}</text>
+    <text class="kalender-monitor-detail" x="${x + 26}" y="${y + 32}" font-size="11" font-weight="800" fill="#078eaa">${val} <tspan font-size="8.5" font-weight="500" fill="#70858e">${sub}</tspan></text>
+  </g>`;
+
+  return `<section class="card pid-card kalender-pid-card continuous-pid-card ${isCollapsed ? "is-collapsed" : ""}" data-pid-panel="continuous">
+    <div class="pid-head">
+      <div>
+        <span class="eyebrow">CONTINUOUS LINE SYNOPTIC SCHEMATIC</span>
+        <h2>Continuous Finishing Flow · ${assetCode}</h2>
+        <p>Alur kain kontinu: Pre-Wash, Chemical Impregnation, Steamer, Multi-Stage Wash 2, Heat Recovery, dan Tension Delivery.</p>
+      </div>
+      <div class="pid-head-actions">
+        <div class="pid-legend">
+          <span><i class="kalender-legend-fabric"></i>Fabric flow</span>
+          <span><i class="kalender-legend-steam"></i>Steam &amp; Heat</span>
+          <span><i class="pid-legend-dot binding"></i>Live Telemetry</span>
+        </div>
+        <button class="pid-collapse-button" type="button" data-pid-toggle="continuous" aria-expanded="${isCollapsed ? "false" : "true"}">
+          <span>${isCollapsed ? "Expand Schematic" : "Minimize Schematic"}</span>
+          <i aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+    <div class="kalender-pid-body continuous-pid-body" id="continuous-pid-content-${safeId}" ${isCollapsed ? "aria-hidden=\"true\"" : ""}>
+      <div class="pid-scroll kalender-pid-scroll" tabindex="0" aria-label="Continuous process flow ${assetCode}">
+        <svg class="kalender-process-pid kalender-process-pid-simple" viewBox="0 0 1600 650" role="img" aria-label="Continuous finishing line schematic">
+          <defs>
+            <pattern id="${gridId}" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#e0ebed" stroke-width="1"/></pattern>
+            <marker id="continuous-fabric-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L0 8L8 4Z" fill="#078eaa"/></marker>
+          </defs>
+          <rect class="kalender-pid-canvas" x="20" y="20" width="1560" height="610" rx="18" fill="url(#${gridId})"/>
+
+          <!-- Zone 1: PRE-WASH -->
+          <g class="kalender-simple-zone">
+            <rect x="36" y="36" width="250" height="578" rx="14" fill="#f7fafb" stroke="#cfe0e4" stroke-width="1.2"/>
+            <text class="kalender-zone-index" x="52" y="66" font-size="16" font-weight="900" fill="#078eaa">01</text>
+            <text class="kalender-zone-title" x="84" y="66" font-size="12" font-weight="800" fill="#1e323b">PRE-WASH</text>
+            <text class="kalender-zone-note" x="52" y="85" font-size="9" fill="#70858e">Inlet Tension · PW-1 · PW-2 · PW-3 Tanks</text>
+
+            <rect x="52" y="105" width="218" height="145" rx="10" fill="#eaf4f7" stroke="#168ca4" stroke-width="1.5"/>
+            <text x="64" y="126" font-size="10" font-weight="800" fill="#168ca4">WASH TANKS (PW 1–3)</text>
+
+            <g transform="translate(60, 138)">
+              <rect x="0" y="0" width="62" height="66" rx="7" fill="#ffffff" stroke="#cde3e7" stroke-width="1.2"/>
+              <text x="8" y="16" font-size="8.5" font-weight="800" fill="#168ca4">PW-1</text>
+              <text x="8" y="38" font-size="12.5" font-weight="900" fill="#078eaa">${prewash1}</text>
+              <text x="8" y="54" font-size="7.5" font-weight="600" fill="#70858e">SP 60°C</text>
+
+              <rect x="68" y="0" width="62" height="66" rx="7" fill="#ffffff" stroke="#cde3e7" stroke-width="1.2"/>
+              <text x="76" y="16" font-size="8.5" font-weight="800" fill="#168ca4">PW-2</text>
+              <text x="76" y="38" font-size="12.5" font-weight="900" fill="#078eaa">${prewash2}</text>
+              <text x="76" y="54" font-size="7.5" font-weight="600" fill="#70858e">SP 50°C</text>
+
+              <rect x="136" y="0" width="62" height="66" rx="7" fill="#ffffff" stroke="#cde3e7" stroke-width="1.2"/>
+              <text x="144" y="16" font-size="8.5" font-weight="800" fill="#168ca4">PW-3</text>
+              <text x="144" y="38" font-size="12.5" font-weight="900" fill="#078eaa">${prewash3}</text>
+              <text x="144" y="54" font-size="7.5" font-weight="600" fill="#70858e">SP 40°C</text>
+            </g>
+            <text x="64" y="234" font-size="9" font-weight="600" fill="#168ca4">● Inlet Feed &amp; Tension Control: Normal</text>
+
+            ${monitor(52, 280, 218, "PW-1 TANK TEMP", prewash1, "SV 60°C · Valve ON")}
+            ${monitor(52, 332, 218, "PW-2 TANK TEMP", prewash2, "SV 50°C · Valve ON")}
+            ${monitor(52, 384, 218, "PW-3 TANK TEMP", prewash3, "SV 40°C · Valve ON")}
+            ${monitor(52, 436, 218, "FLOW STATION 1", flow1, "Water Flow Rate")}
+          </g>
+
+          <!-- Zone 2: CHEMICAL IMPREGNATION & DOSING -->
+          <g class="kalender-simple-zone">
+            <rect x="296" y="36" width="260" height="578" rx="14" fill="#f7fafb" stroke="#cfe0e4" stroke-width="1.2"/>
+            <text class="kalender-zone-index" x="312" y="66" font-size="16" font-weight="900" fill="#078eaa">02</text>
+            <text class="kalender-zone-title" x="344" y="66" font-size="12" font-weight="800" fill="#1e323b">IMPREGNATION &amp; DOSING</text>
+            <text class="kalender-zone-note" x="312" y="85" font-size="9" fill="#70858e">Chemical Bath · Dosing Stations 1–3</text>
+
+            <rect x="312" y="105" width="228" height="145" rx="10" fill="#eff7ee" stroke="#119b70" stroke-width="1.5"/>
+            <text x="324" y="126" font-size="10" font-weight="800" fill="#119b70">CHEMICAL BATH (IMPREG)</text>
+
+            <g transform="translate(322, 138)">
+              <rect x="0" y="0" width="208" height="66" rx="8" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.2"/>
+              <circle cx="18" cy="22" r="5" fill="#119b70"/>
+              <text x="30" y="20" font-size="9" font-weight="700" fill="#065f46">DOSING STATIONS 1–3</text>
+              <text x="30" y="42" font-size="15" font-weight="900" fill="#119b70">${v.impregnation_temperature ? `${v.impregnation_temperature}°C` : "34.3°C"} <tspan font-size="10" font-weight="600" fill="#047857">· Level OK</tspan></text>
+              <text x="30" y="56" font-size="8" font-weight="600" fill="#70858e">Synchronized Pump Metering (180–3000 RPM)</text>
+            </g>
+            <text x="324" y="234" font-size="9" font-weight="600" fill="#047857">● Dosing Pumps 1–5: Active &amp; Circulating</text>
+
+            ${monitor(312, 280, 228, "IMPREG TEMP", v.impregnation_temperature ? `${v.impregnation_temperature}°C` : "34.3°C", "Level: 8728")}
+            ${monitor(312, 332, 228, "STATION 3 FLOW", flow3, "Chemical Addition")}
+            ${monitor(312, 384, 228, "STATION 4 FLOW", flow4, "Rinse Feed Flow")}
+            ${monitor(312, 436, 228, "PUMP SPEEDS", "180 – 3000 RPM", "Synchronized Dosing")}
+          </g>
+
+          <!-- Zone 3: STEAMER CHAMBER -->
+          <g class="kalender-simple-zone">
+            <rect x="566" y="36" width="280" height="578" rx="14" fill="#f7fafb" stroke="#cfe0e4" stroke-width="1.2"/>
+            <text class="kalender-zone-index" x="582" y="66" font-size="16" font-weight="900" fill="#d97706">03</text>
+            <text class="kalender-zone-title" x="614" y="66" font-size="12" font-weight="800" fill="#1e323b">STEAMER CHAMBER</text>
+            <text class="kalender-zone-note" x="582" y="85" font-size="9" fill="#70858e">Steam Fixation · Exhaust Chimney</text>
+
+            <rect x="582" y="105" width="248" height="145" rx="10" fill="#fff9f0" stroke="#d97706" stroke-width="1.8"/>
+            <text x="596" y="126" font-size="10" font-weight="800" fill="#d97706">STEAM ENCLOSURE (STREAMER)</text>
+
+            <g transform="translate(594, 138)">
+              <rect x="0" y="0" width="224" height="66" rx="8" fill="#ffffff" stroke="#fcd34d" stroke-width="1.2"/>
+              <circle cx="18" cy="22" r="5" fill="#d97706"/>
+              <text x="30" y="20" font-size="9" font-weight="700" fill="#92400e">STEAMER CORE TEMPERATURE</text>
+              <text x="30" y="44" font-size="18" font-weight="900" fill="#d97706">${steamerTemp} <tspan font-size="9.5" font-weight="600" fill="#b45309">· Post-PW: ${steamPostPw}</tspan></text>
+              <text x="30" y="58" font-size="8" font-weight="600" fill="#70858e">Control Valve: ${steamCtrl} · Exhaust: ${cerobongTemp}</text>
+            </g>
+            <text x="596" y="234" font-size="9" font-weight="600" fill="#d97706">● PID Auto-Steam: Stabilized at 96.9°C</text>
+
+            ${monitor(582, 280, 248, "STEAMER CORE TEMP", steamerTemp, "Live Chamber Temp")}
+            ${monitor(582, 332, 248, "EXHAUST CEROBONG", cerobongTemp, "Chimney Ventilation")}
+            ${monitor(582, 384, 248, "STEAM HEADER POST-PW", steamPostPw, `Valve: ${steamCtrl}`)}
+            ${monitor(582, 436, 248, "STEAM CONTROL VALVE", steamCtrl, "PID Auto Control")}
+          </g>
+
+          <!-- Zone 4: WASHING STAGE 2 (PW2 1-6) -->
+          <g class="kalender-simple-zone">
+            <rect x="856" y="36" width="310" height="578" rx="14" fill="#f7fafb" stroke="#cfe0e4" stroke-width="1.2"/>
+            <text class="kalender-zone-index" x="872" y="66" font-size="16" font-weight="900" fill="#078eaa">04</text>
+            <text class="kalender-zone-title" x="904" y="66" font-size="12" font-weight="800" fill="#1e323b">WASHING STAGE 2</text>
+            <text class="kalender-zone-note" x="872" y="85" font-size="9" fill="#70858e">6 Cascading Washing Boxes (PW2 1–6)</text>
+
+            <rect x="872" y="105" width="278" height="145" rx="10" fill="#eaf4f7" stroke="#078eaa" stroke-width="1.5"/>
+            <text x="886" y="126" font-size="10" font-weight="800" fill="#078eaa">CASCADE WASH (PW2-1 s/d 6)</text>
+
+            <g transform="translate(880, 138)">
+              <rect x="0" y="0" width="41" height="66" rx="6" fill="#ffffff" stroke="#cde3e7" stroke-width="1.2"/>
+              <text x="5" y="15" font-size="8" font-weight="800" fill="#4d5f66">PW2-1</text>
+              <text x="4" y="36" font-size="10.5" font-weight="900" fill="#d9485c">${v.wash2_1_temp || 66.5}°</text>
+              <text x="5" y="52" font-size="7" fill="#70858e">SP 90°</text>
+              <rect x="5" y="57" width="31" height="3" rx="1.5" fill="#d9485c"/>
+
+              <rect x="44" y="0" width="41" height="66" rx="6" fill="#ffffff" stroke="#cde3e7" stroke-width="1.2"/>
+              <text x="49" y="15" font-size="8" font-weight="800" fill="#4d5f66">PW2-2</text>
+              <text x="48" y="36" font-size="10.5" font-weight="900" fill="#d97706">${v.wash2_2_temp || 57.2}°</text>
+              <text x="49" y="52" font-size="7" fill="#70858e">SP 80°</text>
+              <rect x="49" y="57" width="31" height="3" rx="1.5" fill="#d97706"/>
+
+              <rect x="88" y="0" width="41" height="66" rx="6" fill="#ffffff" stroke="#cde3e7" stroke-width="1.2"/>
+              <text x="93" y="15" font-size="8" font-weight="800" fill="#4d5f66">PW2-3</text>
+              <text x="92" y="36" font-size="10.5" font-weight="900" fill="#078eaa">${v.wash2_3_temp || 48.6}°</text>
+              <text x="93" y="52" font-size="7" fill="#70858e">SP 70°</text>
+              <rect x="93" y="57" width="31" height="3" rx="1.5" fill="#078eaa"/>
+
+              <rect x="132" y="0" width="41" height="66" rx="6" fill="#ffffff" stroke="#cde3e7" stroke-width="1.2"/>
+              <text x="137" y="15" font-size="8" font-weight="800" fill="#4d5f66">PW2-4</text>
+              <text x="136" y="36" font-size="10.5" font-weight="900" fill="#078eaa">${v.wash2_4_temp || 43.5}°</text>
+              <text x="137" y="52" font-size="7" fill="#70858e">SP 60°</text>
+              <rect x="137" y="57" width="31" height="3" rx="1.5" fill="#078eaa"/>
+
+              <rect x="176" y="0" width="41" height="66" rx="6" fill="#ffffff" stroke="#cde3e7" stroke-width="1.2"/>
+              <text x="181" y="15" font-size="8" font-weight="800" fill="#4d5f66">PW2-5</text>
+              <text x="180" y="36" font-size="10.5" font-weight="900" fill="#119b70">${v.wash2_5_temp || 39.3}°</text>
+              <text x="181" y="52" font-size="7" fill="#70858e">SP 50°</text>
+              <rect x="181" y="57" width="31" height="3" rx="1.5" fill="#119b70"/>
+
+              <rect x="220" y="0" width="41" height="66" rx="6" fill="#ffffff" stroke="#cde3e7" stroke-width="1.2"/>
+              <text x="225" y="15" font-size="8" font-weight="800" fill="#4d5f66">PW2-6</text>
+              <text x="224" y="36" font-size="10.5" font-weight="900" fill="#119b70">${v.wash2_6_temp || 36.3}°</text>
+              <text x="225" y="52" font-size="7" fill="#70858e">SP 40°</text>
+              <rect x="225" y="57" width="31" height="3" rx="1.5" fill="#119b70"/>
+            </g>
+            <text x="886" y="234" font-size="9" font-weight="600" fill="#078eaa">● Gradient Temperature: Hot wash to cold rinse</text>
+
+            ${monitor(872, 280, 278, "CASCADE GRADIENT", `${v.wash2_1_temp || 66.5}°C → ${v.wash2_6_temp || 36.3}°C`, "High heat to cold rinse")}
+            ${monitor(872, 332, 278, "BOX 1 (HIGH TEMP)", `${v.wash2_1_temp || 66.5}°C`, "SP: 90°C · Primary detergent")}
+            ${monitor(872, 384, 278, "BOX 3 (MID RINSE)", `${v.wash2_3_temp || 48.6}°C`, "SP: 70°C · Neutralizer")}
+            ${monitor(872, 436, 278, "BOX 6 (FINAL RINSE)", `${v.wash2_6_temp || 36.3}°C`, "SP: 40°C · Clean water wash")}
+          </g>
+
+          <!-- Zone 5: HEAT RECOVERY & OBA -->
+          <g class="kalender-simple-zone">
+            <rect x="1176" y="36" width="200" height="578" rx="14" fill="#f7fafb" stroke="#cfe0e4" stroke-width="1.2"/>
+            <text class="kalender-zone-index" x="1192" y="66" font-size="16" font-weight="900" fill="#8267c7">05</text>
+            <text class="kalender-zone-title" x="1224" y="66" font-size="12" font-weight="800" fill="#1e323b">HEAT REC &amp; OBA</text>
+            <text class="kalender-zone-note" x="1192" y="85" font-size="9" fill="#70858e">Energy Recovery &amp; Brightener</text>
+
+            <rect x="1192" y="105" width="168" height="145" rx="10" fill="#f5f0fb" stroke="#8267c7" stroke-width="1.5"/>
+            <text x="1204" y="126" font-size="10" font-weight="800" fill="#8267c7">HEAT RECOVERY (1–4)</text>
+
+            <g transform="translate(1200, 138)">
+              <rect x="0" y="0" width="152" height="66" rx="8" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2"/>
+              <circle cx="16" cy="18" r="4.5" fill="#8267c7"/>
+              <text x="26" y="17" font-size="8.5" font-weight="700" fill="#5b21b6">HEAT EXCHANGERS</text>
+              <text x="12" y="36" font-size="9.5" font-weight="800" fill="#6d28d9">HR1: ${hr1} · HR2: ${hr2}</text>
+              <text x="12" y="54" font-size="9" font-weight="700" fill="#8267c7">HR3: ${v.heat_recovery_3 || 29}°C · HR4: ${v.heat_recovery_4 || 52}°C</text>
+            </g>
+            <text x="1204" y="234" font-size="9" font-weight="700" fill="#168ca4">OBA Brightener: <tspan font-weight="900">${oba}</tspan></text>
+
+            ${monitor(1192, 280, 168, "HEAT REC 1", hr1, "Primary exchanger")}
+            ${monitor(1192, 332, 168, "HEAT REC 2", hr2, "Secondary loop")}
+            ${monitor(1192, 384, 168, "OBA INLET", v.oba_inlet_temp ? `${v.oba_inlet_temp}°C` : "30.3°C", "Cold brightener bath")}
+            ${monitor(1192, 436, 168, "OBA EXIT", v.oba_exit_temp ? `${v.oba_exit_temp}°C` : "31.4°C", "Fabric discharge")}
+          </g>
+
+          <!-- Zone 6: OUTPUT & MES -->
+          <g class="kalender-simple-zone">
+            <rect x="1386" y="36" width="180" height="578" rx="14" fill="#f7fafb" stroke="#cfe0e4" stroke-width="1.2"/>
+            <text class="kalender-zone-index" x="1402" y="66" font-size="16" font-weight="900" fill="#119b70">06</text>
+            <text class="kalender-zone-title" x="1434" y="66" font-size="12" font-weight="800" fill="#1e323b">DELIVERY &amp; MES</text>
+            <text class="kalender-zone-note" x="1402" y="85" font-size="9" fill="#70858e">Dancer Array · Output Batch</text>
+
+            <rect x="1402" y="105" width="148" height="145" rx="10" fill="#eff7ee" stroke="#119b70" stroke-width="1.5"/>
+            <text x="1414" y="126" font-size="10" font-weight="800" fill="#119b70">ACTIVE BATCH</text>
+
+            <g transform="translate(1410, 138)">
+              <rect x="0" y="0" width="132" height="66" rx="8" fill="#ffffff" stroke="#a7f3d0" stroke-width="1.2"/>
+              <circle cx="16" cy="18" r="4.5" fill="#119b70"/>
+              <text x="26" y="17" font-size="8.5" font-weight="700" fill="#065f46">MES BATCH NO</text>
+              <text x="14" y="42" font-size="16" font-weight="900" fill="#119b70">${batchNo}</text>
+              <text x="14" y="56" font-size="8.5" font-weight="600" fill="#047857">Drive 0: ${v.drive_0_speed || 552} RPM</text>
+            </g>
+            <text x="1414" y="234" font-size="9" font-weight="600" fill="#4d5f66">15 Dancer Rollers: OK</text>
+
+            ${monitor(1402, 280, 148, "LINE SPEED", speed, "Synchronized")}
+            ${monitor(1402, 332, 148, "BATCH LENGTH", batchLength, "Accumulated")}
+            ${monitor(1402, 384, 148, "TOTAL WATER", totalWater, "Water meter")}
+            ${monitor(1402, 436, 148, "RUNTIME", `${Number(v.runtime_minutes || 1331798).toLocaleString("id-ID")} min`, "Operating time")}
+          </g>
+
+          <!-- Fabric Conveyance Flow Line (positioned cleanly between process units and monitor chips) -->
+          <g class="continuous-fabric-conveyance">
+            <path d="M40 260 L1550 260" stroke="#078eaa" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.45"/>
+            <path d="M40 260 L1550 260" stroke="#078eaa" stroke-width="2" stroke-linecap="round" stroke-dasharray="10,6" fill="none"/>
+            <path d="M280 260 L292 260" stroke="#078eaa" stroke-width="2" marker-end="url(#continuous-fabric-arrow)"/>
+            <path d="M550 260 L562 260" stroke="#078eaa" stroke-width="2" marker-end="url(#continuous-fabric-arrow)"/>
+            <path d="M840 260 L852 260" stroke="#078eaa" stroke-width="2" marker-end="url(#continuous-fabric-arrow)"/>
+            <path d="M1160 260 L1172 260" stroke="#078eaa" stroke-width="2" marker-end="url(#continuous-fabric-arrow)"/>
+            <path d="M1370 260 L1382 260" stroke="#078eaa" stroke-width="2" marker-end="url(#continuous-fabric-arrow)"/>
+            <path d="M1536 260 L1548 260" stroke="#078eaa" stroke-width="2" marker-end="url(#continuous-fabric-arrow)"/>
+          </g>
+        </svg>
+      </div>
+      <div class="pid-foot">
+        <span><strong>Live Schematic:</strong> Alur kontinu menampilkan profil temperatur, ruang penguapan, pompa dosing, dan penghitung panjang batch kain.</span>
+        <small>Data diperbarui secara live dari PLC gateway. Nilai historis tersimpan dalam TimescaleDB hypertable.</small>
+      </div>
+    </div>
+  </section>`;
+}
+
 const sensorTrendConfig = {
   jetflow: [
     { key: "main_temp", label: "Main Tank Temperature", tag: "TEMP_MAIN", unit: "°C", sv: 93, variance: 2.4, decimals: 1, color: "#078eaa" },
@@ -486,6 +769,14 @@ const sensorTrendConfig = {
     { key: "load_upper", label: "Loadcell Upper", tag: "LOAD_UPPER", unit: "kg", sv: 480, variance: 24, decimals: 1, color: "#8267c7" },
     { key: "load_lower", label: "Loadcell Lower", tag: "LOAD_LOWER", unit: "kg", sv: 475, variance: 24, decimals: 1, color: "#d68b05" },
     { key: "fabric_width", label: "Fabric Width", tag: "WIDTH_FABRIC", unit: "cm", sv: 181, variance: 1.2, decimals: 1, color: "#db6d48" },
+  ],
+  continuous: [
+    { key: "line_speed_pv", label: "Line Speed", tag: "LINE_SPEED_PV", unit: "m/min", sv: 20, variance: 1.0, decimals: 0, color: "#078eaa" },
+    { key: "steamer_temp", label: "Steamer Temperature", tag: "STEAMER_TEMP", unit: "°C", sv: 96, variance: 1.5, decimals: 1, color: "#d97706" },
+    { key: "prewash_1_temp", label: "Pre-Wash 1 Temperature", tag: "PREWASH_1_TEMP", unit: "°C", sv: 50, variance: 1.8, decimals: 1, color: "#119b70" },
+    { key: "wash2_1_temp", label: "Washing 2-1 Temperature", tag: "WASH2_1_TEMP", unit: "°C", sv: 66, variance: 2.0, decimals: 1, color: "#8267c7" },
+    { key: "steam_post_pw_temp", label: "Steam Post-PW Temp", tag: "STEAM_POST_PW", unit: "°C", sv: 108, variance: 2.5, decimals: 1, color: "#d9485c" },
+    { key: "heat_recovery_1", label: "Heat Recovery 1", tag: "HEAT_REC_1", unit: "°C", sv: 69, variance: 1.6, decimals: 1, color: "#2563eb" },
   ],
   chemical: [
     { key: "transfer_flow", label: "Transfer Flow", tag: "FLOW_TRANSFER", unit: "kg/min", sv: 42.8, variance: 3.2, decimals: 1, color: "#078eaa" },

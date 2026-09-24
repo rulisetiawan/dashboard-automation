@@ -1224,25 +1224,35 @@ select:focus-visible {
 .process-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin: 4px 0 14px;
   color: var(--ink-3);
-  font-size: 0.58rem;
+  font-size: 0.72rem;
+  font-weight: 500;
 }
 
 .process-breadcrumb button {
-  padding: 0;
+  padding: 2px 4px;
   border: 0;
   background: transparent;
   color: var(--primary);
   font-size: inherit;
+  font-weight: 600;
   cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.process-breadcrumb button:hover {
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  text-decoration: underline;
 }
 
 .process-breadcrumb strong {
-  color: var(--ink-2);
+  color: var(--ink);
   font-family: var(--font-data);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .fleet-summary,
@@ -4442,23 +4452,29 @@ select:focus-visible {
   transform: rotate(225deg);
 }
 
-.kalender-pid-body {
+.kalender-pid-body,
+.continuous-pid-body {
   display: block;
 }
 
-.kalender-pid-card.is-collapsed {
+.kalender-pid-card.is-collapsed,
+.continuous-pid-card.is-collapsed {
   padding-top: 16px;
   padding-bottom: 16px;
 }
 
-.kalender-pid-card.is-collapsed .pid-head {
+.kalender-pid-card.is-collapsed .pid-head,
+.continuous-pid-card.is-collapsed .pid-head {
   align-items: center;
   margin-bottom: 0;
 }
 
 .kalender-pid-card.is-collapsed .pid-head p,
 .kalender-pid-card.is-collapsed .pid-legend,
-.kalender-pid-card.is-collapsed .kalender-pid-body {
+.kalender-pid-card.is-collapsed .kalender-pid-body,
+.continuous-pid-card.is-collapsed .pid-head p,
+.continuous-pid-card.is-collapsed .pid-legend,
+.continuous-pid-card.is-collapsed .continuous-pid-body {
   display: none;
 }
 

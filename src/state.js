@@ -112,7 +112,7 @@ const state = {
       calator: ["overfeed_out", "dancing_roller", "feeding_speed"],
       dryer: ["line_speed", "chamber_1", "chamber_5"],
       kalender: ["temp_upper", "temp_lower", "overfeed"],
-      continuous: ["line_speed_pv", "chemical_consumption_kg", "temperature_zone_01_pv", "padder_01_pressure_pv"],
+      continuous: ["line_speed_pv", "steamer_temp", "prewash_1_temp", "wash2_1_temp", "heat_recovery_1", "water_total_liters"],
       inspecting: ["line_speed_pv", "output_total_m", "defect_count", "camera_connected"],
       finishing: ["line_speed_pv", "output_total_m", "temperature_zone_01_pv", "process_pressure_pv"],
       setting_dongnam: ["line_speed_pv", "output_total_m", "temperature_zone_01_pv", "fabric_width_pv"],
@@ -178,6 +178,7 @@ const state = {
   },
   pidPanel: {
     kalender: false,
+    continuous: false,
   },
   batchInvestigation: {
     jetflow: { machineId: null, batch: null },
@@ -272,6 +273,7 @@ function restoreDashboardNavigation() {
     if (/^\d{4}-\d{2}-\d{2}$/.test(saved.productionOutput?.productionDate || "")) state.productionOutput.productionDate = saved.productionOutput.productionDate;
     if (["A", "B", "C"].includes(saved.productionOutput?.shiftCode)) state.productionOutput.shiftCode = saved.productionOutput.shiftCode;
     if (typeof saved.pidPanel?.kalender === "boolean") state.pidPanel.kalender = saved.pidPanel.kalender;
+    if (typeof saved.pidPanel?.continuous === "boolean") state.pidPanel.continuous = saved.pidPanel.continuous;
   } catch {
     // Gunakan default navigation jika browser storage tidak tersedia atau rusak.
   }
@@ -397,7 +399,7 @@ const pageMeta = {
   calator: ["Calator", "Washing Process", "Multi-speed, Overfeed Out, dancing roller, chemical, dan output."],
   dryer: ["Dryer", "Drying Process", "Speed, multi-chamber temperature, thermal oil, dan output."],
   kalender: ["Kalender", "Finishing Process", "Upper-lower balance, overfeed, width, motor, dan quality context."],
-  continuous: ["Continuous", "Continuous Finishing", "Konsumsi chemical, temperature zone, pressure roll padder, speed, runtime, dan output."],
+  continuous: ["Continuous", "Continuous Finishing", "Pre-wash & washing stages, steamer chamber, heat recovery, dosing pumps, dan line speed."],
   inspecting: ["Inspecting", "Fabric Inspection", "Speed, runtime, output, kualitas kain, defect, dan kesiapan integrasi kamera."],
   finishing: ["Finishing", "Finishing Process", "Speed, runtime, output, temperature, dan process pressure mesin Finishing."],
   setting_dongnam: ["Setting Dongnam", "Fabric Setting", "Speed, output, temperature zone, width, overfeed, dan runtime."],
