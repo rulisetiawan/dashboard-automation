@@ -442,6 +442,20 @@ function bindPageEvents() {
       }
     });
   });
+  document.querySelectorAll("[data-parameter-toggle='continuous']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.continuousParametersExpanded = !state.continuousParametersExpanded;
+      persistDashboardNavigation();
+      renderPage({ preserveScroll: true, preserveAnchor: ".finishing-monitoring-scope" });
+    });
+  });
+  document.querySelectorAll("[data-sensor-toggle='continuous']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.continuousSensorExpanded = !state.continuousSensorExpanded;
+      persistDashboardNavigation();
+      renderPage({ preserveScroll: true, preserveAnchor: ".sensor-filter-toolbar" });
+    });
+  });
   document.querySelectorAll("[data-chemical-unit]").forEach((card) => {
     const openUnit = () => {
       const machine = dispensers.find((item) => item.id === card.dataset.chemicalUnit);

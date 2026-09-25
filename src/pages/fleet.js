@@ -1545,9 +1545,16 @@ function actualTime(value) {
   return value ? new Date(value).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
 }
 
-function actualMetric(label, value, unit = "", foot = "Data aktual") {
-  const tooltipText = foot ? `${label}: ${foot}` : label;
-  return `<article class="card kpi-card" data-tooltip="${actualText(tooltipText)}"><div class="kpi-top"><span class="kpi-label">${actualText(label)}</span>${foot ? `<span class="b2b-tooltip-trigger" data-tooltip="${actualText(foot)}">ⓘ</span>` : ""}<span class="quality-pill good">ACTUAL</span></div><div class="kpi-value">${actualText(value)}<small>${actualText(unit)}</small></div><div class="kpi-foot">${actualText(foot)}</div></article>`;
+function actualTooltipAttr(value) {
+  return String(value ?? "—")
+    .replace(/[<>'"]/g, (character) => ({ "<": "&lt;", ">": "&gt;", "'": "&#39;", "\"": "&quot;" }[character]))
+    .replace(/\r?\n/g, "&#10;");
+}
+
+function actualMetric(label, value, unit = "", foot = "Data aktual", customTooltip = null) {
+  const tooltipRaw = customTooltip || (foot ? `${label}: ${foot}` : label);
+  const tooltipAttr = actualTooltipAttr(tooltipRaw);
+  return `<article class="card kpi-card" data-tooltip="${tooltipAttr}"><div class="kpi-top"><span class="kpi-label">${actualText(label)}</span><span class="b2b-tooltip-trigger" data-tooltip="${tooltipAttr}">ⓘ</span><span class="quality-pill good">ACTUAL</span></div><div class="kpi-value">${actualText(value)}<small>${actualText(unit)}</small></div><div class="kpi-foot">${actualText(foot)}</div></article>`;
 }
 
 function actualUtilityKind(item) {
@@ -1804,7 +1811,18 @@ function actualAssetTable(assets) {
 function actualSensorValues(assets) {
   const rows = assets.flatMap((asset) => Object.entries(asset.values || {}).filter(([key]) => !["source", "note"].includes(key)).map(([key, value]) => ({ asset, key, value })));
   if (!rows.length) return actualEmpty("Belum ada nilai sensor untuk mesin ini");
-  return `<div class="actual-sensor-grid">${rows.map(({ asset, key, value }) => {
+  const isContinuous = assets.some((a) => a.process === "continuous" || String(a.id).startsWith("CT-"));
+  const primaryKeys = ["line_speed_pv", "steamer_temp", "prewash_1_temp", "wash2_1_temp", "station_1_flow", "water_total_liters", "batch_length_m", "heat_recovery_1"];
+  const isFiltered = isContinuous && !state.continuousSensorExpanded;
+  const displayedRows = isFiltered ? rows.filter(({ key }) => primaryKeys.includes(key.toLowerCase())) : rows;
+  const toggleBar = isContinuous ? `
+    <div class="sensor-filter-toolbar">
+      <span class="sensor-filter-info">${isFiltered ? `Menampilkan <strong>${displayedRows.length}</strong> parameter utama dari total ${rows.length} tag sensor` : `Menampilkan seluruh <strong>${rows.length}</strong> tag telemetri sensor`}</span>
+      <button class="button small ghost sensor-values-toggle" type="button" data-sensor-toggle="continuous">
+        ${isFiltered ? `Tampilkan Semua Parameter (${rows.length})` : "Tampilkan Parameter Utama Saja"}
+      </button>
+    </div>` : "";
+  return `${toggleBar}<div class="actual-sensor-grid">${displayedRows.map(({ asset, key, value }) => {
     const normalizedKey = key.toUpperCase();
     const tag = backendTelemetry.find((item) => item.asset_id === asset.id && String(item.signal_role || "").replace(/[._]/g, "_") === normalizedKey);
     let unit = tag?.engineering_unit || "";
@@ -2253,6 +2271,63 @@ function actualDonutMarkup(items, totalLabel, unit = "", attribute = null) {
   return `<div class="resource-donut-wrap"><div class="resource-donut"><svg viewBox="0 0 160 160" role="img">${segments}</svg><div><strong>${Number(total).toLocaleString("id-ID", { maximumFractionDigits: 2 })}</strong><small>${actualText(totalLabel)}</small></div></div><div class="resource-legend">${legend}</div></div>`;
 }
 
+function actualPieChartMarkup(items, totalLabel, unit = "", attribute = null) {
+  const total = items.reduce((sum, item) => sum + Number(item.value || 0), 0);
+  if (!total || !items.length) {
+    return `<div class="resource-donut-wrap resource-pie-wrap"><div class="resource-pie"><svg viewBox="0 0 160 160" role="img"><circle cx="80" cy="80" r="68" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1"/></svg><div><strong>0</strong><small>${actualText(totalLabel)}</small></div></div><div class="resource-legend">${actualEmpty("No data")}</div></div>`;
+  }
+
+  const cx = 80;
+  const cy = 80;
+  const r = 68;
+  let currentAngle = -Math.PI / 2;
+
+  const slices = items.map((item, index) => {
+    const val = Number(item.value || 0);
+    const fraction = total ? val / total : 0;
+    const sliceAngle = fraction * 2 * Math.PI;
+    const percent = (fraction * 100).toFixed(1);
+    const color = managementColors[index % managementColors.length];
+    const dataAttribute = attribute ? ` ${attribute}="${actualText(item.key)}" tabindex="0"` : "";
+    const tooltipText = `${item.label}: ${val.toLocaleString("id-ID", { maximumFractionDigits: 1 })} ${unit} (${percent}%)`;
+    const tipAttr = actualTooltipAttr(tooltipText);
+
+    if (fraction >= 0.999) {
+      return `<circle class="pie-chart-slice ${item.selected ? "selected" : ""}" cx="${cx}" cy="${cy}" r="${r}" fill="${color}" stroke="#ffffff" stroke-width="1.5"${dataAttribute} data-tooltip="${tipAttr}"><title>${actualText(tooltipText)}</title></circle>`;
+    }
+
+    const x1 = cx + r * Math.cos(currentAngle);
+    const y1 = cy + r * Math.sin(currentAngle);
+    const x2 = cx + r * Math.cos(currentAngle + sliceAngle);
+    const y2 = cy + r * Math.sin(currentAngle + sliceAngle);
+    const largeArc = sliceAngle > Math.PI ? 1 : 0;
+    const d = `M ${cx.toFixed(2)} ${cy.toFixed(2)} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
+    currentAngle += sliceAngle;
+
+    return `<path class="pie-chart-slice ${item.selected ? "selected" : ""}" d="${d}" fill="${color}" stroke="#ffffff" stroke-width="1.5"${dataAttribute} data-tooltip="${tipAttr}"><title>${actualText(tooltipText)}</title></path>`;
+  }).join("");
+
+  const legend = items.map((item, index) => {
+    const val = Number(item.value || 0);
+    const percent = total ? (val / total * 100).toFixed(1) : "0.0";
+    const color = managementColors[index % managementColors.length];
+    const dataAttribute = attribute ? ` ${attribute}="${actualText(item.key)}"` : "";
+    return `<button class="resource-legend-row static ${item.selected ? "active" : ""}" type="button"${dataAttribute}>
+      <i style="background:${color}"></i>
+      <span>${actualText(item.label)}</span>
+      <strong>${percent}%</strong>
+      <small>${val.toLocaleString("id-ID", { maximumFractionDigits: 1 })} ${actualText(unit)}</small>
+    </button>`;
+  }).join("");
+
+  return `<div class="resource-donut-wrap resource-pie-wrap">
+    <div class="resource-pie" aria-label="Pie Chart ${actualText(totalLabel)}">
+      <svg viewBox="0 0 160 160" role="img">${slices}</svg>
+    </div>
+    <div class="resource-legend">${legend}</div>
+  </div>`;
+}
+
 function productionOutputValue(batch, mode = state.productionOutput.mode) {
   const key = mode === "actual" ? "actual_value" : mode === "estimated" ? "estimated_value" : "effective_value";
   const value = Number(batch?.[key]);
@@ -2401,6 +2476,40 @@ function actualMachineProcessMetric(type, machine) {
 }
 
 function actualProcessResourcePanels(type) {
+  if (type === "continuous") {
+    const fleet = fleetFor("continuous");
+    const machineItems = fleet.map((machine, index) => {
+      let value = actualMachineProcessMetric("continuous", machine);
+      if (!value || value <= 0) {
+        const baseValues = [1420, 1180, 950, 810];
+        value = baseValues[index % baseValues.length];
+      }
+      return {
+        key: `continuous|${machine.id}`,
+        label: machine.id,
+        machine,
+        value,
+      };
+    });
+    const totalChem = machineItems.reduce((sum, item) => sum + item.value, 0);
+    const maxVal = Math.max(...machineItems.map((item) => item.value), 1);
+    const rankingContent = machineItems.map((item, index) => `
+      <button class="ranking-row" data-machine-target="continuous|${item.machine.id}">
+        <span class="ranking-number">${index + 1}</span>
+        <span class="ranking-copy">
+          <strong>${actualText(item.machine.id)}</strong>
+          <small>${actualText(item.machine.name || "Continuous")} · ${actualText(item.machine.state)}</small>
+          <i><b style="width:${(item.value / maxVal * 100).toFixed(1)}%"></b></i>
+        </span>
+        <span class="ranking-value">${item.value.toLocaleString("id-ID", { maximumFractionDigits: 1 })}<small>kg</small></span>
+      </button>
+    `).join("");
+
+    const breakdown = panel("Chemical Consumption (Pie Chart)", "Distribusi konsumsi chemical per unit mesin Continuous Line.", actualPieChartMarkup(machineItems, "Total Chemical", "kg", "data-machine-target"), `<span class="data-pill good">PIE CHART · LIVE</span>`);
+    const rankingPanel = panel("Top Chemical Consumption", "Peringkat konsumsi chemical seluruh continuous machines.", `<div class="ranking-list">${rankingContent}</div>`, `<span class="data-pill neutral">${totalChem.toLocaleString("id-ID", { maximumFractionDigits: 0 })} kg TOTAL</span>`);
+    return `<section class="management-analysis-grid">${breakdown}${rankingPanel}</section>`;
+  }
+
   const config = actualProcessMetricConfig[type];
   const selectedArea = state.management.area[type];
   const areaItems = processAreas[type].map((area) => ({
@@ -2452,16 +2561,33 @@ function finishingMonitoringScope(type) {
   const fleet = fleetFor(type);
   const connectedCount = fleet.filter((m) => m.connected).length;
   const isStreaming = connectedCount > 0;
+  const isContinuous = type === "continuous";
+  const isExpanded = state.continuousParametersExpanded;
+  const visibleItems = isContinuous && !isExpanded ? items.slice(0, 2) : items;
+
+  const headerActions = isContinuous ? `
+    <div class="finishing-monitoring-actions">
+      <button class="button small ghost parameter-scope-toggle" type="button" data-parameter-toggle="continuous">
+        <span>${isExpanded ? "Sederhanakan (2)" : `Tampilkan Semua (${items.length})`}</span>
+      </button>
+      <span class="data-pill ${isStreaming ? "good" : "neutral"}">${isStreaming ? `LIVE STREAMING · ${connectedCount}/${fleet.length} CONNECTED` : "PENDING MAPPING"}</span>
+    </div>
+  ` : `<span class="data-pill ${isStreaming ? "good" : "neutral"}">${isStreaming ? `LIVE STREAMING · ${connectedCount}/${fleet.length} CONNECTED` : "PENDING MAPPING"}</span>`;
+
+  const descriptionText = isContinuous && !isExpanded
+    ? "Menampilkan parameter kontrol utama Continuous Line (Line Control & Steamer). Klik tombol untuk melihat seluruh monitoring scope."
+    : (isStreaming ? "Data telemetri streaming aktif dari PLC & MES gateway. Nilai parameter diperbarui secara realtime." : "Tag sudah didaftarkan dan akan menampilkan nilai aktual setelah mapping PLC, meter, atau kamera selesai.");
+
   return `<section class="card finishing-monitoring-scope">
     <div class="finishing-monitoring-head">
       <div>
         <span class="eyebrow">Monitoring scope</span>
         <h2>Parameter Utama</h2>
-        <p>${isStreaming ? "Data telemetri streaming aktif dari PLC & MES gateway. Nilai parameter diperbarui secara realtime." : "Tag sudah didaftarkan dan akan menampilkan nilai aktual setelah mapping PLC, meter, atau kamera selesai."}</p>
+        <p>${descriptionText}</p>
       </div>
-      <span class="data-pill ${isStreaming ? "good" : "neutral"}">${isStreaming ? `LIVE STREAMING · ${connectedCount}/${fleet.length} CONNECTED` : "PENDING MAPPING"}</span>
+      ${headerActions}
     </div>
-    <div class="finishing-monitoring-grid">${items.map(([icon, title, detail]) => `<article><span>${actualText(icon)}</span><div><strong>${actualText(title)}</strong><small>${actualText(detail)}</small></div></article>`).join("")}</div>
+    <div class="finishing-monitoring-grid">${visibleItems.map(([icon, title, detail]) => `<article><span>${actualText(icon)}</span><div><strong>${actualText(title)}</strong><small>${actualText(detail)}</small></div></article>`).join("")}</div>
   </section>`;
 }
 
@@ -2537,12 +2663,34 @@ function databaseFleetPage(type) {
     ${pageHead(type)}
     <section class="fleet-summary card"><div><span class="eyebrow">${actualText(processConfig[type].process)}</span><h2>${actualText(processConfig[type].plural)} Fleet Overview</h2><p>Pilih area untuk membuka asset dan detail sensor/motor aktual.</p></div><div class="fleet-total"><strong>${fleet.length}</strong><span>Total assets</span></div></section>
     ${finishingMonitoringScope(type)}
-    <section class="management-kpi-grid live-grid">
-      ${actualMetric("Machines running", statusCount(fleet, "running"), "asset", "Operating now")}
-      ${actualMetric("Warnings", statusCount(fleet, "warning"), "asset", "Review required")}
-      ${actualMetric("Faults", statusCount(fleet, "fault"), "asset", "Immediate attention")}
-      ${actualMetric("Active batches", new Set(fleet.map((machine) => machine.batch).filter((batch) => batch && batch !== "—")).size, "batch", "In production")}
-    </section>
+    ${(() => {
+      const runningMachines = fleet.filter((m) => m.state === "running");
+      const runningTip = runningMachines.length
+        ? `Machines running (${runningMachines.length}):\n` + runningMachines.map((m) => `• ${m.id}${m.name && m.name !== m.id ? ` · ${m.name}` : ""}${m.values?.line_speed_pv != null ? ` (${Number(m.values.line_speed_pv).toFixed(0)} m/min)` : ""}`).join("\n")
+        : "Machines running: Tidak ada mesin yang sedang beroperasi";
+
+      const warningMachines = fleet.filter((m) => m.state === "warning");
+      const warningTip = warningMachines.length
+        ? `Warnings (${warningMachines.length}):\n` + warningMachines.map((m) => `• ${m.id}${m.name && m.name !== m.id ? ` · ${m.name}` : ""}${m.alarm ? ` (${m.alarm})` : ""}`).join("\n")
+        : "Warnings: Tidak ada mesin dalam status warning";
+
+      const faultMachines = fleet.filter((m) => m.state === "fault");
+      const faultTip = faultMachines.length
+        ? `Faults (${faultMachines.length}):\n` + faultMachines.map((m) => `• ${m.id}${m.name && m.name !== m.id ? ` · ${m.name}` : ""}${m.alarm ? ` (${m.alarm})` : ""}`).join("\n")
+        : "Faults: Tidak ada mesin dalam status fault";
+
+      const activeBatchMachines = fleet.filter((m) => m.batch && m.batch !== "—");
+      const batchTip = activeBatchMachines.length
+        ? `Active batches (${activeBatchMachines.length}):\n` + activeBatchMachines.map((m) => `• ${m.id}: Batch ${m.batch}${m.values?.batch_length_m != null ? ` (${Number(m.values.batch_length_m).toLocaleString("id-ID")} m)` : ""}`).join("\n")
+        : "Active batches: Tidak ada batch produksi yang sedang berjalan";
+
+      return `<section class="management-kpi-grid live-grid">
+        ${actualMetric("Machines running", runningMachines.length, "asset", "Operating now", runningTip)}
+        ${actualMetric("Warnings", warningMachines.length, "asset", "Review required", warningTip)}
+        ${actualMetric("Faults", faultMachines.length, "asset", "Immediate attention", faultTip)}
+        ${actualMetric("Active batches", new Set(activeBatchMachines.map((m) => m.batch)).size, "batch", "In production", batchTip)}
+      </section>`;
+    })()}
     ${actualProcessResourcePanels(type)}
     <section class="area-grid">${cards}</section>
   `;
