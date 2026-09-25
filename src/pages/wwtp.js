@@ -438,12 +438,21 @@ function alarmRuleConfigPanel() {
   </form>` : actualEmpty("Belum ada asset aktif untuk membuat alarm rule.");
   const ruleRows = alarmConfiguration.rules.length ? alarmConfiguration.rules.map((rule) => {
     const stateTone = rule.evaluation_state === "ACTIVE" ? "warning" : rule.evaluation_state === "PENDING" ? "neutral" : "good";
-    return `<tr><td><strong>${actualText(rule.rule_name)}</strong><small>${actualText(rule.process_type)} · ${actualText(rule.area_code)}</small></td><td><strong>${actualText(rule.asset_id)}</strong><small class="mono">${actualText(rule.tag_code)}</small></td><td><span class="data-pill neutral">${actualText(rule.rule_type)}</span></td><td class="mono"><strong>${alarmRuleOperator(rule.rule_type)} ${actualText(rule.threshold_value)}</strong> ${actualText(rule.engineering_unit || "")}</td><td class="mono">${actualText(rule.hysteresis_value)} ${actualText(rule.engineering_unit || "")}<small>${actualText(rule.delay_seconds)} sec delay</small></td><td><span class="data-pill ${String(rule.severity).toLowerCase() === "critical" ? "warning" : "neutral"}">${actualText(rule.severity)}</span></td><td><span class="data-pill ${stateTone}">${actualText(rule.evaluation_state || "NOT EVALUATED")}</span><small>${rule.last_value == null ? "No sample" : `Last ${actualText(Number(rule.last_value).toLocaleString("id-ID", { maximumFractionDigits: 2 }))}`}</small></td><td><div class="alarm-rule-row-actions"><button class="button small" data-alarm-rule-edit="${actualText(rule.rule_id)}">Edit</button><button class="button small ${rule.enabled ? "ghost" : "primary"}" data-alarm-rule-toggle="${actualText(rule.rule_id)}" data-rule-enabled="${rule.enabled}">${rule.enabled ? "Disable" : "Enable"}</button></div></td></tr>`;
+    return `<tr data-tooltip="Rule: ${actualText(rule.rule_name)} (${actualText(rule.asset_id)} / ${actualText(rule.tag_code)}) - Status: ${actualText(rule.evaluation_state || 'NOT EVALUATED')}"><td><strong>${actualText(rule.rule_name)}</strong><small>${actualText(rule.process_type)} · ${actualText(rule.area_code)}</small></td><td><strong>${actualText(rule.asset_id)}</strong><small class="mono">${actualText(rule.tag_code)}</small></td><td><span class="data-pill neutral">${actualText(rule.rule_type)}</span></td><td class="mono"><strong>${alarmRuleOperator(rule.rule_type)} ${actualText(rule.threshold_value)}</strong> ${actualText(rule.engineering_unit || "")}</td><td class="mono">${actualText(rule.hysteresis_value)} ${actualText(rule.engineering_unit || "")}<small>${actualText(rule.delay_seconds)} sec delay</small></td><td><span class="data-pill ${String(rule.severity).toLowerCase() === "critical" ? "warning" : "neutral"}">${actualText(rule.severity)}</span></td><td><span class="data-pill ${stateTone}">${actualText(rule.evaluation_state || "NOT EVALUATED")}</span><small>${rule.last_value == null ? "No sample" : `Last ${actualText(Number(rule.last_value).toLocaleString("id-ID", { maximumFractionDigits: 2 }))}`}</small></td><td><div class="alarm-rule-row-actions"><button class="button small" data-alarm-rule-edit="${actualText(rule.rule_id)}">Edit</button><button class="button small ${rule.enabled ? "ghost" : "primary"}" data-alarm-rule-toggle="${actualText(rule.rule_id)}" data-rule-enabled="${rule.enabled}">${rule.enabled ? "Disable" : "Enable"}</button></div></td></tr>`;
   }).join("") : `<tr><td colspan="8">${actualEmpty(alarmConfiguration.loading ? "Loading alarm rules…" : "Belum ada alarm rule. Gunakan form di atas untuk membuat rule pertama.")}</td></tr>`;
   const staticRulePanel = `<section class="card alarm-rule-configuration" id="alarm-rule-configuration">
     <div class="alarm-rule-config-header"><div><span class="eyebrow">ALARM CONFIGURATION</span><h2>Tag Threshold & Severity Rules</h2><p>Frontend mengatur rule; backend mengevaluasi telemetry dan mencatat lifecycle alarm.</p></div><span class="range-badge">${alarmConfiguration.rules.length} RULES</span></div>
     ${alarmConfiguration.error ? `<div class="alarm-config-error">${actualText(alarmConfiguration.error)}</div>` : form}
-    <div class="table-wrap alarm-rule-table-wrap"><table class="data-table alarm-rule-table"><thead><tr><th>Rule</th><th>Asset / Tag</th><th>Type</th><th>Threshold</th><th>Stability</th><th>Severity</th><th>Engine State</th><th>Action</th></tr></thead><tbody>${ruleRows}</tbody></table></div>
+    <div class="table-wrap alarm-rule-table-wrap"><table class="data-table alarm-rule-table"><thead><tr>
+      <th>Rule <span class="b2b-tooltip-trigger" data-tooltip="Nama konfigurasi rule dan proses">ⓘ</span></th>
+      <th>Asset / Tag <span class="b2b-tooltip-trigger" data-tooltip="Mesin dan parameter register yang diawasi">ⓘ</span></th>
+      <th>Type <span class="b2b-tooltip-trigger" data-tooltip="Tipe pengecekan limit (HIGH, LOW, dll)">ⓘ</span></th>
+      <th>Threshold <span class="b2b-tooltip-trigger" data-tooltip="Batas batas nilai pemicu alarm">ⓘ</span></th>
+      <th>Stability <span class="b2b-tooltip-trigger" data-tooltip="Nilai hysteresis dan penundaan waktu aktivasi">ⓘ</span></th>
+      <th>Severity <span class="b2b-tooltip-trigger" data-tooltip="Tingkat keparahan event alarm">ⓘ</span></th>
+      <th>Engine State <span class="b2b-tooltip-trigger" data-tooltip="Status evaluasi background engine">ⓘ</span></th>
+      <th>Action <span class="b2b-tooltip-trigger" data-tooltip="Aksi edit konfigurasi dan aktifkan/nonaktifkan">ⓘ</span></th>
+    </tr></thead><tbody>${ruleRows}</tbody></table></div>
   </section>`;
   return `${staticRulePanel}${processDeviationRuleConfigPanel()}`;
 }
@@ -590,7 +599,7 @@ function processDeviationRuleConfigPanel() {
     <div class="deviation-monitor-options"><label><input type="checkbox" name="monitor_reach" ${checked("monitor_reach")}/> Monitor time-to-target</label><label><input type="checkbox" name="monitor_hold" ${checked("monitor_hold")}/> Monitor hold-target</label><label><input type="checkbox" name="pause_on_machine_hold" ${checked("pause_on_machine_hold")}/> Pause timer when machine HOLD</label></div>
     <div class="alarm-rule-form-foot"><span>WARNING/CRITICAL diteruskan ke header alarm; seluruh severity tetap masuk Batch Abnormal Log.</span><div>${editing ? `<button class="button ghost" type="button" data-deviation-rule-cancel>Cancel</button>` : ""}<button class="button primary" type="submit" ${!pvTags.length ? "disabled" : ""}>${editing ? "Update deviation rule" : "Save deviation rule"}</button></div></div>
   </form>` : actualEmpty("Belum ada asset proses aktif.");
-  const rows = alarmConfiguration.deviationRules.length ? alarmConfiguration.deviationRules.map((rule) => `<tr>
+  const rows = alarmConfiguration.deviationRules.length ? alarmConfiguration.deviationRules.map((rule) => `<tr data-tooltip="Deviation: ${actualText(rule.rule_name)} (${actualText(rule.asset_id || rule.process_type)}) - ${actualText(rule.severity)}">
     <td><strong>${actualText(rule.rule_name)}</strong><small class="mono">${actualText(rule.rule_code)}</small></td>
     <td><strong>${actualText(rule.asset_id || rule.process_type)}</strong><small class="mono">${actualText(rule.pv_tag_code || rule.pv_signal_role)}</small></td>
     <td>${actualText(rule.sv_tag_code || rule.sv_signal_role || rule.setpoint_key)}<small>${actualText(rule.step_code || "Continuous target")}</small></td>
@@ -603,7 +612,16 @@ function processDeviationRuleConfigPanel() {
   return `<section class="card alarm-rule-configuration process-deviation-configuration" id="process-deviation-configuration">
     <div class="alarm-rule-config-header"><div><span class="eyebrow">BATCH PROCESS DEVIATION</span><h2>PV / SV Target Achievement Rules</h2><p>Konfigurasi reach-time, stable confirmation, hold-target, tolerance, dan revision ketika SV berubah.</p></div><span class="range-badge">${alarmConfiguration.deviationRules.length} RULES</span></div>
     ${form}
-    <div class="table-wrap alarm-rule-table-wrap"><table class="data-table alarm-rule-table deviation-rule-table"><thead><tr><th>Rule</th><th>Scope / PV</th><th>SV / Step</th><th>Tolerance</th><th>Timing</th><th>Severity</th><th>Engine State</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="table-wrap alarm-rule-table-wrap"><table class="data-table alarm-rule-table deviation-rule-table"><thead><tr>
+      <th>Rule <span class="b2b-tooltip-trigger" data-tooltip="Nama konfigurasi deviasi proses batch">ⓘ</span></th>
+      <th>Scope / PV <span class="b2b-tooltip-trigger" data-tooltip="Cakupan mesin dan parameter nilai aktual (PV)">ⓘ</span></th>
+      <th>SV / Step <span class="b2b-tooltip-trigger" data-tooltip="Target setpoint (SV) dan nomor tahapan step">ⓘ</span></th>
+      <th>Tolerance <span class="b2b-tooltip-trigger" data-tooltip="Batas toleransi deviasi atas dan bawah yang diizinkan">ⓘ</span></th>
+      <th>Timing <span class="b2b-tooltip-trigger" data-tooltip="Waktu pencapaian target, konfirmasi stabil, dan penundaan deviasi">ⓘ</span></th>
+      <th>Severity <span class="b2b-tooltip-trigger" data-tooltip="Tingkat keparahan dan dampak pada proses produksi">ⓘ</span></th>
+      <th>Engine State <span class="b2b-tooltip-trigger" data-tooltip="Status pelacakan aktif dan mesin yang mengalami deviasi">ⓘ</span></th>
+      <th>Action <span class="b2b-tooltip-trigger" data-tooltip="Aksi edit dan aktifkan/nonaktifkan rule">ⓘ</span></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
   </section>`;
 }
 

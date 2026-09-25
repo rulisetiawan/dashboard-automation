@@ -15,317 +15,146 @@ function actualSolarPage() {
   return `${header}${solarOverview(data)}`;
 }
 
-function wwtpRangeToolbar() {
-  const buttons = [["TODAY","Hari ini"],["7D","7 Hari"],["30D","30 Hari"],["CUSTOM","Custom"]].map(([value,label]) =>
-    `<button class="button small ${state.wwtp.range === value ? "primary" : "ghost"}" data-wwtp-range="${value}">${label}</button>`
-  ).join("");
-  const range = wwtpRange();
-  const rangeLabel = state.wwtp.range === "TODAY"
-    ? `Hari ini · 00:00 — ${actualTime(range.to)}`
-    : state.wwtp.range === "CUSTOM"
-      ? `${actualTime(range.from)} — ${actualTime(range.to)}`
-      : `${state.wwtp.range} rolling window (${actualTime(range.from)} — ${actualTime(range.to)})`;
-  return `<section class="card wwtp-toolbar">
-    <div><span class="eyebrow">RENTANG ANALISIS IPAL</span><strong data-wwtp-range-label>${actualText(rangeLabel)}</strong></div>
-    <div class="wwtp-range-actions">${buttons}</div>
-    ${state.wwtp.range === "CUSTOM" ? `
-      <div class="wwtp-custom-range">
-        <label>Dari<input type="datetime-local" data-wwtp-date="from" value="${toDateTimeLocal(state.wwtp.customFrom)}"></label>
-        <label>Sampai<input type="datetime-local" data-wwtp-date="to" value="${toDateTimeLocal(state.wwtp.customTo)}"></label>
-        <button class="button primary small" data-wwtp-apply-range>Terapkan</button>
-      </div>` : ""}
-  </section>`;
+function solarNumber(value, decimals = 1) {
+  return Number(value || 0).toLocaleString("id-ID", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-function wwtpSummaryView(data) {
-  const kpi = data.kpi || {};
-  const stages = data.stages || [];
-  const logs = data.recentControlLogs || [];
-  const timeSeries = data.timeSeries || [];
+function solarStatusPill(status) {
+  const value = String(status || "UNKNOWN").toUpperCase();
+  const tone = ["COMPLETED", "VERIFIED", "POSTED"].includes(value) ? "good" : ["FAILED", "REJECTED", "MANUAL_REVIEW"].includes(value) ? "bad" : ["PARTIAL", "SUBMITTED", "DISPENSING"].includes(value) ? "warning" : "neutral";
+  return `<span class="data-pill ${tone}">${actualText(value.replaceAll("_", " "))}</span>`;
+}
 
-  const avgInletTempStr = Number(kpi.avgInletTemp || 0) > 0 ? `${Number(kpi.avgInletTemp).toFixed(1)}` : "--";
-  const avgOutletTempStr = Number(kpi.avgOutletTemp || 0) > 0 ? `${Number(kpi.avgOutletTemp).toFixed(1)}` : "--";
-  const coolingDeltaTStr = Number(kpi.coolingDeltaT || 0) !== 0 ? `${Number(kpi.coolingDeltaT).toFixed(1)}` : "--";
+function solarRangeToolbar() {
+  const buttons = [["TODAY","Today"],["7D","7 days"],["30D","30 days"],["90D","90 days"],["ALL","All history"],["CUSTOM","Custom"]].map(([value,label]) => `<button class="button small ${state.solar.range === value ? "primary" : "ghost"}" data-solar-range="${value}">${label}</button>`).join("");
+  const rangeLabel = state.solar.range === "TODAY" ? `Today · 00:00—${actualTime(solarRange().to)}` : state.solar.range === "ALL" ? "All available history" : state.solar.range === "CUSTOM" ? `${actualTime(solarRange().from)} — ${actualTime(solarRange().to)}` : `${state.solar.range} rolling window`;
+  return `<section class="card solar-toolbar"><div><span class="eyebrow">ANALYSIS RANGE</span><strong>${actualText(rangeLabel)}</strong></div><div class="solar-range-actions">${buttons}</div>${state.solar.range === "CUSTOM" ? `<div class="solar-custom-range"><label>From<input type="datetime-local" data-solar-date="from" value="${toDateTimeLocal(state.solar.customFrom)}"></label><label>To<input type="datetime-local" data-solar-date="to" value="${toDateTimeLocal(state.solar.customTo)}"></label><button class="button primary small" data-solar-apply-range>Apply</button></div>` : ""}</section>`;
+}
 
-  const kpiHtml = `
-    <section class="wwtp-kpi-grid">
-      ${actualMetric("Debit Masuk (Inflow)", `${Number(kpi.totalInflowRate || 0).toFixed(1)}`, "m³/h", "4 jalur inlet cooling tower")}
-      ${actualMetric("Efisiensi Cooling", coolingDeltaTStr, coolingDeltaTStr === "--" ? "" : "°C", `Suhu In ${avgInletTempStr} → Out ${avgOutletTempStr}`)}
-      ${actualMetric("Debit Pembuangan", `${Number(kpi.totalOutflowRate || 0).toFixed(1)}`, "m³/h", "DAF A/B & Lamela compliance")}
-      ${actualMetric("Debit Aerasi", `${Number(kpi.aerationFlow || 0).toFixed(1)}`, "m³/h", "Biologi aerobik Bak Aerasi 1")}
-      ${actualMetric("Kumulatif Inflow", `${Number(kpi.totalInflowTotalizer || 0).toLocaleString("id-ID")}`, "m³", "Totalizer kumulatif inlet")}
-      ${actualMetric("Peralatan IPAL", `${kpi.runningEquip || 0} / ${kpi.totalEquip || 0}`, "Unit", "Blower, pompa & mixer aktif")}
-    </section>
-  `;
-
-  const reconHtml = `
-    <section class="solar-reconciliation-grid" style="margin-bottom:18px">
-      ${solarComparisonCard("01 · NERACA AIR LIMBAH", "Inflow vs Outflow", "Debit Masuk", `${Number(kpi.totalInflowRate || 0).toFixed(1)} m³/h`, "Debit Keluar Akhir", `${Number(kpi.totalOutflowRate || 0).toFixed(1)} m³/h`, Number(kpi.totalInflowRate || 0) - Number(kpi.totalOutflowRate || 0), Number(kpi.totalInflowRate || 1), "Selisih debit masuk dan pembuangan akhir menunjukkan laju akumulasi dalam bak equalisasi & aerasi.")}
-      ${solarComparisonCard("02 · EFISIENSI CT", "Pendinginan Suhu Inlet", "Suhu Sebelum CT", `${avgInletTempStr} °C`, "Suhu Sesudah CT", `${avgOutletTempStr} °C`, Number(kpi.coolingDeltaT || 0), Number(kpi.avgInletTemp || 1), "Penurunan suhu (ΔT) air limbah setelah melewati Cooling Tower 1..4 sebelum masuk proses biologi.")}
-      ${solarComparisonCard("03 · KUALITAS OUTLET", "Baku Mutu Lingkungan", "Status Kepatuhan", "COMPLIANCE SAFE", "Parameter Outlet", "pH 7.2 · TSS Normal", null, null, "Hasil pengolahan air limbah memenuhi ambang batas baku mutu lingkungan hidup.")}
-    </section>
-  `;
-
-  const stagesCards = stages.map((s) => `
-    <article class="wwtp-stage-card">
-      <div>
-        <div class="wwtp-stage-header">
-          <span class="wwtp-stage-num">TAHAP ${s.stage} · ${actualText(s.code)}</span>
-          <span class="data-pill ${s.tone || "good"}">${actualText(s.status)}</span>
-        </div>
-        <h4 class="wwtp-stage-title">${actualText(s.title)}</h4>
-        <div class="wwtp-stage-metric">${actualText(s.primaryMetric)}</div>
-        <div class="wwtp-stage-sub">${actualText(s.secondaryMetric)}</div>
-      </div>
-      <div class="wwtp-stage-detail">${actualText(s.detail)}</div>
-    </article>
-  `).join("");
-
-  const stagesHtml = panel("Status 7 Tahapan Proses Pengolahan Air Limbah", "Kondisi operasional unit dari inlet sampai final discharge saluran outlet", `<div class="wwtp-stages-grid">${stagesCards || actualEmpty("Belum ada data tahapan proses")}</div>`);
-
-  const maxFlow = Math.max(10, ...timeSeries.map((t) => Math.max(Number(t.inflow || 0), Number(t.outflow || 0))));
-  const trendBars = timeSeries.map((t) => {
-    const inH = Math.max(2, (Number(t.inflow || 0) / maxFlow) * 100);
-    const outH = Math.max(2, (Number(t.outflow || 0) / maxFlow) * 100);
-    return `
-      <div class="solar-trend-column" tabindex="0" title="${t.date}: Inflow ${t.inflow} m³/h, Outflow ${t.outflow} m³/h">
-        <div style="display:flex;gap:3px;align-items:end;height:100%;width:100%">
-          <i style="height:${inH}%;background:var(--primary,#078eaa);flex:1;border-radius:4px 4px 0 0" title="Inflow: ${t.inflow} m³/h"></i>
-          <i style="height:${outH}%;background:var(--success,#119b70);flex:1;border-radius:4px 4px 0 0" title="Outflow: ${t.outflow} m³/h"></i>
-        </div>
-        <span>${t.date ? t.date.slice(5) : ""}</span>
-      </div>
-    `;
+function solarTransactionTable(data, compact = false) {
+  const rows = (data?.transactions || []).map((item) => {
+    const requested = Number(item.requested_liters || 0), final = ["COMPLETED","PARTIAL"].includes(String(item.transaction_status || "").toUpperCase());
+    const metered = final && item.metered_liters != null ? Number(item.metered_liters) : null, variance = metered == null ? null : metered-requested;
+    const totalizer = final && item.machine_totalizer_liters != null ? Number(item.machine_totalizer_liters) : null;
+    return `<tr data-tooltip="QR ${actualText(item.qr_code)} · ${actualText(item.consumer_label || item.consumer_id || 'Consumer')}: ${metered == null ? `${solarNumber(requested)} L (Req)` : `${solarNumber(metered)} L`} (${actualText(item.transaction_status)})"><td><strong>${actualTime(item.fueling_completed_at || item.qr_created_at || item.fueling_started_at || item.source_updated_at || item.ingested_at)}</strong><small>${actualText(item.source_system)}</small></td><td><strong class="mono">${actualText(item.qr_code)}</strong><small>${actualText(item.consumer_label || item.consumer_id || "Consumer belum dimapping")}</small></td><td><strong>${actualText(item.requester_name || "—")}</strong><small>${actualText(item.processed_by || item.qr_created_by || "—")}</small></td><td class="mono">${solarNumber(requested)} L</td><td class="mono"><strong>${metered == null ? "—" : `${solarNumber(metered)} L`}</strong></td><td class="mono ${variance != null && Math.abs(variance) > Math.max(1,requested*.02) ? "solar-variance-bad" : ""}">${variance == null ? "—" : `${variance >= 0 ? "+" : ""}${solarNumber(variance)} L`}</td><td class="mono">${totalizer == null ? "—" : `${solarNumber(totalizer)} L`}</td><td>${solarStatusPill(item.transaction_status)}</td></tr>`;
   }).join("");
-
-  const chartSection = `
-    <section class="solar-analysis-grid" style="margin-bottom:18px">
-      ${panel("Tren Debit Harian (Inflow vs Outflow)", "Perbandingan debit air limbah masuk dan keluar olahan (m³/h)", timeSeries.length ? `<div class="solar-bar-chart"><div class="solar-y-axis"><span>${maxFlow.toFixed(0)} m³/h</span><span>${(maxFlow*0.5).toFixed(0)} m³/h</span><span>0 m³/h</span></div><div class="solar-plot"><div class="solar-grid-lines"><i></i><i></i><i></i></div><div class="solar-trend">${trendBars}</div></div></div><div style="display:flex;gap:16px;justify-content:center;margin-top:10px"><span style="display:flex;align-items:center;gap:6px;font-size:11px"><i style="width:10px;height:10px;border-radius:2px;background:var(--primary,#078eaa)"></i> Debit Inflow</span><span style="display:flex;align-items:center;gap:6px;font-size:11px"><i style="width:10px;height:10px;border-radius:2px;background:var(--success,#119b70)"></i> Debit Outflow</span></div>` : actualEmpty("Belum ada data tren pada rentang ini"), `<span class="data-pill good">HYPERTABLE DIRECT</span>`)}
-      ${panel("Ringkasan Kapasitas IPAL", "Karakteristik desain dan performa operasional", `
-        <div style="display:grid;gap:12px;padding:8px 0">
-          <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid var(--border)"><span>Kapasitas Desain Maksimal</span><strong class="mono">600.0 m³/h</strong></div>
-          <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid var(--border)"><span>Beban Operasi Saat Ini</span><strong class="mono">${Number(kpi.totalInflowRate || 0).toFixed(1)} m³/h (${((Number(kpi.totalInflowRate || 0)/600)*100).toFixed(1)}%)</strong></div>
-          <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid var(--border)"><span>Target Penurunan Suhu (ΔT)</span><strong class="mono">≥ 10.0 °C</strong></div>
-          <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid var(--border)"><span>Pencapaian Cooling Tower</span><strong class="mono ${Number(kpi.coolingDeltaT || 0) >= 10 ? "" : "solar-variance-bad"}">${Number(kpi.coolingDeltaT || 0).toFixed(1)} °C</strong></div>
-          <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid var(--border)"><span>Unit Cooling Tower Beroperasi</span><strong class="mono">${(data.inletUnits || []).filter(u => u.flow > 0).length} dari 4 Unit</strong></div>
-          <div style="display:flex;justify-content:space-between"><span>Status Koneksi Gateway IPAL</span><strong style="color:var(--success)">ONLINE (24ms)</strong></div>
-        </div>
-      `)}
-    </section>
-  `;
-
-  const logRows = logs.map((l, idx) => `
-    <tr>
-      <td class="mono">${idx + 1}</td>
-      <td><strong>${actualTime(l.executed_at || l.created_at)}</strong></td>
-      <td><strong>${actualText(l.equipment_name || "-")}</strong><small>${actualText(l.process || "-")}</small></td>
-      <td><span class="data-pill neutral">${actualText(l.action_name || "-")}</span></td>
-      <td>${actualText(l.initiated_by || "-")}</td>
-      <td><span class="data-pill ${l.status === "Success" ? "good" : "warning"}">${actualText(l.status || "-")}</span></td>
-    </tr>
-  `).join("");
-
-  const logsHtml = panel("Log Kontrol Operasional Peralatan IPAL", "Riwayat perintah start/stop motor, blower, dan pompa oleh operator", `
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr><th>#</th><th>Waktu Eksekusi</th><th>Peralatan</th><th>Perintah / Aksi</th><th>Operator</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          ${logRows || `<tr><td colspan="6">${actualEmpty("Belum ada riwayat kontrol.")}</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `);
-
-  return `${kpiHtml}${reconHtml}${stagesHtml}${chartSection}${logsHtml}`;
+  return `<div class="table-wrap solar-table-wrap"><table class="data-table solar-table"><thead><tr>
+    <th>Activity time <span class="b2b-tooltip-trigger" data-tooltip="Waktu penyelesaian pengisian solar atau pembuatan QR">ⓘ</span></th>
+    <th>QR / Consumer <span class="b2b-tooltip-trigger" data-tooltip="Kode QR otorisasi dan unit mesin/kendaraan penerima">ⓘ</span></th>
+    <th>Requester / Operator <span class="b2b-tooltip-trigger" data-tooltip="Nama penanggung jawab permintaan dan operator dispenser">ⓘ</span></th>
+    <th>Requested <span class="b2b-tooltip-trigger" data-tooltip="Volume solar yang diajukan dalam tiket permintaan">ⓘ</span></th>
+    <th>Flow meter <span class="b2b-tooltip-trigger" data-tooltip="Volume aktual yang tercatat oleh flow meter digital">ⓘ</span></th>
+    <th>Variance <span class="b2b-tooltip-trigger" data-tooltip="Selisih antara volume permintaan dengan volume realisasi">ⓘ</span></th>
+    <th>Totalizer <span class="b2b-tooltip-trigger" data-tooltip="Angka kumulatif meter mekanik dispenser solar">ⓘ</span></th>
+    <th>Status <span class="b2b-tooltip-trigger" data-tooltip="Status verifikasi transaksi pengisian">ⓘ</span></th>
+  </tr></thead><tbody>${rows || `<tr><td colspan="8">${compact ? "Belum ada transaksi terbaru." : "Tidak ada transaksi sesuai filter."}</td></tr>`}</tbody></table></div>`;
 }
 
-function wwtpInletView(data) {
-  const overview = data.overview || {};
-  const units = data.units || [];
-  const distribution = data.distribution || [];
-  const readings = data.recentReadings || [];
-
-  const avgTempInStr = Number(overview.avgTempIn || 0) > 0 ? `${Number(overview.avgTempIn).toFixed(1)}` : "--";
-  const avgTempOutStr = Number(overview.avgTempOut || 0) > 0 ? `${Number(overview.avgTempOut).toFixed(1)}` : "--";
-  const overallDeltaTStr = Number(overview.overallDeltaT || 0) > 0 ? `${Number(overview.overallDeltaT).toFixed(1)}` : "--";
-
-  const kpiHtml = `
-    <section class="wwtp-kpi-grid">
-      ${actualMetric("Total Debit Inlet", `${Number(overview.totalFlow || 0).toFixed(1)}`, "m³/h", "Total akumulasi 4 jalur inlet")}
-      ${actualMetric("Rata-rata per Unit", `${Number(overview.avgFlow || 0).toFixed(1)}`, "m³/h", "Distribusi rata-rata aliran")}
-      ${actualMetric("Suhu Sebelum CT", avgTempInStr, avgTempInStr === "--" ? "" : "°C", "Temperatur inlet cooling tower")}
-      ${actualMetric("Suhu Sesudah CT", avgTempOutStr, avgTempOutStr === "--" ? "" : "°C", "Temperatur outlet cooling tower")}
-      ${actualMetric("Penurunan Suhu (ΔT)", overallDeltaTStr, overallDeltaTStr === "--" ? "" : "°C", "Efisiensi pendinginan rata-rata")}
-      ${actualMetric("Total Kumulatif", `${Number(overview.totalVolume || 0).toLocaleString("id-ID")}`, "m³", "Totalizer flow meter")}
-    </section>
-  `;
-
-  const unitCards = units.map((u) => {
-    const inTemp = Number(u.inletTemp || 0);
-    const outTemp = Number(u.outletTemp || 0);
-    const delta = Number(u.deltaT || 0);
-    const inTempStr = inTemp > 0 ? `${inTemp.toFixed(1)} °C` : "--";
-    const outTempStr = outTemp > 0 ? `${outTemp.toFixed(1)} °C` : "--";
-    const deltaStr = delta > 0 ? `${delta.toFixed(1)} °C` : "--";
-
-    return `
-    <article class="wwtp-cooling-card">
-      <header>
-        <strong>${actualText(u.name)}</strong>
-        <span class="data-pill ${u.status === "Normal" ? "good" : "neutral"}">${actualText(u.status)}</span>
-      </header>
-      <div class="wwtp-cooling-flow">
-        <strong>${Number(u.flowRate || 0).toFixed(1)}</strong>
-        <span>m³/h</span>
-      </div>
-      <div class="wwtp-cooling-temps">
-        <div>
-          <small>T Sebelum CT</small>
-          <strong>${inTempStr}</strong>
-        </div>
-        <div>
-          <small>T Sesudah CT</small>
-          <strong>${outTempStr}</strong>
-        </div>
-      </div>
-      <div class="wwtp-cooling-delta">
-        <span>Efisiensi ΔT</span>
-        <strong>${deltaStr}</strong>
-      </div>
-      <div class="wwtp-cooling-total">
-        <span>Totalizer</span>
-        <strong>${Number(u.totalizer || 0).toLocaleString("id-ID")} m³</strong>
-      </div>
-    </article>
-  `;
-  }).join("");
-
-  const unitSection = panel("Status Komparasi 4 Jalur Inlet & Cooling Tower", "Pembacaan debit flow meter, temperatur sebelum & sesudah CT, dan totalizer", `<div class="wwtp-cooling-grid">${unitCards}</div>`);
-
-  const colors = ["#078eaa", "#119b70", "#d68b05", "#8b67b2"];
-  const distRows = distribution.map((d, i) => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="display:flex;align-items:center;gap:8px">
-        <i style="width:10px;height:10px;border-radius:3px;background:${colors[i % colors.length]}"></i>
-        <strong>${actualText(d.name)}</strong>
-      </span>
-      <div style="text-align:right">
-        <strong class="mono">${Number(d.totalizer || 0).toLocaleString("id-ID")} m³</strong>
-        <span style="color:var(--muted);font-size:11px;margin-left:6px">(${d.sharePercent}%)</span>
-      </div>
-    </div>
-  `).join("");
-
-  const dailyTrend = data.dailyTrend || [];
-  const maxInletTrend = Math.max(10, ...dailyTrend.map((d) => Math.max(d.inlet1, d.inlet2, d.inlet3, d.inlet4)));
-  const trendCols = dailyTrend.map((d) => {
-    const sum = (d.inlet1 + d.inlet2 + d.inlet3 + d.inlet4) || 0;
-    const h = Math.max(2, (sum / (maxInletTrend * 4 || 1)) * 100);
-    return `
-      <div class="solar-trend-column" tabindex="0" title="${d.date}: Total ${sum.toFixed(1)} m³/h">
-        <i style="height:${h}%;background:var(--primary,#078eaa);width:16px" title="Total: ${sum.toFixed(1)} m³/h"></i>
-        <span>${d.date ? d.date.slice(5) : ""}</span>
-      </div>
-    `;
-  }).join("");
-
-  const analyticsHtml = `
-    <section class="wwtp-chart-panel">
-      ${panel("Tren Debit Harian Akumulasi Inlet", "Total debit aliran inlet (m³/h) harian", dailyTrend.length ? `<div class="solar-bar-chart"><div class="solar-y-axis"><span>${(maxInletTrend*4).toFixed(0)} m³/h</span><span>${(maxInletTrend*2).toFixed(0)} m³/h</span><span>0 m³/h</span></div><div class="solar-plot"><div class="solar-grid-lines"><i></i><i></i><i></i></div><div class="solar-trend">${trendCols}</div></div></div>` : actualEmpty("Belum ada histori debit harian"), `<span class="data-pill good">FLOW METER</span>`)}
-      ${panel("Distribusi Volume per Jalur", "Persentase kontribusi totalizer per inlet", `<div style="display:grid;gap:4px;padding:8px 0">${distRows}</div>`)}
-    </section>
-  `;
-
-  const readingRows = readings.map((r, i) => `
-    <tr>
-      <td class="mono">${i + 1}</td>
-      <td><strong>${actualTime(r.captured_at)}</strong></td>
-      <td class="mono"><code>${actualText(r.sensor_tag)}</code></td>
-      <td>${actualText(r.sensor_name || "-")}</td>
-      <td class="mono"><strong>${r.value != null ? Number(r.value).toFixed(2) : "-"}</strong> ${actualText(r.unit || "")}</td>
-      <td><span class="data-pill ${r.status === "NORMAL" || r.status === "Normal" ? "good" : "neutral"}">${actualText(r.status || "Normal")}</span></td>
-    </tr>
-  `).join("");
-
-  const tableHtml = panel("Data Log Telemetri Sensor Inlet Terkini", "Pembacaan histori sensor debit dan temperatur dari TimescaleDB", `
-    <div class="table-wrap" style="max-height:480px">
-      <table class="data-table">
-        <thead>
-          <tr><th>#</th><th>Waktu</th><th>Tag Sensor</th><th>Nama Sensor</th><th>Nilai</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          ${readingRows || `<tr><td colspan="6">${actualEmpty("Belum ada data telemetri.")}</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `);
-
-  return `${kpiHtml}${unitSection}${analyticsHtml}${tableHtml}`;
+function solarNiceMaximum(value) {
+  const numeric = Math.max(1,Number(value) || 0), magnitude = 10 ** Math.floor(Math.log10(numeric)), normalized = numeric/magnitude;
+  return (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude;
 }
 
-function wwtpPidView(data) {
-  const logs = data.logs || [];
-
-  const iframeHtml = `
-    <section class="wwtp-pid-wrapper">
-      <div class="wwtp-pid-toolbar">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:11px;font-weight:800;color:var(--muted,#6f8088);letter-spacing:1px">DIAGRAM ALUR P&ID LIVE</span>
-          <span class="data-pill good">REALTIME AUTO-SYNC</span>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="button small ghost" type="button" data-pf-reload title="Muat ulang diagram">🔄 Muat Ulang</button>
-          <button class="button small ghost" type="button" data-pf-fullscreen title="Fullscreen">⛶ Fullscreen</button>
-          <a class="button small primary" href="/simulasi-full-process.html" target="_blank" rel="noopener" title="Buka di tab baru">↗ Buka di Tab Baru</a>
-        </div>
-      </div>
-      <iframe class="wwtp-pid-frame" data-pf-iframe src="/simulasi-full-process.html" title="Diagram Proses P&ID IPAL"></iframe>
-    </section>
-  `;
-
-  const logRows = logs.map((l, i) => `
-    <tr>
-      <td class="mono">${i + 1}</td>
-      <td><strong>${actualTime(l.executed_at || l.created_at)}</strong></td>
-      <td><strong>${actualText(l.equipment_name || "-")}</strong><small class="mono">${actualText(l.equipment_code || "")}</small></td>
-      <td><span class="data-pill neutral">${actualText(l.action_name || "-")}</span></td>
-      <td>${actualText(l.initiated_by || "-")}</td>
-      <td>${actualText(l.role_name || "-")}</td>
-      <td><span class="data-pill ${l.status === "Success" ? "good" : "warning"}">${actualText(l.status || "-")}</span></td>
-    </tr>
-  `).join("");
-
-  const logsHtml = panel("Log Kontrol Peralatan P&ID IPAL", "Catatan aksi kontrol motor, blower aerasi, dan pompa transfer", `
-    <div class="table-wrap" style="max-height:360px">
-      <table class="data-table">
-        <thead>
-          <tr><th>#</th><th>Waktu</th><th>Peralatan</th><th>Aksi</th><th>Operator</th><th>Role</th><th>Status</th></tr>
-        </thead>
-        <tbody data-wwtp-pid-logs-tbody>
-          ${logRows || `<tr><td colspan="7">${actualEmpty("Belum ada log kontrol.")}</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `, `<button class="button small ghost" data-ctrl-log-refresh>↻ Refresh Log</button>`);
-
-  return `${iframeHtml}${logsHtml}`;
+function solarBucketLabel(value) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return new Intl.DateTimeFormat("id-ID", state.solar.range === "TODAY" ? { timeZone:"Asia/Jakarta",hour:"2-digit",minute:"2-digit",hourCycle:"h23" } : { timeZone:"Asia/Jakarta",day:"2-digit",month:"short" }).format(parsed);
 }
 
-function bindWwtpPidActions() {
-  document.querySelector("[data-pf-reload]")?.addEventListener("click", () => {
-    const iframe = document.querySelector("iframe[data-pf-iframe]");
-    if (iframe) iframe.src = iframe.src;
-  });
-  document.querySelector("[data-pf-fullscreen]")?.addEventListener("click", () => {
-    const iframe = document.querySelector("iframe[data-pf-iframe]");
-    if (iframe) {
-      if (document.fullscreenElement) document.exitFullscreen?.();
-      else iframe.requestFullscreen?.();
-    }
-  });
-  document.querySelector("[data-ctrl-log-refresh]")?.addEventListener("click", () => {
-    void refreshWwtpPidLogs();
+function solarComparisonCard(index,title,leftLabel,leftValue,rightLabel,rightValue,difference,reference,detail) {
+  const available = difference != null && reference != null && Number.isFinite(Number(difference)) && Number.isFinite(Number(reference));
+  const liters = available ? Number(difference) : null, percent = available && Number(reference) !== 0 ? liters/Math.abs(Number(reference))*100 : null;
+  const tone = liters == null ? "neutral" : Math.abs(liters) <= Math.max(1,Math.abs(Number(reference))*0.02) ? "good" : "bad";
+  const signedLiters = liters == null ? "N/A" : `${liters >= 0 ? "+" : ""}${solarNumber(liters)} L`;
+  const signedPercent = percent == null ? "N/A" : `${percent >= 0 ? "+" : ""}${solarNumber(percent,2)}%`;
+  return `<article class="card solar-recon-card"><header><span>${actualText(index)}</span><h3>${actualText(title)}</h3></header><div class="solar-compare-values"><div><small>${actualText(leftLabel)}</small><strong>${actualText(leftValue)}</strong></div><div><small>${actualText(rightLabel)}</small><strong>${actualText(rightValue)}</strong></div></div><div class="solar-compare-difference ${tone}"><span>Selisih</span><strong>${signedLiters}</strong><em>${signedPercent}</em></div><p>${actualText(detail)}</p></article>`;
+}
+
+function solarQrStatusCard(label,value,detail,tone) {
+  return `<article class="card solar-status-card ${tone}"><span></span><div><small>${actualText(label)}</small><strong>${solarNumber(value,0)}</strong><p>${actualText(detail)}</p></div></article>`;
+}
+
+function solarOverview(data) {
+  const overview = data.overview || {}, summary = overview.summary || {}, trend = overview.time_series || [], users = overview.user_ranking || [];
+  const maximum = solarNiceMaximum(Math.max(0,...trend.map((item) => Number(item.metered_liters || 0))));
+  const bars = trend.map((item) => { const value = Number(item.metered_liters || 0), requested = Number(item.requested_liters || 0), gap = value-requested, period = actualTime(item.bucket); return `<div class="solar-trend-column" tabindex="0" role="img" aria-label="${actualText(`${period}, actual ${solarNumber(value)} liter, requested ${solarNumber(requested)} liter, gap ${gap>=0?"+":""}${solarNumber(gap)} liter`)}" data-solar-trend-period="${actualText(period)}" data-solar-trend-actual="${actualText(`${solarNumber(value)} L`)}" data-solar-trend-requested="${actualText(`${solarNumber(requested)} L`)}" data-solar-trend-gap="${actualText(`${gap>=0?"+":""}${solarNumber(gap)} L`)}"><i style="height:${Math.max(2,value/maximum*100)}%"></i><span>${actualText(solarBucketLabel(item.bucket))}</span></div>`; }).join("");
+  const yTicks = [1,.75,.5,.25,0].map((ratio) => `<span>${solarNumber(maximum*ratio,0)} L</span>`).join("");
+  const gridLines = [1,.75,.5,.25,0].map(() => "<i></i>").join("");
+  const consumptionChart = `<div class="solar-bar-chart"><div class="solar-y-axis">${yTicks}</div><div class="solar-plot"><div class="solar-grid-lines">${gridLines}</div><div class="solar-trend">${bars}</div></div></div>`;
+  const userRows = users.map((item,index) => `<div class="solar-user-row"><b>${index+1}</b><span><strong>${actualText(item.user_name)}</strong><small>${solarNumber(item.transactions,0)} transactions</small></span><em>${solarNumber(item.liters)} L</em></div>`).join("");
+  const match = summary.metering_match_percent == null ? "N/A" : `${solarNumber(summary.metering_match_percent,1)}%`;
+  const accuracy = summary.stock_accuracy_percent == null ? "N/A" : `${solarNumber(summary.stock_accuracy_percent,1)}%`;
+  const liveLevel = summary.live_stock_liters == null ? "—" : solarNumber(summary.live_stock_liters);
+  const levelFoot = summary.live_level_source_ts ? `${actualText(summary.live_level_quality)} · ${actualTime(summary.live_level_source_ts)}` : "Sensor level belum diterima";
+  return `<section class="solar-kpi-grid">
+    ${actualMetric("Live Tank Level", liveLevel, "L", levelFoot)}
+    ${actualMetric("System Stock", solarNumber(summary.system_stock_liters), "L", "Calculated stock dari sistem sumber")}
+    ${actualMetric("Fuel Consumption", solarNumber(summary.metered_liters), "L", "Flow meter · selected range")}
+    ${actualMetric("Completed Fueling", solarNumber(summary.completed_transactions,0), "QR", "Completed + partial transactions")}
+    ${actualMetric("Metering Match", match, "", "Flow-meter sum and totalizer delta")}
+    ${actualMetric("Stock Accuracy", accuracy, "", "Latest physical stock opname")}
+    ${actualMetric("Need Review", solarNumber(summary.review_count,0), "items", "Variance, partial, failed, manual review")}
+  </section>
+  <section class="solar-status-grid" aria-label="QR status summary">
+    ${solarQrStatusCard("QR Pending",summary.pending_qr_count,"Created, ready, or dispensing","pending")}
+    ${solarQrStatusCard("Completed",summary.completed_transactions,"Completed and partial","completed")}
+    ${solarQrStatusCard("Cancelled",summary.cancelled_qr_count,"Cancelled QR","cancelled")}
+    ${solarQrStatusCard("Not Match",summary.not_match_count,"Actual gap above 2%","mismatch")}
+    ${solarQrStatusCard("Failed / Review",summary.failed_review_count,"Failed or manual review","review")}
+  </section>
+  <section class="solar-reconciliation-grid">
+    ${solarComparisonCard("01 · DISPENSING","Request & Actual","Requested",`${solarNumber(summary.requested_liters)} L`,"Flow meter actual",`${solarNumber(summary.metered_liters)} L`,Number(summary.metered_liters)-Number(summary.requested_liters),Number(summary.requested_liters),"Actual dikurangi request QR pada range terpilih.")}
+    ${solarComparisonCard("02 · TOTALIZER","Transaction Sum & Totalizer Delta","Backend flow-meter sum",`${solarNumber(summary.metered_liters)} L`,"Totalizer delta",summary.machine_delta_liters == null?"N/A":`${solarNumber(summary.machine_delta_liters)} L`,summary.machine_delta_liters == null?null:Number(summary.machine_delta_liters)-Number(summary.metered_liters),Number(summary.metered_liters),summary.first_totalizer_liters==null||summary.latest_totalizer_liters==null?"Minimal dua sampel totalizer diperlukan.":`Akhir ${solarNumber(summary.latest_totalizer_liters)} L dikurangi awal ${solarNumber(summary.first_totalizer_liters)} L.${summary.totalizer_reset_count?` ${summary.totalizer_reset_count} reset terdeteksi.`:""}`)}
+    ${solarComparisonCard("03 · INVENTORY","System Stock & Level Sensor","Calculated system stock",`${solarNumber(summary.system_stock_liters)} L`,"Live level sensor",summary.live_stock_liters == null?"N/A":`${solarNumber(summary.live_stock_liters)} L`,summary.live_stock_liters == null?null:Number(summary.live_stock_liters)-Number(summary.system_stock_liters),Number(summary.system_stock_liters),"Sensor dikurangi calculated stock; opname fisik menjadi validasi final.")}
+  </section>
+  <section class="solar-analysis-grid">${panel("Consumption Trend", "Actual flow-meter output per interval · nilai sumbu Y dalam liter", trend.length ? consumptionChart : actualEmpty("Belum ada transaksi pada range ini"), `<span class="data-pill good">FLOW METER</span>`, "solar-trend-panel")}${panel("Top Requesters", "Total konsumsi berdasarkan user", userRows ? `<div class="solar-user-list">${userRows}</div>` : actualEmpty("Belum ada data requester"))}</section>
+  ${panel("Recent Fueling Transactions", "QR, volume requested, actual flow meter, dan totalizer", solarTransactionTable(data.transactions, true), `<button class="button small" data-solar-tab="transactions">Open full log →</button>`)}`;
+}
+
+function solarTransactions(data) {
+  const transactionData = data.transactions || {}, page = transactionData.pagination || { page:1,total_pages:1,total_rows:0 };
+  return `<section class="card solar-filter-card"><form data-solar-search-form><label>Search QR or user<input type="search" name="search" value="${actualText(state.solar.search)}" placeholder="QR code, requester, operator…"></label><label>Status<select name="status"><option value="all">All status</option>${["QR_CREATED","READY","DISPENSING","COMPLETED","PARTIAL","FAILED","MANUAL_REVIEW","CANCELLED"].map((value) => `<option value="${value}" ${state.solar.status===value?"selected":""}>${value.replaceAll("_"," ")}</option>`).join("")}</select></label><button class="button primary" type="submit">Search log</button></form></section>${panel("Fueling Transaction Log", "Server-side search dan pagination · tidak menggeser posisi halaman saat auto-update", `${solarTransactionTable(transactionData)}<div class="solar-pagination"><span><strong>${solarNumber(page.total_rows,0)}</strong> records</span><div><button class="button small" data-solar-page="prev" ${page.page<=1?"disabled":""}>← Previous</button><span>Page ${page.page} / ${page.total_pages}</span><button class="button small" data-solar-page="next" ${page.page>=page.total_pages?"disabled":""}>Next →</button></div></div>`, `<span class="data-pill ${backendConnection.realtime === "connected" ? "good" : "warning"}">${backendConnection.realtime === "connected" ? "LIVE AUTO-UPDATE" : "AUTO-UPDATE PAUSED"}</span>`, "solar-log-panel")}`;
+}
+
+function solarMovements(data) {
+  const rows = (data.movements?.movements || []).map((item) => `<tr><td>${actualTime(item.occurred_at)}</td><td>${solarStatusPill(item.movement_type)}</td><td><strong>${actualText(item.direction)}</strong></td><td class="mono"><strong>${solarNumber(item.quantity_liters)} L</strong></td><td class="mono">${actualText(item.reference_code)}</td><td>${actualText(item.created_by)}</td><td>${actualText(item.notes)}</td></tr>`).join("");
+  return `<section class="solar-operation-grid">${panel("Register Stock Movement", "Catat penerimaan, adjustment, atau transfer selain fueling", `<form class="solar-entry-form" data-solar-movement-form><label>Movement<select name="movement_type"><option value="RECEIPT">Receipt</option><option value="ADJUSTMENT">Adjustment</option><option value="TRANSFER">Transfer</option></select></label><label>Direction<select name="direction"><option value="IN">IN</option><option value="OUT">OUT</option></select></label><label>Quantity (L)<input type="number" name="quantity_liters" min="0.001" step="0.001" required></label><label>Reference<input name="reference_code" maxlength="160" placeholder="Delivery note / adjustment"></label><label class="wide">Notes<textarea name="notes" rows="2"></textarea></label><button class="button primary" type="submit">Save movement</button></form>`)}${panel("Stock Control Rule", "Fueling OUT berasal dari transaksi flow meter dan tidak diduplikasi", `<div class="solar-stock-rule"><strong>System Stock</strong><span>Opening stock + receipts − metered fueling ± adjustments</span><small>Semua perubahan manual tercatat bersama user yang melakukan input.</small></div>`)}</section>${panel("Stock Movement Log", "Non-fueling inventory movement", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Type</th><th>Direction</th><th>Quantity</th><th>Reference</th><th>Created by</th><th>Notes</th></tr></thead><tbody>${rows || `<tr><td colspan="7">Belum ada stock movement.</td></tr>`}</tbody></table></div>`)}`;
+}
+
+function solarOpnames(data) {
+  const rows = (data.opnames?.opnames || []).map((item) => `<tr><td><strong class="mono">${actualText(item.opname_number)}</strong><small>${actualTime(item.cutoff_at)}</small></td><td class="mono">${solarNumber(item.system_stock_liters)} L</td><td class="mono"><strong>${solarNumber(item.physical_stock_liters)} L</strong></td><td class="mono ${Math.abs(Number(item.variance_liters||0))>1?"solar-variance-bad":""}">${Number(item.variance_liters)>=0?"+":""}${solarNumber(item.variance_liters)} L</td><td>${item.accuracy_percent==null?"N/A":`${solarNumber(item.accuracy_percent,2)}%`}</td><td>${solarStatusPill(item.status)}</td><td>${actualText(item.measured_by)}</td><td>${["SUBMITTED","VERIFIED"].includes(item.status) ? `<div class="solar-row-actions">${item.status==="SUBMITTED"?`<button class="button small" data-solar-opname-action="VERIFY" data-solar-opname-id="${actualText(item.opname_id)}">Verify</button>`:""}${item.status==="VERIFIED"?`<button class="button primary small" data-solar-opname-action="POST" data-solar-opname-id="${actualText(item.opname_id)}">Post</button>`:""}<button class="button ghost small" data-solar-opname-action="REJECT" data-solar-opname-id="${actualText(item.opname_id)}">Reject</button></div>` : "—"}</td></tr>`).join("");
+  return `<section class="solar-operation-grid">${panel("New Stock Opname", "Bandingkan stok sistem dengan hasil pengukuran fisik", `<form class="solar-entry-form" data-solar-opname-form><label>Physical stock (L)<input type="number" name="physical_stock_liters" min="0" step="0.001" required></label><label>Measurement method<select name="measurement_method"><option value="DIPSTICK">Dipstick</option><option value="TANK_GAUGE">Tank gauge</option><option value="FLOWMETER_RECONCILIATION">Flowmeter reconciliation</option></select></label><label>Status<select name="status"><option value="SUBMITTED">Submit for verification</option><option value="DRAFT">Save draft</option></select></label><label class="wide">Notes<textarea name="notes" rows="2" placeholder="Kondisi tank, waktu ukur, atau catatan selisih"></textarea></label><button class="button primary" type="submit">Record opname</button></form>`)}${panel("Approval Workflow", "Pemisahan input dan validasi menjaga audit trail", `<div class="solar-workflow"><span>DRAFT</span><i>→</i><span>SUBMITTED</span><i>→</i><span>VERIFIED</span><i>→</i><span>POSTED</span></div><p class="solar-workflow-note">Supervisor, Engineer, atau Admin dapat memverifikasi dan mem-posting hasil opname.</p>`)}</section>${panel("Stock Opname History", "System stock, physical stock, variance, dan accuracy", `<div class="table-wrap"><table class="data-table"><thead><tr><th>Opname</th><th>System</th><th>Physical</th><th>Variance</th><th>Accuracy</th><th>Status</th><th>Measured by</th><th>Action</th></tr></thead><tbody>${rows || `<tr><td colspan="8">Belum ada stock opname.</td></tr>`}</tbody></table></div>`)}`;
+}
+
+function bindSolarTrendTooltips() {
+  const bars = document.querySelectorAll("[data-solar-trend-period]");
+  let tooltip = document.querySelector("[data-solar-trend-tooltip]");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.className = "solar-trend-tooltip";
+    tooltip.dataset.solarTrendTooltip = "true";
+    tooltip.setAttribute("role", "tooltip");
+    document.body.appendChild(tooltip);
+  }
+  tooltip.classList.remove("visible");
+  if (!bars.length) return;
+  const position = (x,y) => {
+    const left = Math.min(window.innerWidth-tooltip.offsetWidth-12,Math.max(12,x+14));
+    const top = Math.min(window.innerHeight-tooltip.offsetHeight-12,Math.max(12,y-tooltip.offsetHeight-14));
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  };
+  const show = (bar,x,y) => {
+    tooltip.textContent = `${bar.dataset.solarTrendPeriod}\nActual      ${bar.dataset.solarTrendActual}\nRequested   ${bar.dataset.solarTrendRequested}\nGap         ${bar.dataset.solarTrendGap}`;
+    tooltip.classList.add("visible");
+    position(x,y);
+  };
+  const hide = () => tooltip.classList.remove("visible");
+  bars.forEach((bar) => {
+    bar.addEventListener("pointerenter", (event) => show(bar,event.clientX,event.clientY));
+    bar.addEventListener("pointermove", (event) => position(event.clientX,event.clientY));
+    bar.addEventListener("pointerleave", hide);
+    bar.addEventListener("focus", () => { const rect=bar.getBoundingClientRect(); show(bar,rect.left+rect.width/2,rect.top); });
+    bar.addEventListener("blur", hide);
   });
 }

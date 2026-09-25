@@ -33,23 +33,35 @@ function userManagementPage() {
       </header>
 
       <section class="user-mgmt-kpis">
-        <div class="card kpi-card">
-          <span class="kpi-label">Total Pengguna</span>
+        <div class="card kpi-card" data-tooltip="Total Pengguna: Jumlah seluruh akun yang tersimpan di sistem">
+          <div class="kpi-top">
+            <span class="kpi-label">Total Pengguna</span>
+            <span class="b2b-tooltip-trigger" data-tooltip="Jumlah seluruh akun yang tersimpan di sistem">ⓘ</span>
+          </div>
           <strong class="kpi-value" id="user-mgmt-stat-total">${totalUsers}</strong>
           <small class="kpi-meta">Terdaftar dalam database</small>
         </div>
-        <div class="card kpi-card">
-          <span class="kpi-label">Pengguna Aktif</span>
+        <div class="card kpi-card" data-tooltip="Pengguna Aktif: Akun dengan status aktif yang diizinkan login">
+          <div class="kpi-top">
+            <span class="kpi-label">Pengguna Aktif</span>
+            <span class="b2b-tooltip-trigger" data-tooltip="Akun dengan status aktif yang diizinkan login">ⓘ</span>
+          </div>
           <strong class="kpi-value good" id="user-mgmt-stat-active">${activeUsers}</strong>
           <small class="kpi-meta">Dapat mengakses dashboard</small>
         </div>
-        <div class="card kpi-card">
-          <span class="kpi-label">Terkunci / Nonaktif</span>
+        <div class="card kpi-card" data-tooltip="Terkunci / Nonaktif: Akun terkunci karena percobaan login gagal berulang atau dinonaktifkan admin">
+          <div class="kpi-top">
+            <span class="kpi-label">Terkunci / Nonaktif</span>
+            <span class="b2b-tooltip-trigger" data-tooltip="Akun terkunci karena percobaan login gagal berulang atau dinonaktifkan admin">ⓘ</span>
+          </div>
           <strong class="kpi-value ${lockedOrInactiveUsers > 0 ? "warn" : "neutral"}" id="user-mgmt-stat-locked">${lockedOrInactiveUsers}</strong>
           <small class="kpi-meta">Perlu tindakan admin</small>
         </div>
-        <div class="card kpi-card">
-          <span class="kpi-label">Total Role</span>
+        <div class="card kpi-card" data-tooltip="Total Role: Jumlah tingkatan wewenang dan izin akses yang dikonfigurasi">
+          <div class="kpi-top">
+            <span class="kpi-label">Total Role</span>
+            <span class="b2b-tooltip-trigger" data-tooltip="Jumlah tingkatan wewenang dan izin akses yang dikonfigurasi">ⓘ</span>
+          </div>
           <strong class="kpi-value" id="user-mgmt-stat-roles">${totalRoles}</strong>
           <small class="kpi-meta"><a href="#/roles" style="color:var(--primary);text-decoration:none;">Kelola Menu Permissions →</a></small>
         </div>
@@ -88,12 +100,12 @@ function userManagementPage() {
           <table class="data-table" style="width:100%;margin:0;border:none;">
             <thead>
               <tr>
-                <th style="min-width:220px;">Pengguna</th>
-                <th style="min-width:200px;">Kontak & Departemen</th>
-                <th style="min-width:140px;">Role Akses</th>
-                <th style="min-width:120px;">Status</th>
-                <th style="min-width:160px;">Terakhir Login</th>
-                <th style="min-width:160px;text-align:right;">Aksi</th>
+                <th style="min-width:220px;">Pengguna <span class="b2b-tooltip-trigger" data-tooltip="Nama lengkap dan identifikasi username akun">ⓘ</span></th>
+                <th style="min-width:200px;">Kontak & Departemen <span class="b2b-tooltip-trigger" data-tooltip="Alamat email resmi dan unit kerja">ⓘ</span></th>
+                <th style="min-width:140px;">Role Akses <span class="b2b-tooltip-trigger" data-tooltip="Tingkat izin hak akses dan otorisasi">ⓘ</span></th>
+                <th style="min-width:120px;">Status <span class="b2b-tooltip-trigger" data-tooltip="Status operasional akun (Aktif, Nonaktif, Terkunci)">ⓘ</span></th>
+                <th style="min-width:160px;">Terakhir Login <span class="b2b-tooltip-trigger" data-tooltip="Waktu sesi login terakhir kali tercatat">ⓘ</span></th>
+                <th style="min-width:160px;text-align:right;">Aksi <span class="b2b-tooltip-trigger" data-tooltip="Operasi edit data, reset password, dan status akun">ⓘ</span></th>
               </tr>
             </thead>
             <tbody id="user-mgmt-tbody">

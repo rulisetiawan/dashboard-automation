@@ -453,9 +453,21 @@ func (s *TransactionSyncer) queryQRCodes(ctx context.Context, whereClause string
 				case int64:
 					rawMap[col] = v
 					intVal = &v
+				case int:
+					i := int64(v)
+					rawMap[col] = i
+					intVal = &i
+				case int32:
+					i := int64(v)
+					rawMap[col] = i
+					intVal = &i
 				case float64:
 					rawMap[col] = v
 					floatVal = &v
+				case float32:
+					f := float64(v)
+					rawMap[col] = f
+					floatVal = &f
 				default:
 					rawMap[col] = v
 				}
@@ -477,50 +489,15 @@ func (s *TransactionSyncer) queryQRCodes(ctx context.Context, whereClause string
 					r.Code = sql.NullString{String: *strVal, Valid: true}
 				}
 			case "jumlah":
-				if floatVal != nil {
-					r.Jumlah = sql.NullFloat64{Float64: *floatVal, Valid: true}
-				} else if strVal != nil {
-					var f float64
-					if _, err := fmt.Sscanf(*strVal, "%f", &f); err == nil {
-						r.Jumlah = sql.NullFloat64{Float64: f, Valid: true}
-					}
-				}
+				r.Jumlah = parseNullFloat(floatVal, intVal, strVal)
 			case "actual_solar":
-				if floatVal != nil {
-					r.ActualSolar = sql.NullFloat64{Float64: *floatVal, Valid: true}
-				} else if strVal != nil {
-					var f float64
-					if _, err := fmt.Sscanf(*strVal, "%f", &f); err == nil {
-						r.ActualSolar = sql.NullFloat64{Float64: f, Valid: true}
-					}
-				}
+				r.ActualSolar = parseNullFloat(floatVal, intVal, strVal)
 			case "total_solar_in":
-				if floatVal != nil {
-					r.TotalSolarIn = sql.NullFloat64{Float64: *floatVal, Valid: true}
-				} else if strVal != nil {
-					var f float64
-					if _, err := fmt.Sscanf(*strVal, "%f", &f); err == nil {
-						r.TotalSolarIn = sql.NullFloat64{Float64: f, Valid: true}
-					}
-				}
+				r.TotalSolarIn = parseNullFloat(floatVal, intVal, strVal)
 			case "total_solar_out":
-				if floatVal != nil {
-					r.TotalSolarOut = sql.NullFloat64{Float64: *floatVal, Valid: true}
-				} else if strVal != nil {
-					var f float64
-					if _, err := fmt.Sscanf(*strVal, "%f", &f); err == nil {
-						r.TotalSolarOut = sql.NullFloat64{Float64: f, Valid: true}
-					}
-				}
+				r.TotalSolarOut = parseNullFloat(floatVal, intVal, strVal)
 			case "calculated_volume":
-				if floatVal != nil {
-					r.CalculatedVolume = sql.NullFloat64{Float64: *floatVal, Valid: true}
-				} else if strVal != nil {
-					var f float64
-					if _, err := fmt.Sscanf(*strVal, "%f", &f); err == nil {
-						r.CalculatedVolume = sql.NullFloat64{Float64: f, Valid: true}
-					}
-				}
+				r.CalculatedVolume = parseNullFloat(floatVal, intVal, strVal)
 			case "process_type":
 				if strVal != nil {
 					r.ProcessType = sql.NullString{String: *strVal, Valid: true}
@@ -565,4 +542,20 @@ func (s *TransactionSyncer) queryQRCodes(ctx context.Context, whereClause string
 	}
 
 	return results, rows.Err()
+}
+
+func parseNullFloat(floatVal *float64, intVal *int64, strVal *string) sql.NullFloat64 {
+	if floatVal != nil {
+		return sql.NullFloat64{Float64: *floatVal, Valid: true}
+	}
+	if intVal != nil {
+		return sql.NullFloat64{Float64: float64(*intVal), Valid: true}
+	}
+	if strVal != nil {
+		var f float64
+		if _, err := fmt.Sscanf(*strVal, "%f", &f); err == nil {
+			return sql.NullFloat64{Float64: f, Valid: true}
+		}
+	}
+	return sql.NullFloat64{}
 }

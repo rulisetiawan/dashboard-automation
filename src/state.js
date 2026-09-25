@@ -921,13 +921,13 @@ function solarRequestKey() {
   return `${range.from}|${range.to}|${state.solar.search}|${state.solar.status}|${state.solar.page}|${state.solar.pageSize}`;
 }
 
-async function loadSolarFueling({ force = false, preserveScroll = true } = {}) {
+async function loadSolarFueling({ force = false, preserveScroll = true, background = false } = {}) {
   const key = solarRequestKey();
   if (solarFueling.loading || (!force && solarFueling.key === key && solarFueling.data)) return;
   const requestId = ++solarFueling.requestId;
   solarFueling.loading = true;
   solarFueling.error = null;
-  if (state.page === "solar") renderPage({ preserveScroll });
+  if (!solarFueling.data && !background && state.page === "solar") renderPage({ preserveScroll });
   try {
     const range = solarRange();
     const common = new URLSearchParams({ from: range.from, to: range.to });
@@ -949,6 +949,11 @@ async function loadSolarFueling({ force = false, preserveScroll = true } = {}) {
     solarFueling.loading = false;
     if (state.page === "solar") renderPage({ preserveScroll });
   }
+}
+
+function updateSolarBackground() {
+  if (state.page !== "solar" || solarFueling.loading || document.hidden) return;
+  void loadSolarFueling({ force: true, background: true });
 }
 
 function invalidateSolarFueling() {
@@ -1256,7 +1261,7 @@ async function refreshBackendSources(sources) {
   }
   if (refreshAll || sources.has("solar_fueling_transaction") || sources.has("solar_level_sample") || sources.has("solar_stock_movement") || sources.has("solar_stock_opname")) {
     invalidateSolarFueling();
-    if (state.page === "solar") tasks.push(loadSolarFueling({ force: true }));
+    if (state.page === "solar") tasks.push(loadSolarFueling({ force: true, background: true }));
   }
   if (refreshAll || sources.has("alarm_event") || sources.has("alarm_rule_state")) {
     tasks.push(fetchJson("/api/v1/alarms/recent?limit=100", "Alarm API").then((payload) => {
