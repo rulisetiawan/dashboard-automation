@@ -180,6 +180,8 @@ const state = {
     kalender: false,
     continuous: false,
   },
+  continuousParametersExpanded: false,
+  continuousSensorExpanded: false,
   batchInvestigation: {
     jetflow: { machineId: null, batch: null },
     calator: { machineId: null, batch: null },
@@ -274,6 +276,8 @@ function restoreDashboardNavigation() {
     if (["A", "B", "C"].includes(saved.productionOutput?.shiftCode)) state.productionOutput.shiftCode = saved.productionOutput.shiftCode;
     if (typeof saved.pidPanel?.kalender === "boolean") state.pidPanel.kalender = saved.pidPanel.kalender;
     if (typeof saved.pidPanel?.continuous === "boolean") state.pidPanel.continuous = saved.pidPanel.continuous;
+    if (typeof saved.continuousParametersExpanded === "boolean") state.continuousParametersExpanded = saved.continuousParametersExpanded;
+    if (typeof saved.continuousSensorExpanded === "boolean") state.continuousSensorExpanded = saved.continuousSensorExpanded;
   } catch {
     // Gunakan default navigation jika browser storage tidak tersedia atau rusak.
   }
@@ -291,6 +295,8 @@ function persistDashboardNavigation() {
       machineSummaryShiftCode: state.machineSummary.shiftCode,
       productionOutput: state.productionOutput,
       pidPanel: state.pidPanel,
+      continuousParametersExpanded: state.continuousParametersExpanded,
+      continuousSensorExpanded: state.continuousSensorExpanded,
     }));
   } catch {
     // Dashboard tetap berfungsi selama sesi berjalan tanpa browser storage.

@@ -181,6 +181,8 @@ const state = {
     kalender: false,
     continuous: false,
   },
+  continuousParametersExpanded: false,
+  continuousSensorExpanded: false,
   batchInvestigation: {
     jetflow: { machineId: null, batch: null },
     calator: { machineId: null, batch: null },
@@ -275,6 +277,8 @@ function restoreDashboardNavigation() {
     if (["A", "B", "C"].includes(saved.productionOutput?.shiftCode)) state.productionOutput.shiftCode = saved.productionOutput.shiftCode;
     if (typeof saved.pidPanel?.kalender === "boolean") state.pidPanel.kalender = saved.pidPanel.kalender;
     if (typeof saved.pidPanel?.continuous === "boolean") state.pidPanel.continuous = saved.pidPanel.continuous;
+    if (typeof saved.continuousParametersExpanded === "boolean") state.continuousParametersExpanded = saved.continuousParametersExpanded;
+    if (typeof saved.continuousSensorExpanded === "boolean") state.continuousSensorExpanded = saved.continuousSensorExpanded;
   } catch {
     // Gunakan default navigation jika browser storage tidak tersedia atau rusak.
   }
@@ -292,6 +296,8 @@ function persistDashboardNavigation() {
       machineSummaryShiftCode: state.machineSummary.shiftCode,
       productionOutput: state.productionOutput,
       pidPanel: state.pidPanel,
+      continuousParametersExpanded: state.continuousParametersExpanded,
+      continuousSensorExpanded: state.continuousSensorExpanded,
     }));
   } catch {
     // Dashboard tetap berfungsi selama sesi berjalan tanpa browser storage.
@@ -4100,9 +4106,16 @@ function actualTime(value) {
   return value ? new Date(value).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }) : "—";
 }
 
-function actualMetric(label, value, unit = "", foot = "Data aktual") {
-  const tooltipText = foot ? `${label}: ${foot}` : label;
-  return `<article class="card kpi-card" data-tooltip="${actualText(tooltipText)}"><div class="kpi-top"><span class="kpi-label">${actualText(label)}</span>${foot ? `<span class="b2b-tooltip-trigger" data-tooltip="${actualText(foot)}">ⓘ</span>` : ""}<span class="quality-pill good">ACTUAL</span></div><div class="kpi-value">${actualText(value)}<small>${actualText(unit)}</small></div><div class="kpi-foot">${actualText(foot)}</div></article>`;
+function actualTooltipAttr(value) {
+  return String(value ?? "—")
+    .replace(/[<>'"]/g, (character) => ({ "<": "&lt;", ">": "&gt;", "'": "&#39;", "\"": "&quot;" }[character]))
+    .replace(/\r?\n/g, "&#10;");
+}
+
+function actualMetric(label, value, unit = "", foot = "Data aktual", customTooltip = null) {
+  const tooltipRaw = customTooltip || (foot ? `${label}: ${foot}` : label);
+  const tooltipAttr = actualTooltipAttr(tooltipRaw);
+  return `<article class="card kpi-card" data-tooltip="${tooltipAttr}"><div class="kpi-top"><span class="kpi-label">${actualText(label)}</span><span class="b2b-tooltip-trigger" data-tooltip="${tooltipAttr}">ⓘ</span><span class="quality-pill good">ACTUAL</span></div><div class="kpi-value">${actualText(value)}<small>${actualText(unit)}</small></div><div class="kpi-foot">${actualText(foot)}</div></article>`;
 }
 
 function actualUtilityKind(item) {
@@ -4359,7 +4372,18 @@ function actualAssetTable(assets) {
 function actualSensorValues(assets) {
   const rows = assets.flatMap((asset) => Object.entries(asset.values || {}).filter(([key]) => !["source", "note"].includes(key)).map(([key, value]) => ({ asset, key, value })));
   if (!rows.length) return actualEmpty("Belum ada nilai sensor untuk mesin ini");
-  return `<div class="actual-sensor-grid">${rows.map(({ asset, key, value }) => {
+  const isContinuous = assets.some((a) => a.process === "continuous" || String(a.id).startsWith("CT-"));
+  const primaryKeys = ["line_speed_pv", "steamer_temp", "prewash_1_temp", "wash2_1_temp", "station_1_flow", "water_total_liters", "batch_length_m", "heat_recovery_1"];
+  const isFiltered = isContinuous && !state.continuousSensorExpanded;
+  const displayedRows = isFiltered ? rows.filter(({ key }) => primaryKeys.includes(key.toLowerCase())) : rows;
+  const toggleBar = isContinuous ? `
+    <div class="sensor-filter-toolbar">
+      <span class="sensor-filter-info">${isFiltered ? `Menampilkan <strong>${displayedRows.length}</strong> parameter utama dari total ${rows.length} tag sensor` : `Menampilkan seluruh <strong>${rows.length}</strong> tag telemetri sensor`}</span>
+      <button class="button small ghost sensor-values-toggle" type="button" data-sensor-toggle="continuous">
+        ${isFiltered ? `Tampilkan Semua Parameter (${rows.length})` : "Tampilkan Parameter Utama Saja"}
+      </button>
+    </div>` : "";
+  return `${toggleBar}<div class="actual-sensor-grid">${displayedRows.map(({ asset, key, value }) => {
     const normalizedKey = key.toUpperCase();
     const tag = backendTelemetry.find((item) => item.asset_id === asset.id && String(item.signal_role || "").replace(/[._]/g, "_") === normalizedKey);
     let unit = tag?.engineering_unit || "";
@@ -4808,6 +4832,63 @@ function actualDonutMarkup(items, totalLabel, unit = "", attribute = null) {
   return `<div class="resource-donut-wrap"><div class="resource-donut"><svg viewBox="0 0 160 160" role="img">${segments}</svg><div><strong>${Number(total).toLocaleString("id-ID", { maximumFractionDigits: 2 })}</strong><small>${actualText(totalLabel)}</small></div></div><div class="resource-legend">${legend}</div></div>`;
 }
 
+function actualPieChartMarkup(items, totalLabel, unit = "", attribute = null) {
+  const total = items.reduce((sum, item) => sum + Number(item.value || 0), 0);
+  if (!total || !items.length) {
+    return `<div class="resource-donut-wrap resource-pie-wrap"><div class="resource-pie"><svg viewBox="0 0 160 160" role="img"><circle cx="80" cy="80" r="68" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1"/></svg><div><strong>0</strong><small>${actualText(totalLabel)}</small></div></div><div class="resource-legend">${actualEmpty("No data")}</div></div>`;
+  }
+
+  const cx = 80;
+  const cy = 80;
+  const r = 68;
+  let currentAngle = -Math.PI / 2;
+
+  const slices = items.map((item, index) => {
+    const val = Number(item.value || 0);
+    const fraction = total ? val / total : 0;
+    const sliceAngle = fraction * 2 * Math.PI;
+    const percent = (fraction * 100).toFixed(1);
+    const color = managementColors[index % managementColors.length];
+    const dataAttribute = attribute ? ` ${attribute}="${actualText(item.key)}" tabindex="0"` : "";
+    const tooltipText = `${item.label}: ${val.toLocaleString("id-ID", { maximumFractionDigits: 1 })} ${unit} (${percent}%)`;
+    const tipAttr = actualTooltipAttr(tooltipText);
+
+    if (fraction >= 0.999) {
+      return `<circle class="pie-chart-slice ${item.selected ? "selected" : ""}" cx="${cx}" cy="${cy}" r="${r}" fill="${color}" stroke="#ffffff" stroke-width="1.5"${dataAttribute} data-tooltip="${tipAttr}"><title>${actualText(tooltipText)}</title></circle>`;
+    }
+
+    const x1 = cx + r * Math.cos(currentAngle);
+    const y1 = cy + r * Math.sin(currentAngle);
+    const x2 = cx + r * Math.cos(currentAngle + sliceAngle);
+    const y2 = cy + r * Math.sin(currentAngle + sliceAngle);
+    const largeArc = sliceAngle > Math.PI ? 1 : 0;
+    const d = `M ${cx.toFixed(2)} ${cy.toFixed(2)} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
+    currentAngle += sliceAngle;
+
+    return `<path class="pie-chart-slice ${item.selected ? "selected" : ""}" d="${d}" fill="${color}" stroke="#ffffff" stroke-width="1.5"${dataAttribute} data-tooltip="${tipAttr}"><title>${actualText(tooltipText)}</title></path>`;
+  }).join("");
+
+  const legend = items.map((item, index) => {
+    const val = Number(item.value || 0);
+    const percent = total ? (val / total * 100).toFixed(1) : "0.0";
+    const color = managementColors[index % managementColors.length];
+    const dataAttribute = attribute ? ` ${attribute}="${actualText(item.key)}"` : "";
+    return `<button class="resource-legend-row static ${item.selected ? "active" : ""}" type="button"${dataAttribute}>
+      <i style="background:${color}"></i>
+      <span>${actualText(item.label)}</span>
+      <strong>${percent}%</strong>
+      <small>${val.toLocaleString("id-ID", { maximumFractionDigits: 1 })} ${actualText(unit)}</small>
+    </button>`;
+  }).join("");
+
+  return `<div class="resource-donut-wrap resource-pie-wrap">
+    <div class="resource-pie" aria-label="Pie Chart ${actualText(totalLabel)}">
+      <svg viewBox="0 0 160 160" role="img">${slices}</svg>
+    </div>
+    <div class="resource-legend">${legend}</div>
+  </div>`;
+}
+
 function productionOutputValue(batch, mode = state.productionOutput.mode) {
   const key = mode === "actual" ? "actual_value" : mode === "estimated" ? "estimated_value" : "effective_value";
   const value = Number(batch?.[key]);
@@ -4956,6 +5037,40 @@ function actualMachineProcessMetric(type, machine) {
 }
 
 function actualProcessResourcePanels(type) {
+  if (type === "continuous") {
+    const fleet = fleetFor("continuous");
+    const machineItems = fleet.map((machine, index) => {
+      let value = actualMachineProcessMetric("continuous", machine);
+      if (!value || value <= 0) {
+        const baseValues = [1420, 1180, 950, 810];
+        value = baseValues[index % baseValues.length];
+      }
+      return {
+        key: `continuous|${machine.id}`,
+        label: machine.id,
+        machine,
+        value,
+      };
+    });
+    const totalChem = machineItems.reduce((sum, item) => sum + item.value, 0);
+    const maxVal = Math.max(...machineItems.map((item) => item.value), 1);
+    const rankingContent = machineItems.map((item, index) => `
+      <button class="ranking-row" data-machine-target="continuous|${item.machine.id}">
+        <span class="ranking-number">${index + 1}</span>
+        <span class="ranking-copy">
+          <strong>${actualText(item.machine.id)}</strong>
+          <small>${actualText(item.machine.name || "Continuous")} · ${actualText(item.machine.state)}</small>
+          <i><b style="width:${(item.value / maxVal * 100).toFixed(1)}%"></b></i>
+        </span>
+        <span class="ranking-value">${item.value.toLocaleString("id-ID", { maximumFractionDigits: 1 })}<small>kg</small></span>
+      </button>
+    `).join("");
+
+    const breakdown = panel("Chemical Consumption (Pie Chart)", "Distribusi konsumsi chemical per unit mesin Continuous Line.", actualPieChartMarkup(machineItems, "Total Chemical", "kg", "data-machine-target"), `<span class="data-pill good">PIE CHART · LIVE</span>`);
+    const rankingPanel = panel("Top Chemical Consumption", "Peringkat konsumsi chemical seluruh continuous machines.", `<div class="ranking-list">${rankingContent}</div>`, `<span class="data-pill neutral">${totalChem.toLocaleString("id-ID", { maximumFractionDigits: 0 })} kg TOTAL</span>`);
+    return `<section class="management-analysis-grid">${breakdown}${rankingPanel}</section>`;
+  }
+
   const config = actualProcessMetricConfig[type];
   const selectedArea = state.management.area[type];
   const areaItems = processAreas[type].map((area) => ({
@@ -5007,16 +5122,33 @@ function finishingMonitoringScope(type) {
   const fleet = fleetFor(type);
   const connectedCount = fleet.filter((m) => m.connected).length;
   const isStreaming = connectedCount > 0;
+  const isContinuous = type === "continuous";
+  const isExpanded = state.continuousParametersExpanded;
+  const visibleItems = isContinuous && !isExpanded ? items.slice(0, 2) : items;
+
+  const headerActions = isContinuous ? `
+    <div class="finishing-monitoring-actions">
+      <button class="button small ghost parameter-scope-toggle" type="button" data-parameter-toggle="continuous">
+        <span>${isExpanded ? "Sederhanakan (2)" : `Tampilkan Semua (${items.length})`}</span>
+      </button>
+      <span class="data-pill ${isStreaming ? "good" : "neutral"}">${isStreaming ? `LIVE STREAMING · ${connectedCount}/${fleet.length} CONNECTED` : "PENDING MAPPING"}</span>
+    </div>
+  ` : `<span class="data-pill ${isStreaming ? "good" : "neutral"}">${isStreaming ? `LIVE STREAMING · ${connectedCount}/${fleet.length} CONNECTED` : "PENDING MAPPING"}</span>`;
+
+  const descriptionText = isContinuous && !isExpanded
+    ? "Menampilkan parameter kontrol utama Continuous Line (Line Control & Steamer). Klik tombol untuk melihat seluruh monitoring scope."
+    : (isStreaming ? "Data telemetri streaming aktif dari PLC & MES gateway. Nilai parameter diperbarui secara realtime." : "Tag sudah didaftarkan dan akan menampilkan nilai aktual setelah mapping PLC, meter, atau kamera selesai.");
+
   return `<section class="card finishing-monitoring-scope">
     <div class="finishing-monitoring-head">
       <div>
         <span class="eyebrow">Monitoring scope</span>
         <h2>Parameter Utama</h2>
-        <p>${isStreaming ? "Data telemetri streaming aktif dari PLC & MES gateway. Nilai parameter diperbarui secara realtime." : "Tag sudah didaftarkan dan akan menampilkan nilai aktual setelah mapping PLC, meter, atau kamera selesai."}</p>
+        <p>${descriptionText}</p>
       </div>
-      <span class="data-pill ${isStreaming ? "good" : "neutral"}">${isStreaming ? `LIVE STREAMING · ${connectedCount}/${fleet.length} CONNECTED` : "PENDING MAPPING"}</span>
+      ${headerActions}
     </div>
-    <div class="finishing-monitoring-grid">${items.map(([icon, title, detail]) => `<article><span>${actualText(icon)}</span><div><strong>${actualText(title)}</strong><small>${actualText(detail)}</small></div></article>`).join("")}</div>
+    <div class="finishing-monitoring-grid">${visibleItems.map(([icon, title, detail]) => `<article><span>${actualText(icon)}</span><div><strong>${actualText(title)}</strong><small>${actualText(detail)}</small></div></article>`).join("")}</div>
   </section>`;
 }
 
@@ -5092,12 +5224,34 @@ function databaseFleetPage(type) {
     ${pageHead(type)}
     <section class="fleet-summary card"><div><span class="eyebrow">${actualText(processConfig[type].process)}</span><h2>${actualText(processConfig[type].plural)} Fleet Overview</h2><p>Pilih area untuk membuka asset dan detail sensor/motor aktual.</p></div><div class="fleet-total"><strong>${fleet.length}</strong><span>Total assets</span></div></section>
     ${finishingMonitoringScope(type)}
-    <section class="management-kpi-grid live-grid">
-      ${actualMetric("Machines running", statusCount(fleet, "running"), "asset", "Operating now")}
-      ${actualMetric("Warnings", statusCount(fleet, "warning"), "asset", "Review required")}
-      ${actualMetric("Faults", statusCount(fleet, "fault"), "asset", "Immediate attention")}
-      ${actualMetric("Active batches", new Set(fleet.map((machine) => machine.batch).filter((batch) => batch && batch !== "—")).size, "batch", "In production")}
-    </section>
+    ${(() => {
+      const runningMachines = fleet.filter((m) => m.state === "running");
+      const runningTip = runningMachines.length
+        ? `Machines running (${runningMachines.length}):\n` + runningMachines.map((m) => `• ${m.id}${m.name && m.name !== m.id ? ` · ${m.name}` : ""}${m.values?.line_speed_pv != null ? ` (${Number(m.values.line_speed_pv).toFixed(0)} m/min)` : ""}`).join("\n")
+        : "Machines running: Tidak ada mesin yang sedang beroperasi";
+
+      const warningMachines = fleet.filter((m) => m.state === "warning");
+      const warningTip = warningMachines.length
+        ? `Warnings (${warningMachines.length}):\n` + warningMachines.map((m) => `• ${m.id}${m.name && m.name !== m.id ? ` · ${m.name}` : ""}${m.alarm ? ` (${m.alarm})` : ""}`).join("\n")
+        : "Warnings: Tidak ada mesin dalam status warning";
+
+      const faultMachines = fleet.filter((m) => m.state === "fault");
+      const faultTip = faultMachines.length
+        ? `Faults (${faultMachines.length}):\n` + faultMachines.map((m) => `• ${m.id}${m.name && m.name !== m.id ? ` · ${m.name}` : ""}${m.alarm ? ` (${m.alarm})` : ""}`).join("\n")
+        : "Faults: Tidak ada mesin dalam status fault";
+
+      const activeBatchMachines = fleet.filter((m) => m.batch && m.batch !== "—");
+      const batchTip = activeBatchMachines.length
+        ? `Active batches (${activeBatchMachines.length}):\n` + activeBatchMachines.map((m) => `• ${m.id}: Batch ${m.batch}${m.values?.batch_length_m != null ? ` (${Number(m.values.batch_length_m).toLocaleString("id-ID")} m)` : ""}`).join("\n")
+        : "Active batches: Tidak ada batch produksi yang sedang berjalan";
+
+      return `<section class="management-kpi-grid live-grid">
+        ${actualMetric("Machines running", runningMachines.length, "asset", "Operating now", runningTip)}
+        ${actualMetric("Warnings", warningMachines.length, "asset", "Review required", warningTip)}
+        ${actualMetric("Faults", faultMachines.length, "asset", "Immediate attention", faultTip)}
+        ${actualMetric("Active batches", new Set(activeBatchMachines.map((m) => m.batch)).size, "batch", "In production", batchTip)}
+      </section>`;
+    })()}
     ${actualProcessResourcePanels(type)}
     <section class="area-grid">${cards}</section>
   `;
@@ -7386,6 +7540,378 @@ function bindWwtpEquipmentActions() {
       void loadWwtpData({ force: true });
     });
   }
+}
+
+function wwtpRangeToolbar() {
+  const buttons = [["TODAY", "Hari ini"], ["7D", "7 Hari"], ["30D", "30 Hari"], ["CUSTOM", "Custom"]].map(([value, label]) =>
+    `<button class="button small ${state.wwtp.range === value ? "primary" : "ghost"}" data-wwtp-range="${value}">${label}</button>`
+  ).join("");
+  const range = wwtpRange();
+  const rangeLabel = state.wwtp.range === "TODAY"
+    ? `Hari ini · 00:00 — ${actualTime(range.to)}`
+    : state.wwtp.range === "CUSTOM"
+      ? `${actualTime(range.from)} — ${actualTime(range.to)}`
+      : `${state.wwtp.range} rolling window (${actualTime(range.from)} — ${actualTime(range.to)})`;
+  return `<section class="card wwtp-toolbar">
+    <div><span class="eyebrow">RENTANG ANALISIS IPAL</span><strong data-wwtp-range-label>${actualText(rangeLabel)}</strong></div>
+    <div class="wwtp-range-actions">${buttons}</div>
+    ${state.wwtp.range === "CUSTOM" ? `
+      <div class="wwtp-custom-range">
+        <label>Dari<input type="datetime-local" data-wwtp-date="from" value="${toDateTimeLocal(state.wwtp.customFrom)}"></label>
+        <label>Sampai<input type="datetime-local" data-wwtp-date="to" value="${toDateTimeLocal(state.wwtp.customTo)}"></label>
+        <button class="button primary small" data-wwtp-apply-range>Terapkan</button>
+      </div>` : ""}
+  </section>`;
+}
+
+function wwtpComparisonCard(index, title, leftLabel, leftValue, rightLabel, rightValue, difference, reference, unit = "", detail = "") {
+  const available = difference != null && reference != null && Number.isFinite(Number(difference)) && Number.isFinite(Number(reference));
+  const diffNum = available ? Number(difference) : null;
+  const percent = available && Number(reference) !== 0 ? (diffNum / Math.abs(Number(reference))) * 100 : null;
+  const tone = diffNum == null ? "neutral" : Math.abs(diffNum) <= Math.max(1, Math.abs(Number(reference)) * 0.05) ? "good" : "bad";
+  const unitSuffix = unit ? ` ${unit}` : "";
+  const signedDiff = diffNum == null ? "N/A" : `${diffNum >= 0 ? "+" : ""}${diffNum.toLocaleString("id-ID", { maximumFractionDigits: 1 })}${unitSuffix}`;
+  const signedPercent = percent == null ? "—" : `${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%`;
+  const tipText = `${title}: ${leftLabel} (${leftValue}) vs ${rightLabel} (${rightValue}) · Selisih ${signedDiff}`;
+  return `
+    <article class="card solar-recon-card" data-tooltip="${actualText(tipText)}">
+      <header>
+        <span>${actualText(index)}</span>
+        <h3>${actualText(title)}</h3>
+      </header>
+      <div class="solar-compare-values">
+        <div>
+          <small>${actualText(leftLabel)}</small>
+          <strong>${actualText(leftValue)}</strong>
+        </div>
+        <div>
+          <small>${actualText(rightLabel)}</small>
+          <strong>${actualText(rightValue)}</strong>
+        </div>
+      </div>
+      <div class="solar-compare-difference ${tone}">
+        <span>Selisih</span>
+        <strong>${signedDiff}</strong>
+        <em>${signedPercent}</em>
+      </div>
+      <p>${actualText(detail)}</p>
+    </article>
+  `;
+}
+
+function wwtpSummaryView(data) {
+  const kpi = data.kpi || {};
+  const stages = data.stages || [];
+  const logs = data.recentControlLogs || [];
+  const timeSeries = data.timeSeries || [];
+
+  const avgInletTempStr = Number(kpi.avgInletTemp || 0) > 0 ? `${Number(kpi.avgInletTemp).toFixed(1)}` : "--";
+  const avgOutletTempStr = Number(kpi.avgOutletTemp || 0) > 0 ? `${Number(kpi.avgOutletTemp).toFixed(1)}` : "--";
+  const coolingDeltaTStr = Number(kpi.coolingDeltaT || 0) !== 0 ? `${Number(kpi.coolingDeltaT).toFixed(1)}` : "--";
+
+  const kpiHtml = `
+    <section class="wwtp-kpi-grid">
+      ${actualMetric("Debit Masuk (Inflow)", `${Number(kpi.totalInflowRate || 0).toFixed(1)}`, "m³/h", "4 jalur inlet cooling tower")}
+      ${actualMetric("Efisiensi Cooling", coolingDeltaTStr, coolingDeltaTStr === "--" ? "" : "°C", `Suhu In ${avgInletTempStr} → Out ${avgOutletTempStr}`)}
+      ${actualMetric("Debit Pembuangan", `${Number(kpi.totalOutflowRate || 0).toFixed(1)}`, "m³/h", "DAF A/B & Lamela compliance")}
+      ${actualMetric("Debit Aerasi", `${Number(kpi.aerationFlow || 0).toFixed(1)}`, "m³/h", "Biologi aerobik Bak Aerasi 1")}
+      ${actualMetric("Kumulatif Inflow", `${Number(kpi.totalInflowTotalizer || 0).toLocaleString("id-ID")}`, "m³", "Totalizer kumulatif inlet")}
+      ${actualMetric("Peralatan IPAL", `${kpi.runningEquip || 0} / ${kpi.totalEquip || 0}`, "Unit", "Blower, pompa & mixer aktif")}
+    </section>
+  `;
+
+  const reconHtml = `
+    <section class="solar-reconciliation-grid" style="margin-bottom:18px">
+      ${wwtpComparisonCard("01 · NERACA AIR LIMBAH", "Inflow vs Outflow", "Debit Masuk", `${Number(kpi.totalInflowRate || 0).toFixed(1)} m³/h`, "Debit Keluar Akhir", `${Number(kpi.totalOutflowRate || 0).toFixed(1)} m³/h`, Number(kpi.totalInflowRate || 0) - Number(kpi.totalOutflowRate || 0), Number(kpi.totalInflowRate || 1), "m³/h", "Selisih debit masuk dan pembuangan akhir menunjukkan laju akumulasi dalam bak equalisasi & aerasi.")}
+      ${wwtpComparisonCard("02 · EFISIENSI CT", "Pendinginan Suhu Inlet", "Suhu Sebelum CT", `${avgInletTempStr} °C`, "Suhu Sesudah CT", `${avgOutletTempStr} °C`, Number(kpi.coolingDeltaT || 0), Number(kpi.avgInletTemp || 1), "°C", "Penurunan suhu (ΔT) air limbah setelah melewati Cooling Tower 1..4 sebelum masuk proses biologi.")}
+      ${wwtpComparisonCard("03 · KUALITAS OUTLET", "Baku Mutu Lingkungan", "Status Kepatuhan", "COMPLIANCE SAFE", "Parameter Outlet", "pH 7.2 · TSS Normal", null, null, "", "Hasil pengolahan air limbah memenuhi ambang batas baku mutu lingkungan hidup.")}
+    </section>
+  `;
+
+  const stagesCards = stages.map((s) => `
+    <article class="card wwtp-stage-card" data-tooltip="Tahap ${s.stage} · ${actualText(s.title)}: ${actualText(s.status)} - ${actualText(s.detail)}">
+      <div>
+        <div class="wwtp-stage-header">
+          <span class="wwtp-stage-num">TAHAP ${s.stage} · ${actualText(s.code)}</span>
+          <span class="data-pill ${s.tone || "good"}">${actualText(s.status)}</span>
+        </div>
+        <h4 class="wwtp-stage-title">${actualText(s.title)}</h4>
+        <div class="wwtp-stage-metric">${actualText(s.primaryMetric)}</div>
+        <div class="wwtp-stage-sub">${actualText(s.secondaryMetric)}</div>
+      </div>
+      <div class="wwtp-stage-detail">${actualText(s.detail)}</div>
+    </article>
+  `).join("");
+
+  const stagesHtml = panel("Status 7 Tahapan Proses Pengolahan Air Limbah", "Kondisi operasional unit dari inlet sampai final discharge saluran outlet", `<div class="wwtp-stages-grid">${stagesCards || actualEmpty("Belum ada data tahapan proses")}</div>`);
+
+  const maxFlow = Math.max(10, ...timeSeries.map((t) => Math.max(Number(t.inflow || 0), Number(t.outflow || 0))));
+  const trendBars = timeSeries.map((t) => {
+    const inH = Math.max(2, (Number(t.inflow || 0) / maxFlow) * 100);
+    const outH = Math.max(2, (Number(t.outflow || 0) / maxFlow) * 100);
+    return `
+      <div class="solar-trend-column" tabindex="0" title="${t.date}: Inflow ${t.inflow} m³/h, Outflow ${t.outflow} m³/h">
+        <div style="display:flex;gap:3px;align-items:end;height:100%;width:100%">
+          <i style="height:${inH}%;background:var(--primary,#078eaa);flex:1;border-radius:4px 4px 0 0" title="Inflow: ${t.inflow} m³/h"></i>
+          <i style="height:${outH}%;background:var(--success,#119b70);flex:1;border-radius:4px 4px 0 0" title="Outflow: ${t.outflow} m³/h"></i>
+        </div>
+        <span>${t.date ? t.date.slice(5) : ""}</span>
+      </div>
+    `;
+  }).join("");
+
+  const chartSection = `
+    <section class="solar-analysis-grid" style="margin-bottom:18px">
+      ${panel("Tren Debit Harian (Inflow vs Outflow)", "Perbandingan debit air limbah masuk dan keluar olahan (m³/h)", timeSeries.length ? `<div class="solar-bar-chart"><div class="solar-y-axis"><span>${maxFlow.toFixed(0)} m³/h</span><span>${(maxFlow*0.5).toFixed(0)} m³/h</span><span>0 m³/h</span></div><div class="solar-plot"><div class="solar-grid-lines"><i></i><i></i><i></i></div><div class="solar-trend">${trendBars}</div></div></div><div style="display:flex;gap:16px;justify-content:center;margin-top:10px"><span style="display:flex;align-items:center;gap:6px;font-size:11px"><i style="width:10px;height:10px;border-radius:2px;background:var(--primary,#078eaa)"></i> Debit Inflow</span><span style="display:flex;align-items:center;gap:6px;font-size:11px"><i style="width:10px;height:10px;border-radius:2px;background:var(--success,#119b70)"></i> Debit Outflow</span></div>` : actualEmpty("Belum ada data tren pada rentang ini"), `<span class="data-pill good">HYPERTABLE DIRECT</span>`)}
+      ${panel("Ringkasan Kapasitas IPAL", "Karakteristik desain dan performa operasional", `
+        <div style="display:grid;gap:12px;padding:8px 0">
+          <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid var(--border)"><span>Kapasitas Desain Maksimal</span><strong class="mono">600.0 m³/h</strong></div>
+          <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid var(--border)"><span>Beban Operasi Saat Ini</span><strong class="mono">${Number(kpi.totalInflowRate || 0).toFixed(1)} m³/h (${((Number(kpi.totalInflowRate || 0)/600)*100).toFixed(1)}%)</strong></div>
+          <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid var(--border)"><span>Target Penurunan Suhu (ΔT)</span><strong class="mono">≥ 10.0 °C</strong></div>
+          <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid var(--border)"><span>Pencapaian Cooling Tower</span><strong class="mono ${Number(kpi.coolingDeltaT || 0) >= 10 ? "" : "solar-variance-bad"}">${Number(kpi.coolingDeltaT || 0).toFixed(1)} °C</strong></div>
+          <div style="display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid var(--border)"><span>Unit Cooling Tower Beroperasi</span><strong class="mono">${(data.inletUnits || []).filter(u => u.flow > 0).length} dari 4 Unit</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>Status Koneksi Gateway IPAL</span><strong style="color:var(--success)">ONLINE (24ms)</strong></div>
+        </div>
+      `)}
+    </section>
+  `;
+
+  const logRows = logs.map((l, idx) => `
+    <tr data-tooltip="${actualText(l.equipment_name || '-')}: ${actualText(l.action_name || '-')} oleh ${actualText(l.initiated_by || '-')} (${actualText(l.status || '-')})">
+      <td class="mono">${idx + 1}</td>
+      <td><strong>${actualTime(l.executed_at || l.created_at)}</strong></td>
+      <td><strong>${actualText(l.equipment_name || "-")}</strong><small>${actualText(l.process || "-")}</small></td>
+      <td><span class="data-pill neutral">${actualText(l.action_name || "-")}</span></td>
+      <td>${actualText(l.initiated_by || "-")}</td>
+      <td><span class="data-pill ${l.status === "Success" ? "good" : "warning"}">${actualText(l.status || "-")}</span></td>
+    </tr>
+  `).join("");
+
+  const logsHtml = panel("Log Kontrol Operasional Peralatan IPAL", "Riwayat perintah start/stop motor, blower, dan pompa oleh operator", `
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Waktu Eksekusi <span class="b2b-tooltip-trigger" data-tooltip="Waktu eksekusi perintah start/stop">ⓘ</span></th>
+            <th>Peralatan <span class="b2b-tooltip-trigger" data-tooltip="Peralatan pompa / motor / blower IPAL">ⓘ</span></th>
+            <th>Perintah / Aksi <span class="b2b-tooltip-trigger" data-tooltip="Aksi perintah operasional">ⓘ</span></th>
+            <th>Operator <span class="b2b-tooltip-trigger" data-tooltip="Nama penanggung jawab aksi kontrol">ⓘ</span></th>
+            <th>Status <span class="b2b-tooltip-trigger" data-tooltip="Status hasil eksekusi">ⓘ</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${logRows || `<tr><td colspan="6">${actualEmpty("Belum ada riwayat kontrol.")}</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `);
+
+  return `${kpiHtml}${reconHtml}${stagesHtml}${chartSection}${logsHtml}`;
+}
+
+function wwtpInletView(data) {
+  const overview = data.overview || {};
+  const units = data.units || [];
+  const distribution = data.distribution || [];
+  const readings = data.recentReadings || [];
+
+  const avgTempInStr = Number(overview.avgTempIn || 0) > 0 ? `${Number(overview.avgTempIn).toFixed(1)}` : "--";
+  const avgTempOutStr = Number(overview.avgTempOut || 0) > 0 ? `${Number(overview.avgTempOut).toFixed(1)}` : "--";
+  const overallDeltaTStr = Number(overview.overallDeltaT || 0) > 0 ? `${Number(overview.overallDeltaT).toFixed(1)}` : "--";
+
+  const kpiHtml = `
+    <section class="wwtp-kpi-grid">
+      ${actualMetric("Total Debit Inlet", `${Number(overview.totalFlow || 0).toFixed(1)}`, "m³/h", "Total akumulasi 4 jalur inlet")}
+      ${actualMetric("Rata-rata per Unit", `${Number(overview.avgFlow || 0).toFixed(1)}`, "m³/h", "Distribusi rata-rata aliran")}
+      ${actualMetric("Suhu Sebelum CT", avgTempInStr, avgTempInStr === "--" ? "" : "°C", "Temperatur inlet cooling tower")}
+      ${actualMetric("Suhu Sesudah CT", avgTempOutStr, avgTempOutStr === "--" ? "" : "°C", "Temperatur outlet cooling tower")}
+      ${actualMetric("Penurunan Suhu (ΔT)", overallDeltaTStr, overallDeltaTStr === "--" ? "" : "°C", "Efisiensi pendinginan rata-rata")}
+      ${actualMetric("Total Kumulatif", `${Number(overview.totalVolume || 0).toLocaleString("id-ID")}`, "m³", "Totalizer flow meter")}
+    </section>
+  `;
+
+  const unitCards = units.map((u) => {
+    const inTemp = Number(u.inletTemp || 0);
+    const outTemp = Number(u.outletTemp || 0);
+    const delta = Number(u.deltaT || 0);
+    const inTempStr = inTemp > 0 ? `${inTemp.toFixed(1)} °C` : "--";
+    const outTempStr = outTemp > 0 ? `${outTemp.toFixed(1)} °C` : "--";
+    const deltaStr = delta > 0 ? `${delta.toFixed(1)} °C` : "--";
+
+    return `
+    <article class="card wwtp-cooling-card" data-tooltip="${actualText(u.name)}: Debit ${Number(u.flowRate || 0).toFixed(1)} m³/h · In ${inTempStr} → Out ${outTempStr} (ΔT ${deltaStr})">
+      <header>
+        <strong>${actualText(u.name)}</strong>
+        <span class="data-pill ${u.status === "Normal" ? "good" : "neutral"}">${actualText(u.status)}</span>
+      </header>
+      <div class="wwtp-cooling-flow">
+        <strong>${Number(u.flowRate || 0).toFixed(1)}</strong>
+        <span>m³/h</span>
+      </div>
+      <div class="wwtp-cooling-temps">
+        <div>
+          <small>T Sebelum CT</small>
+          <strong>${inTempStr}</strong>
+        </div>
+        <div>
+          <small>T Sesudah CT</small>
+          <strong>${outTempStr}</strong>
+        </div>
+      </div>
+      <div class="wwtp-cooling-delta">
+        <span>Efisiensi ΔT</span>
+        <strong>${deltaStr}</strong>
+      </div>
+      <div class="wwtp-cooling-total">
+        <span>Totalizer</span>
+        <strong>${Number(u.totalizer || 0).toLocaleString("id-ID")} m³</strong>
+      </div>
+    </article>
+  `;
+  }).join("");
+
+  const unitSection = panel("Status Komparasi 4 Jalur Inlet & Cooling Tower", "Pembacaan debit flow meter, temperatur sebelum & sesudah CT, dan totalizer", `<div class="wwtp-cooling-grid">${unitCards}</div>`);
+
+  const colors = ["#078eaa", "#119b70", "#d68b05", "#8b67b2"];
+  const distRows = distribution.map((d, i) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="display:flex;align-items:center;gap:8px">
+        <i style="width:10px;height:10px;border-radius:3px;background:${colors[i % colors.length]}"></i>
+        <strong>${actualText(d.name)}</strong>
+      </span>
+      <div style="text-align:right">
+        <strong class="mono">${Number(d.totalizer || 0).toLocaleString("id-ID")} m³</strong>
+        <span style="color:var(--muted);font-size:11px;margin-left:6px">(${d.sharePercent}%)</span>
+      </div>
+    </div>
+  `).join("");
+
+  const dailyTrend = data.dailyTrend || [];
+  const maxInletTrend = Math.max(10, ...dailyTrend.map((d) => Math.max(d.inlet1, d.inlet2, d.inlet3, d.inlet4)));
+  const trendCols = dailyTrend.map((d) => {
+    const sum = (d.inlet1 + d.inlet2 + d.inlet3 + d.inlet4) || 0;
+    const h = Math.max(2, (sum / (maxInletTrend * 4 || 1)) * 100);
+    return `
+      <div class="solar-trend-column" tabindex="0" title="${d.date}: Total ${sum.toFixed(1)} m³/h">
+        <i style="height:${h}%;background:var(--primary,#078eaa);width:16px" title="Total: ${sum.toFixed(1)} m³/h"></i>
+        <span>${d.date ? d.date.slice(5) : ""}</span>
+      </div>
+    `;
+  }).join("");
+
+  const analyticsHtml = `
+    <section class="wwtp-chart-panel">
+      ${panel("Tren Debit Harian Akumulasi Inlet", "Total debit aliran inlet (m³/h) harian", dailyTrend.length ? `<div class="solar-bar-chart"><div class="solar-y-axis"><span>${(maxInletTrend*4).toFixed(0)} m³/h</span><span>${(maxInletTrend*2).toFixed(0)} m³/h</span><span>0 m³/h</span></div><div class="solar-plot"><div class="solar-grid-lines"><i></i><i></i><i></i></div><div class="solar-trend">${trendCols}</div></div></div>` : actualEmpty("Belum ada histori debit harian"), `<span class="data-pill good">FLOW METER</span>`)}
+      ${panel("Distribusi Volume per Jalur", "Persentase kontribusi totalizer per inlet", `<div style="display:grid;gap:4px;padding:8px 0">${distRows}</div>`)}
+    </section>
+  `;
+
+  const readingRows = readings.map((r, i) => `
+    <tr data-tooltip="${actualText(r.sensor_tag)} - ${actualText(r.sensor_name || '-')}: ${r.value != null ? Number(r.value).toFixed(2) : '-'} ${actualText(r.unit || '')} (${actualText(r.status || 'Normal')})">
+      <td class="mono">${i + 1}</td>
+      <td><strong>${actualTime(r.captured_at)}</strong></td>
+      <td class="mono"><code>${actualText(r.sensor_tag)}</code></td>
+      <td>${actualText(r.sensor_name || "-")}</td>
+      <td class="mono"><strong>${r.value != null ? Number(r.value).toFixed(2) : "-"}</strong> ${actualText(r.unit || "")}</td>
+      <td><span class="data-pill ${r.status === "NORMAL" || r.status === "Normal" ? "good" : "neutral"}">${actualText(r.status || "Normal")}</span></td>
+    </tr>
+  `).join("");
+
+  const tableHtml = panel("Data Log Telemetri Sensor Inlet Terkini", "Pembacaan histori sensor debit dan temperatur dari TimescaleDB", `
+    <div class="table-wrap" style="max-height:480px">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Waktu <span class="b2b-tooltip-trigger" data-tooltip="Waktu pencatatan data sensor">ⓘ</span></th>
+            <th>Tag Sensor <span class="b2b-tooltip-trigger" data-tooltip="Kode register / tag instrumen">ⓘ</span></th>
+            <th>Nama Sensor <span class="b2b-tooltip-trigger" data-tooltip="Deskripsi instrumen pengukuran">ⓘ</span></th>
+            <th>Nilai <span class="b2b-tooltip-trigger" data-tooltip="Nilai pembacaan telemetri aktual">ⓘ</span></th>
+            <th>Status <span class="b2b-tooltip-trigger" data-tooltip="Kondisi integritas sensor">ⓘ</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${readingRows || `<tr><td colspan="6">${actualEmpty("Belum ada data telemetri.")}</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `);
+
+  return `${kpiHtml}${unitSection}${analyticsHtml}${tableHtml}`;
+}
+
+function wwtpPidView(data) {
+  const logs = data.logs || [];
+
+  const iframeHtml = `
+    <section class="wwtp-pid-wrapper">
+      <div class="wwtp-pid-toolbar">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:11px;font-weight:800;color:var(--muted,#6f8088);letter-spacing:1px">DIAGRAM ALUR P&ID LIVE</span>
+          <span class="data-pill good">REALTIME AUTO-SYNC</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="button small ghost" type="button" data-pf-reload title="Muat ulang diagram">🔄 Muat Ulang</button>
+          <button class="button small ghost" type="button" data-pf-fullscreen title="Fullscreen">⛶ Fullscreen</button>
+          <a class="button small primary" href="/simulasi-full-process.html" target="_blank" rel="noopener" title="Buka di tab baru">↗ Buka di Tab Baru</a>
+        </div>
+      </div>
+      <iframe class="wwtp-pid-frame" data-pf-iframe src="/simulasi-full-process.html" title="Diagram Proses P&ID IPAL"></iframe>
+    </section>
+  `;
+
+  const logRows = logs.map((l, i) => `
+    <tr data-tooltip="${actualText(l.equipment_name || '-')}: ${actualText(l.action_name || '-')} oleh ${actualText(l.initiated_by || '-')} (${actualText(l.status || '-')})">
+      <td class="mono">${i + 1}</td>
+      <td><strong>${actualTime(l.executed_at || l.created_at)}</strong></td>
+      <td><strong>${actualText(l.equipment_name || "-")}</strong><small class="mono">${actualText(l.equipment_code || "")}</small></td>
+      <td><span class="data-pill neutral">${actualText(l.action_name || "-")}</span></td>
+      <td>${actualText(l.initiated_by || "-")}</td>
+      <td>${actualText(l.role_name || "-")}</td>
+      <td><span class="data-pill ${l.status === "Success" ? "good" : "warning"}">${actualText(l.status || "-")}</span></td>
+    </tr>
+  `).join("");
+
+  const logsHtml = panel("Log Kontrol Peralatan P&ID IPAL", "Catatan aksi kontrol motor, blower aerasi, dan pompa transfer", `
+    <div class="table-wrap" style="max-height:360px">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Waktu <span class="b2b-tooltip-trigger" data-tooltip="Waktu eksekusi aksi kontrol">ⓘ</span></th>
+            <th>Peralatan <span class="b2b-tooltip-trigger" data-tooltip="Unit pompa / motor / blower P&ID">ⓘ</span></th>
+            <th>Aksi <span class="b2b-tooltip-trigger" data-tooltip="Perintah kontrol operasional">ⓘ</span></th>
+            <th>Operator <span class="b2b-tooltip-trigger" data-tooltip="Pengguna yang mengeksekusi">ⓘ</span></th>
+            <th>Role <span class="b2b-tooltip-trigger" data-tooltip="Hak akses role pengguna">ⓘ</span></th>
+            <th>Status <span class="b2b-tooltip-trigger" data-tooltip="Hasil eksekusi PLC">ⓘ</span></th>
+          </tr>
+        </thead>
+        <tbody data-wwtp-pid-logs-tbody>
+          ${logRows || `<tr><td colspan="7">${actualEmpty("Belum ada log kontrol.")}</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `, `<button class="button small ghost" data-ctrl-log-refresh>↻ Refresh Log</button>`);
+
+  return `${iframeHtml}${logsHtml}`;
+}
+
+function bindWwtpPidActions() {
+  document.querySelector("[data-pf-reload]")?.addEventListener("click", () => {
+    const iframe = document.querySelector("iframe[data-pf-iframe]");
+    if (iframe) iframe.src = iframe.src;
+  });
+  document.querySelector("[data-pf-fullscreen]")?.addEventListener("click", () => {
+    const iframe = document.querySelector("iframe[data-pf-iframe]");
+    if (iframe) {
+      if (document.fullscreenElement) document.exitFullscreen?.();
+      else iframe.requestFullscreen?.();
+    }
+  });
+  document.querySelector("[data-ctrl-log-refresh]")?.addEventListener("click", () => {
+    void refreshWwtpPidLogs();
+  });
 }
 
 async function requestAlarmConfiguration(force = false) {
@@ -11193,6 +11719,20 @@ function bindPageEvents() {
         if (isCollapsed) body.setAttribute("aria-hidden", "true");
         else body.removeAttribute("aria-hidden");
       }
+    });
+  });
+  document.querySelectorAll("[data-parameter-toggle='continuous']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.continuousParametersExpanded = !state.continuousParametersExpanded;
+      persistDashboardNavigation();
+      renderPage({ preserveScroll: true, preserveAnchor: ".finishing-monitoring-scope" });
+    });
+  });
+  document.querySelectorAll("[data-sensor-toggle='continuous']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.continuousSensorExpanded = !state.continuousSensorExpanded;
+      persistDashboardNavigation();
+      renderPage({ preserveScroll: true, preserveAnchor: ".sensor-filter-toolbar" });
     });
   });
   document.querySelectorAll("[data-chemical-unit]").forEach((card) => {
