@@ -1546,7 +1546,8 @@ function actualTime(value) {
 }
 
 function actualMetric(label, value, unit = "", foot = "Data aktual") {
-  return `<article class="card kpi-card"><div class="kpi-top"><span class="kpi-label">${actualText(label)}</span><span class="quality-pill good">ACTUAL</span></div><div class="kpi-value">${actualText(value)}<small>${actualText(unit)}</small></div><div class="kpi-foot">${actualText(foot)}</div></article>`;
+  const tooltipText = foot ? `${label}: ${foot}` : label;
+  return `<article class="card kpi-card" data-tooltip="${actualText(tooltipText)}"><div class="kpi-top"><span class="kpi-label">${actualText(label)}</span>${foot ? `<span class="b2b-tooltip-trigger" data-tooltip="${actualText(foot)}">ⓘ</span>` : ""}<span class="quality-pill good">ACTUAL</span></div><div class="kpi-value">${actualText(value)}<small>${actualText(unit)}</small></div><div class="kpi-foot">${actualText(foot)}</div></article>`;
 }
 
 function actualUtilityKind(item) {
@@ -1730,7 +1731,7 @@ function actualAssetTable(assets) {
   `;
 
   const tableRows = pageItems.length ? pageItems.map((asset) => `
-    <tr class="clickable-row" data-machine-row="${asset.process || 'jetflow'}|${asset.id}" role="button" tabindex="0" aria-label="Buka detail mesin ${actualText(asset.id)}" title="Klik untuk membuka detail ${asset.id}">
+    <tr class="clickable-row" data-machine-row="${asset.process || 'jetflow'}|${asset.id}" data-tooltip="${actualText(asset.id)} · ${actualText(asset.name)} · Status: ${actualText(asset.state)} · Batch: ${actualText(asset.batch)}" role="button" tabindex="0" aria-label="Buka detail mesin ${actualText(asset.id)}">
       <td>
         <strong class="machine-id-highlight">${actualText(asset.id)}</strong>
         <br><small class="machine-name-sub">${actualText(asset.name)}</small>
@@ -1779,15 +1780,15 @@ function actualAssetTable(assets) {
         <table class="data-table">
           <thead>
             <tr>
-              <th>Asset</th>
-              <th>Area</th>
-              <th>Status</th>
-              <th>Controller</th>
-              <th>Active alarm</th>
-              <th>Batch</th>
-              <th>Progress</th>
-              <th>Source time</th>
-              <th>Quality</th>
+              <th>Asset <span class="b2b-tooltip-trigger" data-tooltip="Kode pengenal unik dan deskripsi mesin">ⓘ</span></th>
+              <th>Area <span class="b2b-tooltip-trigger" data-tooltip="Area penempatan operasional di pabrik">ⓘ</span></th>
+              <th>Status <span class="b2b-tooltip-trigger" data-tooltip="Status operasional mesin saat ini (Running, Idle, Warning, Fault)">ⓘ</span></th>
+              <th>Controller <span class="b2b-tooltip-trigger" data-tooltip="Konektivitas PLC / Controller ke broker SCADA">ⓘ</span></th>
+              <th>Active alarm <span class="b2b-tooltip-trigger" data-tooltip="Kondisi alarm aktif yang membutuhkan perhatian">ⓘ</span></th>
+              <th>Batch <span class="b2b-tooltip-trigger" data-tooltip="Nomor pesanan batch produksi yang sedang diproses">ⓘ</span></th>
+              <th>Progress <span class="b2b-tooltip-trigger" data-tooltip="Kemajuan siklus batch atau kecepatan lini continuous">ⓘ</span></th>
+              <th>Source time <span class="b2b-tooltip-trigger" data-tooltip="Waktu pencatatan data terakhir dari PLC">ⓘ</span></th>
+              <th>Quality <span class="b2b-tooltip-trigger" data-tooltip="Kualitas dan integritas sinyal telemetry">ⓘ</span></th>
             </tr>
           </thead>
           <tbody>
@@ -2484,7 +2485,14 @@ function databaseOverviewPage() {
     return processNode(processConfig[type].plural, `${fleet.length} asset terdaftar`, type, statusCount(fleet, "running"), statusCount(fleet, "warning"), statusCount(fleet, "fault"));
   }).join("");
   const runs = actualRuns.length
-    ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Batch</th><th>Asset</th><th>Recipe</th><th>Status</th><th>Output</th><th>Start</th></tr></thead><tbody>${actualRuns.slice(0, 10).map((run) => `<tr><td class="mono">${actualText(run.batch_no)}</td><td>${actualText(run.asset_id)}</td><td class="mono">${actualText(run.recipe_code)}</td><td>${actualText(run.run_status)}</td><td>${actualText(run.output_quantity ?? "—")} ${actualText(run.output_unit || "")}</td><td class="mono">${actualTime(run.started_at)}</td></tr>`).join("")}</tbody></table></div>`
+    ? `<div class="table-wrap"><table class="data-table"><thead><tr>
+        <th>Batch <span class="b2b-tooltip-trigger" data-tooltip="Nomor identifikasi unik batch pesanan produksi">ⓘ</span></th>
+        <th>Asset <span class="b2b-tooltip-trigger" data-tooltip="Kode mesin yang memproses pesanan">ⓘ</span></th>
+        <th>Recipe <span class="b2b-tooltip-trigger" data-tooltip="Formula proses / program mesin yang berjalan">ⓘ</span></th>
+        <th>Status <span class="b2b-tooltip-trigger" data-tooltip="Kondisi siklus eksekusi run">ⓘ</span></th>
+        <th>Output <span class="b2b-tooltip-trigger" data-tooltip="Kuantitas hasil keluaran yang dicatat">ⓘ</span></th>
+        <th>Start <span class="b2b-tooltip-trigger" data-tooltip="Waktu awal batch mulai diproses">ⓘ</span></th>
+      </tr></thead><tbody>${actualRuns.slice(0, 10).map((run) => `<tr data-tooltip="Batch ${actualText(run.batch_no)} di ${actualText(run.asset_id)} (${actualText(run.run_status)})"><td class="mono"><strong>${actualText(run.batch_no)}</strong></td><td>${actualText(run.asset_id)}</td><td class="mono">${actualText(run.recipe_code)}</td><td><span class="status-pill ${String(run.run_status).toLowerCase() === 'completed' ? 'running' : 'idle'}">${actualText(run.run_status)}</span></td><td>${actualText(run.output_quantity ?? "—")} ${actualText(run.output_unit || "")}</td><td class="mono">${actualTime(run.started_at)}</td></tr>`).join("")}</tbody></table></div>`
     : actualEmpty("Belum ada process run aktual");
   return `
     ${pageHead("overview", `<span class="range-badge">LIVE DATA</span>`)}

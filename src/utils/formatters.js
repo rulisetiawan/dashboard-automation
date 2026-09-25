@@ -29,9 +29,14 @@ function panel(title, subtitle, content, actions = "", classes = "") {
 }
 
 function kpi(label, value, unit, icon, foot, tone = "") {
+  const tooltipText = foot ? `${label}: ${foot}` : label;
   return `
-    <article class="card kpi-card">
-      <div class="kpi-top"><span class="kpi-label">${label}</span><span class="kpi-icon ${tone}">${icon}</span></div>
+    <article class="card kpi-card" data-tooltip="${actualText(tooltipText)}">
+      <div class="kpi-top">
+        <span class="kpi-label">${actualText(label)}</span>
+        ${foot ? `<span class="b2b-tooltip-trigger" data-tooltip="${actualText(foot)}">ⓘ</span>` : ""}
+        <span class="kpi-icon ${tone}">${icon}</span>
+      </div>
       <div class="kpi-value">${value}<small>${unit}</small></div>
       <div class="kpi-foot">${foot}</div>
     </article>

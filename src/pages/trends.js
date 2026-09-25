@@ -233,7 +233,7 @@ function actualTrendsPage() {
   `;
 
   const tableRows = pageItems.length ? pageItems.map((item) => `
-    <tr>
+    <tr data-tooltip="${actualText(item.asset_id)} · ${actualText(item.signal_role)}: ${actualText(item.value_number ?? item.value_text ?? "—")} ${actualText(item.engineering_unit || "")} (${actualText(item.quality)})">
       <td class="mono"><strong>${actualTime(item.source_ts)}</strong></td>
       <td>
         <strong class="machine-id-highlight">${actualText(item.asset_id)}</strong>
@@ -283,12 +283,12 @@ function actualTrendsPage() {
           <table class="data-table">
             <thead>
               <tr>
-                <th>Source Time</th>
-                <th>Asset</th>
-                <th>Tag Code</th>
-                <th>Signal Role</th>
-                <th>Value & Unit</th>
-                <th>Quality</th>
+                <th>Source Time <span class="b2b-tooltip-trigger" data-tooltip="Waktu pencatatan data aktual dari PLC / remote node">ⓘ</span></th>
+                <th>Asset <span class="b2b-tooltip-trigger" data-tooltip="Kode pengenal mesin pabrik dan lokasi area">ⓘ</span></th>
+                <th>Tag Code <span class="b2b-tooltip-trigger" data-tooltip="Kode pengenal register atau tag SCADA">ⓘ</span></th>
+                <th>Signal Role <span class="b2b-tooltip-trigger" data-tooltip="Peranan sinyal (PV, SV, status motor, alarm, dll)">ⓘ</span></th>
+                <th>Value & Unit <span class="b2b-tooltip-trigger" data-tooltip="Besaran nilai data telemetry beserta satuan enjiniring">ⓘ</span></th>
+                <th>Quality <span class="b2b-tooltip-trigger" data-tooltip="Status integritas kualitas data sensor">ⓘ</span></th>
               </tr>
             </thead>
             <tbody>

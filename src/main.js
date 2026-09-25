@@ -219,40 +219,85 @@ async function exportActualBatchProcessRun(processRunId, format, button) {
   }
 }
 
-function bindSolarTrendTooltips() {
-  const bars = document.querySelectorAll("[data-solar-trend-period]");
-  let tooltip = document.querySelector("[data-solar-trend-tooltip]");
-  if (!tooltip) {
-    tooltip = document.createElement("div");
-    tooltip.className = "solar-trend-tooltip";
-    tooltip.dataset.solarTrendTooltip = "true";
-    tooltip.setAttribute("role", "tooltip");
-    document.body.appendChild(tooltip);
+let globalB2bTooltipEl = null;
+
+function bindGlobalTooltips() {
+  if (!globalB2bTooltipEl) {
+    globalB2bTooltipEl = document.createElement("div");
+    globalB2bTooltipEl.className = "b2b-floating-tooltip";
+    globalB2bTooltipEl.setAttribute("role", "tooltip");
+    globalB2bTooltipEl.setAttribute("aria-hidden", "true");
+    document.body.appendChild(globalB2bTooltipEl);
   }
-  tooltip.classList.remove("visible");
-  if (!bars.length) return;
-  const position = (x,y) => {
-    const left = Math.min(window.innerWidth-tooltip.offsetWidth-12,Math.max(12,x+14));
-    const top = Math.min(window.innerHeight-tooltip.offsetHeight-12,Math.max(12,y-tooltip.offsetHeight-14));
-    tooltip.style.left = `${left}px`;
-    tooltip.style.top = `${top}px`;
+
+  // Convert static title attributes on tooltip elements to data-tooltip to avoid default browser popups
+  document.querySelectorAll("[title]").forEach((el) => {
+    if (!el.dataset.tooltip) {
+      el.dataset.tooltip = el.getAttribute("title");
+      el.removeAttribute("title");
+    }
+  });
+
+  const positionTooltip = (x, y) => {
+    if (!globalB2bTooltipEl) return;
+    const padding = 12;
+    const tipWidth = globalB2bTooltipEl.offsetWidth;
+    const tipHeight = globalB2bTooltipEl.offsetHeight;
+
+    let left = x - (tipWidth / 2);
+    let top = y - tipHeight - 10;
+
+    // Flip below if too close to top
+    if (top < padding) {
+      top = y + 18;
+    }
+    // Prevent overflow left/right
+    if (left < padding) left = padding;
+    if (left + tipWidth > window.innerWidth - padding) {
+      left = window.innerWidth - tipWidth - padding;
+    }
+
+    globalB2bTooltipEl.style.left = `${left}px`;
+    globalB2bTooltipEl.style.top = `${top}px`;
   };
-  const show = (bar,x,y) => {
-    tooltip.textContent = `${bar.dataset.solarTrendPeriod}\nActual      ${bar.dataset.solarTrendActual}\nRequested   ${bar.dataset.solarTrendRequested}\nGap         ${bar.dataset.solarTrendGap}`;
-    tooltip.classList.add("visible");
-    position(x,y);
+
+  const showTooltip = (el, x, y) => {
+    const text = el.dataset.tooltip || el.dataset.tip;
+    if (!text) return;
+    globalB2bTooltipEl.textContent = text;
+    globalB2bTooltipEl.classList.add("visible");
+    globalB2bTooltipEl.setAttribute("aria-hidden", "false");
+    positionTooltip(x, y);
   };
-  const hide = () => tooltip.classList.remove("visible");
-  bars.forEach((bar) => {
-    bar.addEventListener("pointerenter", (event) => show(bar,event.clientX,event.clientY));
-    bar.addEventListener("pointermove", (event) => position(event.clientX,event.clientY));
-    bar.addEventListener("pointerleave", hide);
-    bar.addEventListener("focus", () => { const rect=bar.getBoundingClientRect(); show(bar,rect.left+rect.width/2,rect.top); });
-    bar.addEventListener("blur", hide);
+
+  const hideTooltip = () => {
+    if (globalB2bTooltipEl) {
+      globalB2bTooltipEl.classList.remove("visible");
+      globalB2bTooltipEl.setAttribute("aria-hidden", "true");
+    }
+  };
+
+  document.querySelectorAll("[data-tooltip], [data-tip], .b2b-tooltip-trigger").forEach((el) => {
+    el.addEventListener("pointerenter", (event) => {
+      const rect = el.getBoundingClientRect();
+      const x = event.clientX || (rect.left + rect.width / 2);
+      const y = rect.top;
+      showTooltip(el, x, y);
+    });
+    el.addEventListener("pointermove", (event) => {
+      positionTooltip(event.clientX, event.clientY);
+    });
+    el.addEventListener("pointerleave", hideTooltip);
+    el.addEventListener("focus", () => {
+      const rect = el.getBoundingClientRect();
+      showTooltip(el, rect.left + rect.width / 2, rect.top);
+    });
+    el.addEventListener("blur", hideTooltip);
   });
 }
 
 function bindPageEvents() {
+  bindGlobalTooltips();
   bindSolarTrendTooltips();
   document.querySelectorAll("[data-solar-tab]").forEach((button) => button.addEventListener("click", () => {
     state.solar.tab = button.dataset.solarTab;
@@ -648,14 +693,30 @@ function bindPageEvents() {
   document.querySelectorAll("[data-matrix-status]").forEach((button) => {
     button.addEventListener("click", () => {
       state.assetMatrix.status = button.dataset.matrixStatus;
-      renderPage({ preserveScroll: true, preserveAnchor: ".matrix-toolbar-card" });
+      state.assetMatrix.page = 1;
+      renderPage({ preserveScroll: true });
     });
   });
 
   document.querySelectorAll("[data-matrix-process]").forEach((button) => {
     button.addEventListener("click", () => {
       state.assetMatrix.process = button.dataset.matrixProcess;
-      renderPage({ preserveScroll: true, preserveAnchor: ".matrix-toolbar-card" });
+      state.assetMatrix.page = 1;
+      renderPage({ preserveScroll: true });
+    });
+  });
+
+  document.querySelectorAll("[data-matrix-page]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.matrixPage;
+      if (action === "prev") {
+        state.assetMatrix.page = Math.max(1, (state.assetMatrix.page || 1) - 1);
+      } else if (action === "next") {
+        state.assetMatrix.page = (state.assetMatrix.page || 1) + 1;
+      } else if (!isNaN(Number(action))) {
+        state.assetMatrix.page = Number(action);
+      }
+      renderPage({ preserveScroll: true });
     });
   });
 

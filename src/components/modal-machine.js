@@ -1426,6 +1426,7 @@ function showAuthenticatedDashboard(user) {
     window.setInterval(updateMachineConnectionIndicators, 1000);
     window.setInterval(updateLiveNumbers, 1800);
     window.setInterval(updateWwtpBackground, 15000);
+    window.setInterval(updateSolarBackground, 5000);
   }
 }
 
